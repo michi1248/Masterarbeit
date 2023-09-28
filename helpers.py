@@ -6,9 +6,18 @@ import pandas
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+from ChannelExtraction import ChannelExtraction
 from scipy.signal import convolve2d
 
-
+def extract_important_channels(movement_list,path_to_subject_dat):
+    important_channels = []
+    for movement in tqdm.tqdm(movement_list,desc="Extracting important channels for from all movements"):
+        extractor = ChannelExtraction(movement, path_to_subject_dat)
+        channels = extractor.get_channels()
+        for channel in channels:
+            if channel not in important_channels:
+                important_channels.append(channel)
+    return important_channels
 def load_mat_file(file_path, attributes_to_open = None):
     """
     loads a mat file and returns a dict with the attributes as keys or when no keyw are specified, returns the whole dict
@@ -227,16 +236,53 @@ def fill_empty_array_indexes_with_0(arr):
                 mask[row,column] = False
     return arr,mask
 
+def from_grid_position_to_row_position(grid_position):
+    # shape of grid is 13x 26 mit outliers = [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0],[0,25],[1,25],[2,25],[3,25],[4,25],[5,25],[6,25],[7,25],[12,0],[12,13]]
+    outliers = [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0],[0,25],[1,25],[2,25],[3,25],[4,25],[5,25],[6,25],[7,25],[12,0],[12,13]]
 
+    if grid_position[0] < 8:
+        # dann sind es die 8 mal 8 grids 3 nebeneinander
+        if grid_position[1] <8:
+            grid = 1
+            adding = 0
+        if grid_position[1] >=8 and grid_position[1] < 16:
+            grid = 2
+            adding = 8*8*2
+        if grid_position[1] >=16:
+            grid = 3
+            adding = 8*8*3
 
-def normalize_2D_array(data):
+        row_position = adding + grid_position[0] * 8 + ((grid_position[1]-1) - (grid-1)*8)
+    else:
+        # dann sind es die 5 mal 13 grids 2 nebeneinander
+        # dann sind es die 8 mal 8 grids 3 nebeneinander
+        if grid_position[1] < 13:
+            grid = 1
+            adding = 0
+        else:
+            grid = 2
+            adding = 5*13
+
+        row_position = adding + (grid_position[1]*5 - ((grid - 1) * 13)) + ((grid_position[0] ) )
+
+    if grid_position in outliers:
+        print("error in helper function from_grid_position_to_row_position , this positon is an outlier")
+    else:
+        if row_position > 320:
+            print("error in helper function from_grid_position_to_row_position , this positon is out of range")
+    return row_position
+def normalize_2D_array(data,axis=None):
     """
     normalizes a 2D array
     :param array:
     :return:
     """
-    data = np.array(data)
-    norm = (data-np.min(data))/(np.max(data)-np.min(data))
+    if axis is None:
+        data = np.array(data)
+        norm = (data-np.min(data))/(np.max(data)-np.min(data))
+    else:
+        data = np.array(data)
+        norm = (data-np.min(data,axis=axis))/(np.max(data,axis=axis)-np.min(data,axis=axis))
     return norm
 
 
@@ -290,6 +336,7 @@ def check_to_which_movement_cycle_sample_belongs(sample_position,local_maxima,lo
     else:
         return 2 , distance_to_minima
 
+
 def get_locations_of_all_maxima(movement_signal):
     # Calculate the local maxima and minima of the signal
     local_maxima = np.where((movement_signal[:-2] < movement_signal[1:-1]) & (movement_signal[1:-1] > movement_signal[2:]))[0] + 1
@@ -321,7 +368,6 @@ def choose_possible_channels(difference_heatmap,mean_flex_heatmap,mean_ex_heatma
     # Find the centroids of each area and calculate the channel with the highest activity
     #TODO additionaly filter for outliers (has high activity but surrounding not)
 
-
     # Iterate through the grid
     for i in range(difference_heatmap.shape[0]):
         for j in range(difference_heatmap.shape[1]):
@@ -347,15 +393,19 @@ def choose_possible_channels(difference_heatmap,mean_flex_heatmap,mean_ex_heatma
                     flex_list.append([i, j])
                 else:
                     ex_list.append([i, j])
-            else:
-                print("Slope difference too high or other value in neighborhood is higher")
-                print("row: ", i, " col: ", j)
+            # else:
+            #     print("Slope difference too high or other value in neighborhood is higher")
+            #     print("row: ", i, " col: ", j)
+            if (this_value<= min(neighbours) and (min(differences)>= threshold_neighbours) and (this_value is not None) and (this_value !=  0.0)):
+                activity_in_movement_1 = mean_flex_heatmap[i][j]
+                activity_in_movement_2 = mean_ex_heatmap[i][j]
 
+                # Assign the channel to the respective list based on activity
+                if activity_in_movement_1 < activity_in_movement_2:
+                    flex_list.append([i, j])
+                else:
+                    ex_list.append([i, j])
 
-
-        # # Limit the number of areas to the specified value
-        # if len(important_channels_movement_1) >= num_areas and len(important_channels_movement_2) >= num_areas:
-        #     break
 
     return flex_list, ex_list
 
@@ -395,6 +445,8 @@ def is_near_extremum(frame,local_maxima, local_minima,time_window,sampling_frequ
         return True
     else:
         return False
+
+
 
 #area to test functions
 if __name__ == "__main__":
