@@ -1,20 +1,11 @@
-from sklearn.datasets import load_breast_cancer
-from sklearn.model_selection import train_test_split
-import tqdm
 from sklearn.utils import shuffle
 import time
-from helpers import *
+from exo_controller.helpers import *
 import numpy as np
-from sklearn.tree import DecisionTreeRegressor
 from sklearn.multioutput import MultiOutputRegressor
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.svm import SVR
-from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-import pickle as pkl
+
 
 #TODO min_samples 5 besser als 30
 class MultiDimensionalDecisionTree:
@@ -119,7 +110,7 @@ class MultiDimensionalDecisionTree:
         labels = []
 
         for movement in tqdm.tqdm(movement_names,desc="Building training data for local differences"):
-            emg_data, Mu_data, ref_data = open_all_files_for_one_patient_and_movement(path_to_subject_dat, movement)
+            emg_data, Mu_data, ref_data = open_all_files_for_one_patient_and_movement_(path_to_subject_dat, movement)
             ref_erweitert = np.zeros((self.num_movements,len(ref_data))) # [num_movements x num_samples]
             if movement != "2pinch":
                 ref_erweitert[ref_erweitert == 0.0] = 0.0

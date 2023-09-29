@@ -1,18 +1,10 @@
-import numpy as np
-import matplotlib.pyplot as plt
 import seaborn as sns
-import os
-import tqdm
 from PIL import Image
 from matplotlib.animation import FuncAnimation
-from matplotlib.transforms import Bbox
-import ipywidgets as widgets
-from ipywidgets import interact
-from IPython.display import HTML
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
 from tkinter import ttk
-from helpers import *
+from exo_controller.helpers import *
 
 #TODO wie emg grids in heatmaps voneinander separieren?
 #TODO funtion die mu signal resamples wenn nicht von marius gegeben

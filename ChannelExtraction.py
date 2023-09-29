@@ -1,18 +1,7 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
 import tqdm
-from PIL import Image
-from matplotlib.animation import FuncAnimation
-from matplotlib.transforms import Bbox
-import ipywidgets as widgets
-from ipywidgets import interact
-from IPython.display import HTML
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import tkinter as tk
-from tkinter import ttk
-import helpers
+from exo_controller import helpers
+
 
 class ChannelExtraction:
     def __init__(self, movement_name, path_to_subject_dat, sampling_frequency=2048, frame_duration=150):
@@ -31,7 +20,7 @@ class ChannelExtraction:
           """
         self.movement_name = movement_name
         self.important_channels = []
-        self.emg_data, self.Mu_data, self.ref_data = helpers.open_all_files_for_one_patient_and_movement(path_to_subject_dat,movement_name)
+        self.emg_data, self.Mu_data, self.ref_data = helpers.open_all_files_for_one_patient_and_movement(path_to_subject_dat, movement_name)
         self.emg_data, self.mask_for_heatmap = helpers.fill_empty_array_indexes_with_0(self.emg_data)
         self.ref_data = self.ref_data.to_numpy()
         self.sample_length = self.emg_data[0][1][0].shape[0]
@@ -54,10 +43,10 @@ class ChannelExtraction:
 
         # only do the following if +- window size near extrema
         if (helpers.is_near_extremum(frame, self.local_maxima, self.local_minima, time_window=self.frame_duration,
-                             sampling_frequency=self.sampling_frequency)):
+                                     sampling_frequency=self.sampling_frequency)):
             # find out to which part of the movement the current sample belongs (half of flex or ref)
             belongs_to_movement, distance = helpers.check_to_which_movement_cycle_sample_belongs(frame, self.local_maxima,
-                                                                                         self.local_minima)
+                                                                                                 self.local_minima)
             # add the heatmap to the list of all heatmaps of the fitting flex/ex for later calculation of difference heatmap
             if (belongs_to_movement == 1):
                 # the closer the sample is to the extrema the more impact it has on the heatmap
@@ -117,7 +106,7 @@ class ChannelExtraction:
             mean_ex_heatmap = helpers.normalize_2D_array(np.divide(self.heatmaps_ex, self.number_heatmaps_ex))
         if self.number_heatmaps_flex > 0 and self.number_heatmaps_ex > 0:
             difference_heatmap = helpers.normalize_2D_array(np.abs(np.subtract(mean_ex_heatmap, mean_flex_heatmap)))
-            channels_flexion, channels_extension = helpers.choose_possible_channels(difference_heatmap, mean_flex_heatmap,mean_ex_heatmap)
+            channels_flexion, channels_extension = helpers.choose_possible_channels(difference_heatmap, mean_flex_heatmap, mean_ex_heatmap)
 
         return channels_flexion, channels_extension
 

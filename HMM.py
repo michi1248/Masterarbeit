@@ -1,8 +1,6 @@
-import numpy as np
 from hmmlearn import hmm
-import tqdm
 import pandas as pd
-from helpers import *
+from exo_controller.helpers import *
 
 class HMM_model:
     def __init__(self,n_states=13, covariance_type="full", n_iter=1000, path_to_subject_dat = r"D:\Lab\data\extracted\Sub2"):
