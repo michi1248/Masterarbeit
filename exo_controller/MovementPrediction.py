@@ -71,7 +71,7 @@ class MultiDimensionalDecisionTree:
         print("Selected default number of previous samples: ",self.num_previous_samples)
         return self.num_previous_samples
 
-    def predict(self, X,tree_numbers):
+    def predict(self, X ,tree_numbers):
         """
         Predict the target values using the list of trained models and average the results.
 
@@ -87,15 +87,15 @@ class MultiDimensionalDecisionTree:
         for i in tree_numbers:
             predictions.append(self.trees[i].predict(X))
         predictions = np.array(predictions)
-        for i in range(len(predictions)):
-            print("Tree number: ",i, "Prediction: ",predictions[i])
+        # for i in range(len(predictions)):
+        #     print("Tree number: ",i, "Prediction: ",predictions[i])
         # Average the predictions
         averaged_predictions = predictions.mean(axis=0)
         print("Averaged prediction: ",averaged_predictions)
 
         return averaged_predictions
 
-    def build_training_data(self, movement_names, path_to_subject_dat, window_size=int((150 / 1000) * 2048),
+    def build_training_data(self, movement_names, window_size=int((150 / 1000) * 2048),
                             overlap=int((150 / 1000) * 2048) - 150, split_ratio=0.8):
         """
         This function builds the training data for the random forest
