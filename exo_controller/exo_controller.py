@@ -30,8 +30,8 @@ class Exo_Control:
         """
         #self.clients = [1212, 1236]
         self.exoIP = "127.0.0.1"  # mit welcher IP verbinden
-        self.exoPort = 1111  # Port von diesem Pc Server
-        self.port_from_exo= 1212   #Port von exo client
+        self.exoPort = 1235  # Port von diesem Pc Server
+        self.port_from_exo= 1236   #Port von exo client
         #self.connected_to_exo = False
         #while not self.connected_to_exo:
         self.exoSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -76,9 +76,10 @@ class Exo_Control:
             # Encode message to utf-8 bytes
 
             encoded_message = str(values).encode("utf-8")
+            print(encoded_message)
 
             #  definiere IP  und Port von Client
-            self.exoSocket.sendto(encoded_message, (self.exoIP, self.port_from_exo))
+            print(self.exoSocket.sendto(encoded_message, (self.exoIP, self.port_from_exo)))
             #print("data sent...\n")
         except Exception as e:
             pass

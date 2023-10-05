@@ -30,8 +30,6 @@ class MultiDimensionalDecisionTree:
         if num_previous_samples is None:
             num_previous_samples = self.select_default_num_previous()
         self.num_previous_samples = num_previous_samples
-
-
         count = 0
         for i in range(len(self.movements)): #check if finger already in dict and add the movement number to the dict
             if self.movements[i] in ["2pinch","3pinch","fist"]:
@@ -124,7 +122,7 @@ class MultiDimensionalDecisionTree:
                     ref_erweitert[k, :] = ref_data[:, k]
             emg_data= self.emg_data[movement][self.important_channels,:]
             for i in range(0, len(emg_data[0]) - window_size + 1, window_size - overlap): # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
-                if i <= self.ref_data.shape[0]:
+                if i <= ref_data.shape[0]:
                     segment = calculate_emg_rms_row(emg_data,i,self.window_size_in_samples)
                     segment = normalize_2D_array(segment)
                     # feature = calculate_rms(segment)
@@ -187,11 +185,11 @@ class MultiDimensionalDecisionTree:
             self.training_data_time = results
 
     def load_trainings_data(self):
-        self.X_test_local = np.array(load_pickle_file( r"../trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/X_test_local.pkl"))
-        self.y_test_local = np.array(load_pickle_file( r"../trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/y_test_local.pkl"))
-        self.X_train_local = np.array(load_pickle_file(r"../trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/X_train_local.pkl"))
-        self.y_train_local = np.array(load_pickle_file(r"../trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/y_train_local.pkl"))
-        self.training_data_time = load_pickle_file( r"../trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/training_data_time.pkl")
+        self.X_test_local = np.array(load_pickle_file( r"trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/X_test_local.pkl"))
+        self.y_test_local = np.array(load_pickle_file( r"trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/y_test_local.pkl"))
+        self.X_train_local = np.array(load_pickle_file(r"trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/X_train_local.pkl"))
+        self.y_train_local = np.array(load_pickle_file(r"trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/y_train_local.pkl"))
+        self.training_data_time = load_pickle_file( r"trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/training_data_time.pkl")
 
 
     def add_data_for_local_detection(self,x_train,y_train,x_test,y_test):
@@ -247,11 +245,11 @@ class MultiDimensionalDecisionTree:
     def save_trainings_data(self):
 
 
-        save_as_pickle(self.X_test_local, r"../trainings_data/resulting_trainings_data/subject_" + str(self.patient_number) + "/X_test_local.pkl")
-        save_as_pickle(self.y_test_local,r"../trainings_data/resulting_trainings_data/subject_" + str(self.patient_number) + "/y_test_local.pkl")
-        save_as_pickle(self.X_train_local,r"../trainings_data/resulting_trainings_data/subject_" + str(self.patient_number) + "/X_train_local.pkl")
-        save_as_pickle(self.y_train_local,  r"../trainings_data/resulting_trainings_data/subject_" + str(self.patient_number) + "/y_train_local.pkl")
-        save_as_pickle(self.training_data_time,r"../trainings_data/resulting_trainings_data/subject_" + str(self.patient_number) + "/training_data_time.pkl")
+        save_as_pickle(self.X_test_local, r"trainings_data/resulting_trainings_data/subject_" + str(self.patient_number) + "/X_test_local.pkl")
+        save_as_pickle(self.y_test_local,r"trainings_data/resulting_trainings_data/subject_" + str(self.patient_number) + "/y_test_local.pkl")
+        save_as_pickle(self.X_train_local,r"trainings_data/resulting_trainings_data/subject_" + str(self.patient_number) + "/X_train_local.pkl")
+        save_as_pickle(self.y_train_local,  r"trainings_data/resulting_trainings_data/subject_" + str(self.patient_number) + "/y_train_local.pkl")
+        save_as_pickle(self.training_data_time,r"trainings_data/resulting_trainings_data/subject_" + str(self.patient_number) + "/training_data_time.pkl")
     def simulate_realtime_prediction(self):
         for i in tqdm.tqdm(range(len(self.trees)),desc="Evaluating trees"):
             if i == 0:
@@ -290,7 +288,7 @@ if __name__ == "__main__":
     # print("there were following number of important channels found: ",len(channels))
 
     channels= range(320)
-    model = MultiDimensionalDecisionTree(important_channels=channels,movements=movements)
+    model = MultiDimensionalDecisionTree(important_channels=channels,movements=movements,emg=None,ref=None,patient_number=2)
     model.build_training_data(model.movements, r"D:\Lab\data\extracted\Sub2")
     #odel.load_trainings_data()
     model.save_trainings_data()

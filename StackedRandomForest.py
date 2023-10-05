@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.linear_model import Ridge
 
 
 #TODO min_samples 5 besser als 30
@@ -58,7 +59,9 @@ class MultiDimensionalDecisionTree:
             # epsilo = margin of tolerance where no penalty is assigned to errors
             # low epsilon = more overfitting
             #self.trees.append(MultiOutputRegressor(SVR(kernel="linear",C=0.5,epsilon=0.2)))
-            self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=30, min_samples_split=self.min_samples_split, min_samples_leaf=15)))
+            #self.trees.append(MultiOutputRegressor(
+            #    Ridge()))
+            self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=30, min_samples_split=self.min_samples_split, min_samples_leaf=20)))
 
     def select_default_num_previous(self,middle_time_difference = 100):
 
@@ -110,7 +113,7 @@ class MultiDimensionalDecisionTree:
         labels = []
 
         for movement in tqdm.tqdm(movement_names,desc="Building training data for local differences"):
-            emg_data, Mu_data, ref_data = open_all_files_for_one_patient_and_movement_(path_to_subject_dat, movement)
+            emg_data, Mu_data, ref_data = open_all_files_for_one_patient_and_movement(path_to_subject_dat, movement)
             ref_erweitert = np.zeros((self.num_movements,len(ref_data))) # [num_movements x num_samples]
             if movement != "2pinch":
                 ref_erweitert[ref_erweitert == 0.0] = 0.0
@@ -264,23 +267,23 @@ class MultiDimensionalDecisionTree:
                 score = np.mean(np.abs(np.subtract(res, self.training_data_time[i-1][3])),axis=0)
                 print("time differences for tree " + str(i)+ " : ", (1 - score[0]) * 100,(1 - score[1]) * 100)
 
-    def visualize_trees(self):
-        for i in range(len(self.trees)):
-            print("Tree number: ",i)
-            print("Tree depth: ",self.trees[i].get_depth())
-            print("Number of leaves: ",self.trees[i].get_n_leaves())
-            print("Number of samples: ",self.trees[i].get_n_leaves())
-            print("Feature importance: ",self.trees[i].feature_importances_)
-            print("Number of features: ",self.trees[i].n_features_)
-            print("Number of outputs: ",self.trees[i].n_outputs_)
-            print("Number of classes: ",self.trees[i].n_classes_)
-            print("Number of samples: ",self.trees[i].n_samples_)
-            print("Number of features: ",self.trees[i].n_features_)
-            print("Number of features: ",self.trees[i].n_features_)
+    def visualize_tree(self):
+        from sklearn.tree import export_graphviz
+        import pydot
+        estimator = self.trees[0].estimators_[5]
+        export_graphviz(estimator, out_file='tree.dot',
+                        feature_names=['x', 'y'],
+                        class_names=['0', '1', '2'],
+                        rounded=True, proportion=False,
+                        precision=2, filled=True)
+
+        (graph,) = pydot.graph_from_dot_file('tree.dot')
+        graph.write_png('tree.png')
 
 if __name__ == "__main__":
     #movements = ["thumb_slow", "thumb_fast", "index_slow", "index_fast","2pinch"]
     movements = ["thumb_slow",  "index_slow", "2pinch"]
+    #movements = ["ring_slow", "index_slow"]
     # important_channels = extract_important_channels(movements, r"D:\Lab\data\extracted\Sub2")
     # print("there were following number of important channels found: ",len(important_channels))
     # channels = []

@@ -13,7 +13,7 @@ from tkinter.font import Font
 import numpy as np
 import pandas as pd
 import vlc
-from Videoplayer import PyPlayer, BaseTkContainer
+from exo_controller.Videoplayer import PyPlayer, BaseTkContainer
 
 
 class Realtime_Datagenerator:
@@ -45,9 +45,10 @@ class Realtime_Datagenerator:
         self.time_diffs = {}
         # time how long one movement takes to capture
         self.recording_time = recording_time
+        self.BufferSize = 408 * 64 * 2  # ch, samples, int16 -> 2 bytes
         # size of one chunk in sample
         self.chunk_size = 64
-
+        self.emg_indices = np.concatenate([np.r_[:64], np.r_[128:384]])
         ##################################### Stuff for Sockets / Streaming ##########################################
         self.buffer_size = 3
         self.EMG_HEADER = 8
@@ -102,8 +103,8 @@ class Realtime_Datagenerator:
 
         kinematics_data = {}
         for i in self.movement_name:
-            data = pd.read_csv(r"../trainings_data/movement_numbers_for_videos/" +str(i) +".csv")
-
+            data = pd.read_csv(r"trainings_data/movement_numbers_for_videos/" +str(i) +".csv")
+            data = data.to_numpy()
             # from seconds to samples like this
             start = int((self.values_movie_start_emg[i] * 120))
             # print(start, int((start + (5 * 120))))
@@ -113,26 +114,26 @@ class Realtime_Datagenerator:
 
             # hoch much one incoming emg chunk is in samples in the video
             # e.g hw much is 64 samples in emg in secondds in the video
-            skip = int(np.round((64 / 2048) * 120))
-            chunk_size__samples = skip * 3
+            #skip = int(np.round((64 / 2048) * 120))
+            #chunk_size__samples = skip * 3
 
-            distance_between_chunks__samples = skip
-            kinematics_temp = []
-            k = 0
-            while k + chunk_size__samples <= data.shape[0]:
-                to_append = data[k : k + chunk_size__samples].mean(axis=0)
-                kinematics_temp.append(to_append)
-                k += distance_between_chunks__samples
-            kinematics_data[i] = np.array(kinematics_temp)
-
+            #distance_between_chunks__samples = skip
+            #kinematics_temp = []
+            #k = 0
+            #while k + chunk_size__samples <= data.shape[0]:
+                #to_append = data[k : k + chunk_size__samples].mean(axis=0)
+                #kinematics_temp.append(to_append)
+                #k += distance_between_chunks__samples
+            #kinematics_data[i] = np.array(kinematics_temp)
+            kinematics_data[i] = np.array(data)
         print("Step 2: \t Saving Kinematics Data")
+        if not self.debug:
+            resulting_file = r"trainings_data/resulting_trainings_data/subject_" + str(self.patient_id) + "/3d_data"  + ".pkl"
+            if not os.path.exists("trainings_data/resulting_trainings_data/subject_" + str(self.patient_id)):
+                os.makedirs("trainings_data/resulting_trainings_data/subject_" + str(self.patient_id))
 
-        resulting_file = r"../trainings_data/resulting_trainings_data/subject_" + str(self.patient_id) + "/3d_data"  + ".pkl"
-        if not os.path.exists("../trainings_data/resulting_trainings_data/subject_" + str(self.patient_id)):
-            os.makedirs("../trainings_data/resulting_trainings_data/subject_" + str(self.patient_id))
-
-        with open(resulting_file, "wb") as f:
-            pickle.dump(kinematics_data, f)
+            with open(resulting_file, "wb") as f:
+                pickle.dump(kinematics_data, f)
 
         print("Step 3: \t Getting EMG Data from Memory")
 
@@ -146,16 +147,18 @@ class Realtime_Datagenerator:
             # times 10 because of 10 seconds movement we want to have
             stop = int(start + (self.recording_time * 32))
 
-            emg_data[self.movement_name[0]] = np.array([step[None, ...] for step in v[start:stop]])
+            #emg_data[self.movement_name[0]] = np.array([step[None, ...] for step in v[start:stop]])
+            emg_data[self.movement_name[0]] = np.array(v[start:stop])
             self.movement_name.pop(0)
 
         print("Step 4: \t Saving EMG Data")
-        resulting_file = r"../trainings_data/resulting_trainings_data/subject_" + str(self.patient_id) + "/emg_data" + ".pkl"
-        if not os.path.exists("../trainings_data/resulting_trainings_data/subject_" + str(self.patient_id)):
-            os.makedirs("../trainings_data/resulting_trainings_data/subject_" + str(self.patient_id))
+        if not self.debug:
+            resulting_file = r"trainings_data/resulting_trainings_data/subject_" + str(self.patient_id) + "/emg_data" + ".pkl"
+            if not os.path.exists("trainings_data/resulting_trainings_data/subject_" + str(self.patient_id)):
+                os.makedirs("trainings_data/resulting_trainings_data/subject_" + str(self.patient_id))
 
-        with open(resulting_file, "wb") as f:
-            pickle.dump(emg_data, f)
+            with open(resulting_file, "wb") as f:
+                pickle.dump(emg_data, f)
 
         return
 
@@ -179,19 +182,13 @@ class Realtime_Datagenerator:
                 # get emg data
 
                 try:
-                    save_buffer.append(
-                        np.frombuffer(self.emgSocket.recv(self.BufferSize), dtype=np.int16).reshape(
-                            (408, -1), order="F"
-                        )[np.concatenate([np.r_[:64], np.r_[128:384]])]
-                    )
+                    save_buffer.append(np.frombuffer(self.emgSocket.recv(self.BufferSize), dtype=np.int16).reshape((408, -1), order="F")[self.emg_indices])
                 except Exception:
                     continue
             self.time_diffs.update({self.movement_name[self.movement_count]: time_diff})
 
             # self.emg_list[self.movement_name[self.movement_count]] = save_buffer
             self.emg_list.update({self.movement_name[self.movement_count]: save_buffer})
-            print("emg list:")
-            print(self.emg_list)
             self.movement_count += 1
 
 

@@ -36,7 +36,7 @@ class PyPlayer(tk.Frame):
         self.canvas = tk.Canvas(self.video_panel, background="black")
         self.canvas.pack(fill=tk.BOTH, expand=1)
         self.video_panel.pack(fill=tk.BOTH, expand=1)
-        self.media_list = [r"../trainings_data/videos/" + x for x in os.listdir("../trainings_data/videos")]
+        self.media_list = [r"trainings_data/videos/" + x for x in os.listdir("trainings_data/videos")]
         self.media_list_copy = self.media_list.copy()
         # controls
         self.create_control_panel()

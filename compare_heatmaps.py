@@ -5,19 +5,16 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
 from tkinter import ttk
 from exo_controller.helpers import *
+from exo_controller import *
 
-#TODO wie emg grids in heatmaps voneinander separieren?
-#TODO funtion die mu signal resamples wenn nicht von marius gegeben
-#TODO funktion die mir sagt welcher channel ich nehmen will wenn arrayindex sage
-#TODO kommunikation mit EMG in echtzeit
-#TODO
+
 
 
 
 class Heatmap:
     def __init__(self, movement_name,path_to_subject_dat,sampling_frequency=2048,path_to_save_plots=r"D:\Lab\MasterArbeit\plots\Heatmaps",frame_duration=150):
         """
-
+        NOTE !!!! at the moment if there are more than one ref dimension is given (2pinch,fist,etc,) for the plot the first one is taken!!!
         :param movement_name:
         :param path_to_subject_dat:
         :param sampling_frequency:
@@ -29,6 +26,8 @@ class Heatmap:
         self.closest_mu = closest_mu is the MU that fired the closest to the last frame, important if no mu fires since the last frame to use the old one again
         self.global_counter = global_counter is the number of frames that have been plotted, important because for first time we need to plot colorbar and other times not
         """
+        print("NOTE !!!! at the moment if there are more than one ref dimension is given (2pinch,fist,etc,) for the plot the first one is taken!!!",file=sys.stderr )
+
         self.movement_name = movement_name
         if not os.path.exists(os.path.join(path_to_save_plots, movement_name)):
             os.makedirs(os.path.join(path_to_save_plots, movement_name))
@@ -88,8 +87,13 @@ class Heatmap:
         #self.ax_emg.imshow(heatmap, cmap='hot', interpolation='nearest')
 
     def make_Ref_trackings(self,frame):
-        self.ax_ref.plot(self.x_for_ref, normalize_2D_array(self.ref_data), color='blue')
-        self.ax_ref.scatter(self.x_for_ref[frame], normalize_2D_array(self.ref_data)[frame], color='green', marker='x', s=90, linewidth=3)
+        if ("pinch" in self.movement_name) or ("fist" in self.movement_name):
+            self.ax_ref.plot(self.x_for_ref, normalize_2D_array(self.ref_data[:,0]), color='blue')
+            self.ax_ref.scatter(self.x_for_ref[frame], normalize_2D_array(self.ref_data[:,0])[frame], color='green',
+                                marker='x', s=90, linewidth=3)
+        else:
+            self.ax_ref.plot(self.x_for_ref, normalize_2D_array(self.ref_data), color='blue')
+            self.ax_ref.scatter(self.x_for_ref[frame], normalize_2D_array(self.ref_data)[frame], color='green', marker='x', s=90, linewidth=3)
 
     def make_mu_heatmap(self,frame):
         #search if a spike occured in the current frame and when, in which mu and then display the heatmap of this mu
@@ -188,7 +192,10 @@ class Heatmap:
         self.heatmaps_ex = np.zeros((num_rows, num_cols))
         self.number_heatmaps_flex = 0
         self.number_heatmaps_ex = 0
-        self.local_maxima,self.local_minima = get_locations_of_all_maxima(self.ref_data[:])
+        if ("pinch" in self.movement_name) or ("fist" in self.movement_name):
+            self.local_maxima, self.local_minima = get_locations_of_all_maxima(self.ref_data[:,0])
+        else:
+            self.local_maxima,self.local_minima = get_locations_of_all_maxima(self.ref_data[:])
 
 
 
@@ -278,7 +285,7 @@ if __name__ == "__main__":
     # movement_list = ["thumb_slow", "thumb_fast", "index_slow", "index_fast", "middle_slow", "middle_fast", "ring_slow",
     #                  "ring_fast", "pinky_slow", "pinky_fast", "fist", "2pinch", "3pinch"]
     # for movement in tqdm.tqdm(movement_list):
-    movement = "fist"
+    movement = "2pinch"
     heatmap = Heatmap(movement,r"D:\Lab\data\extracted\Sub2")
     heatmap.animate(save=True)
 

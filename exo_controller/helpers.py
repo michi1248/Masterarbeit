@@ -7,7 +7,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 #from ChannelExtraction import ChannelExtraction
-from ExtractImportantChannels import ChannelExtraction
+import sys
+import os
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+from exo_controller.ExtractImportantChannels import ChannelExtraction
 from scipy.signal import convolve2d
 
 def extract_important_channels(movement_list,path_to_subject_dat):
@@ -153,7 +156,7 @@ def calculate_emg_rms_one_channel(emg_data):
     Returns:
     - float: The RMS value of the EMG data.
     """
-    rms = np.sqrt(np.mean(emg_data**2))
+    rms = np.sqrt(np.mean(np.square(emg_data)))
     return rms
 
 def calculate_emg_rms_row(emg_grid,position,interval_in_samples):
@@ -178,8 +181,11 @@ def calculate_emg_rms_row(emg_grid,position,interval_in_samples):
             channel_data = emg_grid[row_idx][:position + 1]
         else:
             channel_data = emg_grid[row_idx][position - interval_in_samples:position]
-
-        rms_values[row_idx] = np.sqrt(np.mean(np.array(channel_data) ** 2))
+        rms_value = np.sqrt(np.mean(np.square(np.array(channel_data))))
+        if np.isnan(rms_value):
+            print("nan")
+            rms_value = 0
+        rms_values[row_idx] = rms_value
     return rms_values
 
 def calculate_emg_rms_grid(emg_grid,position,interval_in_samples):
@@ -407,10 +413,10 @@ def choose_possible_channels(difference_heatmap,mean_flex_heatmap,mean_ex_heatma
             # else:
             #     print("Slope difference too high or other value in neighborhood is higher")
             #     print("row: ", i, " col: ", j)
-            if (this_value<= min(neighbours) and (min(differences)>= threshold_neighbours) and (this_value is not None) and (this_value !=  0.0)):
+            if (this_value<= min(neighbours) and (min(differences)<= threshold_neighbours) and (this_value is not None) and (this_value !=  0.0)):
                 activity_in_movement_1 = mean_flex_heatmap[i][j]
                 activity_in_movement_2 = mean_ex_heatmap[i][j]
-
+                print("refference channel found for low acitivity")
                 # Assign the channel to the respective list based on activity
                 if activity_in_movement_1 < activity_in_movement_2:
                     flex_list.append([i, j])
