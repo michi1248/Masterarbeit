@@ -10,9 +10,10 @@ from sklearn.linear_model import Ridge
 
 #TODO min_samples 5 besser als 30
 class MultiDimensionalDecisionTree:
-    def __init__(self, important_channels, movements, windom_size=150, num_trees=1, sample_difference_overlap=64, max_depth = 10, min_samples_split=20,
+    def __init__(self, important_channels, movements, mean_heatmaps,windom_size=150, num_trees=1, sample_difference_overlap=64, max_depth = 10, min_samples_split=20,
                  num_previous_samples=None):
 
+        self.mean_heatmaps = mean_heatmaps
         self.sample_difference_overlap = sample_difference_overlap
         self.max_depth = max_depth # max depth of the tree
         self.min_samples_split = min_samples_split # min number of samples to split
@@ -284,15 +285,17 @@ if __name__ == "__main__":
     #movements = ["thumb_slow", "thumb_fast", "index_slow", "index_fast","2pinch"]
     movements = ["thumb_slow",  "index_slow", "2pinch"]
     #movements = ["ring_slow", "index_slow"]
-    # important_channels = extract_important_channels(movements, r"D:\Lab\data\extracted\Sub2")
-    # print("there were following number of important channels found: ",len(important_channels))
-    # channels = []
-    # for important_channel in important_channels:
-    #     channels.append(from_grid_position_to_row_position(important_channel))
-    # print("there were following number of important channels found: ",len(channels))
+
+    mean_heatmaps = extract_mean_heatmaps(movements, r"D:\Lab\data\extracted\Sub2")
+    #important_channels = extract_important_channels(movements, r"D:\Lab\data\extracted\Sub2")
+    #print("there were following number of important channels found: ",len(important_channels))
+    #channels = []
+    #for important_channel in important_channels:
+    #    channels.append(from_grid_position_to_row_position(important_channel))
+    #print("there were following number of important channels found: ",len(channels))
 
     channels= range(320)
-    model = MultiDimensionalDecisionTree(important_channels=channels,movements=movements)
+    model = MultiDimensionalDecisionTree(important_channels=channels,movements=movements,mean_heatmaps=mean_heatmaps)
     model.build_training_data(model.movements, r"D:\Lab\data\extracted\Sub2")
     #odel.load_trainings_data()
     model.save_trainings_data()

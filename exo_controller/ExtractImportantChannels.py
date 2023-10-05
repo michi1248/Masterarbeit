@@ -73,6 +73,25 @@ class ChannelExtraction:
         next_higher_value = self.samples[index_of_closest_value + 1]
         print("next value is: " + str(next_higher_value))
 
+    def get_heatmaps(self):
+        # samples = all sample values when using all samples with self.frame_duration in between
+        self.samples = np.linspace(0, self.sample_length, self.num_samples, endpoint=False, dtype=int)
+        self.samples = [element for element in self.samples if element <= self.ref_data.shape[0]]
+        # make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
+        num_rows, num_cols = self.emg_data.shape
+        self.heatmaps_flex = np.zeros((num_rows, num_cols))
+        self.heatmaps_ex = np.zeros((num_rows, num_cols))
+        self.number_heatmaps_flex = 0
+        self.number_heatmaps_ex = 0
+        self.local_maxima, self.local_minima = get_locations_of_all_maxima(self.ref_data[:])
+        important_channels = []
+        heatmap_list = {}
+        for i in self.samples:
+            self.make_heatmap_emg(i)
+
+        heatmap_flex, heatmap_ex, heatmap_difference = self.heatmap_extraction()
+        return heatmap_flex, heatmap_ex, heatmap_difference
+
 
     def get_channels(self):
         # samples = all sample values when using all samples with self.frame_duration in between
@@ -88,17 +107,25 @@ class ChannelExtraction:
         important_channels = []
         for i in self.samples:
             self.make_heatmap_emg(i)
-            channels_flexion, channels_extension = self.channel_extraction()
-            for j in channels_flexion:
-                if j not in important_channels:
-                    important_channels.append(j)
 
-            for j in channels_extension:
-                if j not in important_channels:
-                    important_channels.append(j)
+        channels_flexion, channels_extension = self.channel_extraction()
+        for j in channels_flexion:
+            if j not in important_channels:
+                important_channels.append(j)
 
+        for j in channels_extension:
+            if j not in important_channels:
+                important_channels.append(j)
         return important_channels
 
+    def heatmap_extraction(self):
+        if self.number_heatmaps_flex > 0 :
+            mean_flex_heatmap = normalize_2D_array(np.divide(self.heatmaps_flex, self.number_heatmaps_flex))
+        if self.number_heatmaps_ex > 0:
+            mean_ex_heatmap = normalize_2D_array(np.divide(self.heatmaps_ex, self.number_heatmaps_ex))
+        if self.number_heatmaps_flex > 0 and self.number_heatmaps_ex > 0:
+            difference_heatmap = normalize_2D_array(np.abs(np.subtract(mean_ex_heatmap, mean_flex_heatmap)))
+        return mean_flex_heatmap, mean_ex_heatmap, difference_heatmap
     def channel_extraction(self):
         channels_flexion, channels_extension = [],[]
         if self.number_heatmaps_flex > 0 :
@@ -108,7 +135,6 @@ class ChannelExtraction:
         if self.number_heatmaps_flex > 0 and self.number_heatmaps_ex > 0:
             difference_heatmap = normalize_2D_array(np.abs(np.subtract(mean_ex_heatmap, mean_flex_heatmap)))
             channels_flexion, channels_extension = choose_possible_channels(difference_heatmap, mean_flex_heatmap, mean_ex_heatmap)
-
         return channels_flexion, channels_extension
 
 if __name__ == "__main__":

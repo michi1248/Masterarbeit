@@ -13,6 +13,21 @@ import os
 from exo_controller.ExtractImportantChannels import ChannelExtraction
 from scipy.signal import convolve2d
 
+def extract_mean_heatmaps(movement_list, path_to_subject_data):
+    """
+    extracts the mean heatmaps for every movement (including both movement phases flexion and extension)
+    :param movement_list:
+    :param path_to_subject_data:
+    :return:
+    """
+    mean_heatmaps = {}
+    for movement in tqdm.tqdm(movement_list,desc="Extracting mean heatmaps for from all movements"):
+        extractor = ChannelExtraction(movement, path_to_subject_data)
+        heatmap_flexion,heatmap_extension,heatmap_difference = extractor.get_heatmaps()
+        mean_heatmaps[movement+ "_flexion"] = heatmap_flexion
+        mean_heatmaps[movement+ "_extension"] = heatmap_extension
+        mean_heatmaps[movement+ "_difference"] = heatmap_difference
+    return mean_heatmaps
 def extract_important_channels(movement_list,path_to_subject_dat):
     important_channels = []
     for movement in tqdm.tqdm(movement_list,desc="Extracting important channels for from all movements"):
