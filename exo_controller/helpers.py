@@ -5,24 +5,38 @@ import tqdm
 import pandas
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.signal import argrelextrema
 import torch
+from scipy.signal import find_peaks
 #from ChannelExtraction import ChannelExtraction
 import sys
 import os
 #sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
-from exo_controller.ExtractImportantChannels import ChannelExtraction
+from exo_controller import ExtractImportantChannels
 from scipy.signal import convolve2d
 
-def extract_mean_heatmaps(movement_list, path_to_subject_data):
+import ChannelExtraction
+
+
+def extract_mean_heatmaps(movement_list, path_to_subject_data,emg= None,ref =None):
     """
+    if emg and ref will be given, it has to be in format : num_movements x rest
     extracts the mean heatmaps for every movement (including both movement phases flexion and extension)
     :param movement_list:
     :param path_to_subject_data:
     :return:
     """
+
     mean_heatmaps = {}
+    count = 0
     for movement in tqdm.tqdm(movement_list,desc="Extracting mean heatmaps for from all movements"):
-        extractor = ChannelExtraction(movement, path_to_subject_data)
+        # if emg is None and ref is None:
+        #     emg_data,_,ref_data= open_all_files_for_one_patient_and_movement(path_to_subject_data, movement)
+        #     extractor = ExtractImportantChannels.ChannelExtraction(movement,emg_data,ref_data)
+        # else:
+        #     extractor = ExtractImportantChannels.ChannelExtraction(movement, emg[count], ref[count])
+        #     count +=1
+        extractor = ChannelExtraction.ChannelExtraction(movement, path_to_subject_data)
         heatmap_flexion,heatmap_extension,heatmap_difference = extractor.get_heatmaps()
         mean_heatmaps[movement+ "_flexion"] = heatmap_flexion
         mean_heatmaps[movement+ "_extension"] = heatmap_extension
@@ -31,7 +45,7 @@ def extract_mean_heatmaps(movement_list, path_to_subject_data):
 def extract_important_channels(movement_list,path_to_subject_dat):
     important_channels = []
     for movement in tqdm.tqdm(movement_list,desc="Extracting important channels for from all movements"):
-        extractor = ChannelExtraction(movement, path_to_subject_dat)
+        extractor = ChannelExtraction.ChannelExtraction(movement, path_to_subject_dat)
         channels = extractor.get_channels()
         for channel in channels:
             if channel not in important_channels:
@@ -369,11 +383,13 @@ def check_to_which_movement_cycle_sample_belongs(sample_position,local_maxima,lo
         return 2 , distance_to_minima
 
 
-def get_locations_of_all_maxima(movement_signal):
-    # Calculate the local maxima and minima of the signal
-    local_maxima = np.where((movement_signal[:-2] < movement_signal[1:-1]) & (movement_signal[1:-1] > movement_signal[2:]))[0] + 1
-    local_minima = np.where((movement_signal[:-2] > movement_signal[1:-1]) & (movement_signal[1:-1] < movement_signal[2:]))[0] + 1
-    return local_maxima,local_minima
+def get_locations_of_all_maxima(movement_signal, distance=3000):
+
+    local_maxima,_ = find_peaks(movement_signal,distance=distance)
+    local_minima,_ = find_peaks(-movement_signal,distance=distance)
+
+    return local_maxima, local_minima
+
 
 def choose_possible_channels(difference_heatmap,mean_flex_heatmap,mean_ex_heatmap,threshold_neighbours=0.25, threshold_difference_amplitude=0.35):
     """

@@ -1,6 +1,6 @@
 import numpy as np
 import tqdm
-from exo_controller import *
+from exo_controller.helpers import *
 
 
 class ChannelExtraction:

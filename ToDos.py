@@ -8,3 +8,8 @@
     # und dann die crosscorrelation zwischen dieser heatmap und der den mean heatmaps berechenen.
     # zusätzlich das local model nehmne und auch mit reinrechnen
     #
+
+
+# TODO: verwende 2d crosscorr um ein gelernten aktivierungsbereich mit heatmpa zu vergleichen
+
+# TODO:

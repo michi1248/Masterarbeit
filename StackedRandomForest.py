@@ -1,18 +1,21 @@
+import matplotlib.pyplot as plt
 from sklearn.utils import shuffle
 import time
 from exo_controller.helpers import *
 import numpy as np
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from sklearn.linear_model import Ridge
 
 
 #TODO min_samples 5 besser als 30
 class MultiDimensionalDecisionTree:
-    def __init__(self, important_channels, movements, mean_heatmaps,windom_size=150, num_trees=1, sample_difference_overlap=64, max_depth = 10, min_samples_split=20,
-                 num_previous_samples=None):
-
+    def __init__(self, important_channels, movements, mean_heatmaps= None,windom_size=150, num_trees=1, sample_difference_overlap=64, max_depth = 10, min_samples_split=20,
+                 num_previous_samples=None,classification = False):
+        self.classification = classification # whether to use classification or regression
         self.mean_heatmaps = mean_heatmaps
         self.sample_difference_overlap = sample_difference_overlap
         self.max_depth = max_depth # max depth of the tree
@@ -62,15 +65,20 @@ class MultiDimensionalDecisionTree:
             #self.trees.append(MultiOutputRegressor(SVR(kernel="linear",C=0.5,epsilon=0.2)))
             #self.trees.append(MultiOutputRegressor(
             #    Ridge()))
-            self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=30, min_samples_split=self.min_samples_split, min_samples_leaf=20)))
+            if self.classification:
+                self.trees.append(RandomForestClassifier(n_estimators=70, min_samples_split=self.min_samples_split, min_samples_leaf=15))
+            else:
+                self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=70, min_samples_split=self.min_samples_split, min_samples_leaf=15)))
 
-    def select_default_num_previous(self,middle_time_difference = 100):
-
-        overlap_in_time = self.sample_difference_overlap / 2048
-        middle_time_difference_in_samples = middle_time_difference/1000
-        middle_selected_default = middle_time_difference_in_samples/ overlap_in_time
-        self.num_previous_samples = [int(middle_selected_default/2),int(middle_selected_default),int(middle_selected_default*2),int(middle_selected_default*3)]
-        print("Selected default number of previous samples: ",self.num_previous_samples)
+    def select_default_num_previous(self):
+        """
+        Select the default number of previous samples to use for the time difference model.
+        We take the windows size (f.e 150 ms) and calculate the number of samples for 1, 2, 3 and 4 times the window size.
+        later we will be at a point in time t and make the difference heatmap between t and t-1*(window_size_in_samples), t-2*(window_size_in_samples), t-3*(window_size_in_samples) and t-4*(window_size_in_samples)
+                """
+        self.num_previous_samples = [int(self.window_size_in_samples / 2), int(self.window_size_in_samples),
+                                     int(self.window_size_in_samples * 2), int(self.window_size_in_samples * 3)]
+        print("Selected default number of previous samples: ", self.num_previous_samples)
         return self.num_previous_samples
 
     def predict(self, X,tree_numbers):
@@ -97,8 +105,7 @@ class MultiDimensionalDecisionTree:
 
         return averaged_predictions
 
-    def build_training_data(self, movement_names, path_to_subject_dat, window_size=int((150 / 1000) * 2048),
-                            overlap=int((150 / 1000) * 2048) - 150, split_ratio=0.8):
+    def build_training_data(self, movement_names, path_to_subject_dat, split_ratio=0.85):
         """
         This function builds the training data for the random forest
         the format for one input value should be [[movement1, movement2, ....][value1, value2, ....]] for ref labels
@@ -110,10 +117,14 @@ class MultiDimensionalDecisionTree:
         :param split_ratio:
         :return:
         """
+        res= {}
         segments = []
         labels = []
 
+        window_size = self.window_size_in_samples
+
         for movement in tqdm.tqdm(movement_names,desc="Building training data for local differences"):
+            heatmaps = []
             emg_data, Mu_data, ref_data = open_all_files_for_one_patient_and_movement(path_to_subject_dat, movement)
             ref_erweitert = np.zeros((self.num_movements,len(ref_data))) # [num_movements x num_samples]
             if movement != "2pinch":
@@ -126,25 +137,49 @@ class MultiDimensionalDecisionTree:
                     ref_erweitert[k, :] = ref_data[:, k]
             emg_data = reshape_emg_channels_into_320(emg_data)
             emg_data= emg_data[self.important_channels,:]
-            for i in range(0, len(emg_data[0]) - window_size + 1, window_size - overlap): # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
+            for i in range(0, len(emg_data[0]) - window_size + 1, self.sample_difference_overlap): # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
                 if i <= ref_data.shape[0]:
                     segment = calculate_emg_rms_row(emg_data,i,self.window_size_in_samples)
                     segment = normalize_2D_array(segment)
                     # feature = calculate_rms(segment)
                     # segments.append(feature)
-                    label = ref_erweitert[:,i]
+                    if self.classification:
+                        maxima,minima = get_locations_of_all_maxima(ref_data[:,0])
+                        belongs_to_movement,_ = check_to_which_movement_cycle_sample_belongs(i,maxima,minima)
+                        label = belongs_to_movement
+                        # plt.figure()
+                        # plt.plot(ref_data[:,0])
+                        # plt.title("belong to movement: " + str(belongs_to_movement))
+                        # plt.scatter(i,ref_data[i,0],c="red")
+                        # plt.scatter(maxima,ref_data[maxima,0],c="green")
+                        # plt.scatter(minima,ref_data[minima,0],c="blue")
+                        # #plt.xlim(i,i+20000)
+                        # plt.show()
+                    else:
+                        label = ref_erweitert[:,i]
                     segments.append(segment)
                     labels.append(label)
 
 
+            # segments, labels = shuffle(segments, labels, random_state=42)
+            # split_index = int(len(labels) * split_ratio)
+            # X_train_local, X_test_local = segments[:split_index], segments[split_index:]
+            # y_train_local, y_test_local = labels[:split_index], labels[split_index:]
+            # dict = {"X_train_local":X_train_local,"X_test_local":X_test_local,"y_train_local":y_train_local,"y_test_local":y_test_local}
+            # res[movement] = dict
+            # self.res = res
+
         segments, labels = shuffle(segments, labels, random_state=42)
+        print("number of samples generated for local: : ", len(labels))
         split_index = int(len(labels) * split_ratio)
         self.X_train_local, self.X_test_local = segments[:split_index], segments[split_index:]
         self.y_train_local, self.y_test_local = labels[:split_index], labels[split_index:]
 
 
 
-        ############# For the time traind data #############
+
+
+        ############ For the time traind data #############
         results = []
 
         for idx in tqdm.tqdm(self.num_previous_samples,desc="Building training data for time differences"):
@@ -164,7 +199,7 @@ class MultiDimensionalDecisionTree:
                         ref_erweitert[k, :] = ref_data[:, k] # TODO maybe change back to k if do not want both values to be the same
                 emg_data = reshape_emg_channels_into_320(emg_data)
                 emg_data = emg_data[self.important_channels, :]
-                for i in range(0, len(emg_data[0]) - window_size + 1, window_size - overlap):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
+                for i in range(0, len(emg_data[0]) - window_size + 1, self.sample_difference_overlap):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
                     if (i <= ref_data.shape[0]) and ( i-idx >= 0):
                         heatmap = calculate_emg_rms_row(emg_data, i, self.window_size_in_samples)
                         heatmap = normalize_2D_array(heatmap)
@@ -173,7 +208,14 @@ class MultiDimensionalDecisionTree:
                         difference_heatmap = np.abs(np.subtract(heatmap , previous_heatmap))
                         #difference_heatmap = normalize_2D_array(difference_heatmap)
                         #difference_heatmap = normalize_2D_array(calculate_emg_rms_row(emg_data, i,idx *(self.window_size_in_samples-self.sample_difference_overlap)))
-                        label = ref_erweitert[:, i]
+
+
+                        if self.classification:
+                            maxima, minima = get_locations_of_all_maxima(ref_data[:, 0])
+                            belongs_to_movement, _ = check_to_which_movement_cycle_sample_belongs(i, maxima, minima)
+                            label = belongs_to_movement
+                        else:
+                            label = ref_erweitert[:, i]
                         combined_diffs.append(difference_heatmap)
                         combined_ys.append(label)
 
@@ -188,7 +230,7 @@ class MultiDimensionalDecisionTree:
             y_train, y_test = combined_ys[:split_index], combined_ys[split_index:]
 
             results.append((X_train, X_test, y_train, y_test))
-            self.training_data_time = results
+        self.training_data_time = results
 
     def load_trainings_data(self):
         self.X_test_local = np.array(load_pickle_file( r"D:\Lab\MasterArbeit\trainings_data\X_test_local_" +str(self.window_size) + "_" + str(self.sample_difference_overlap)+ ".pkl"))
@@ -215,38 +257,89 @@ class MultiDimensionalDecisionTree:
         return normalize_2D_array(emg_data)
 
     def train(self):
+        # start = time.time()
+        # for i in tqdm.tqdm(range(len(self.trees)),desc="Training trees"):
+        #     #self.trees[i].fit(np.array(self.X_train_local),np.array(self.y_train_local))
+        #     self.trees[i].fit(np.array(self.res[self.movements[i]]["X_train_local"]), np.array(self.res[self.movements[i]]["y_train_local"]))
+        # print("Training Time: %s seconds" % (str(time.time() - start)))
+
         start = time.time()
-        for i in tqdm.tqdm(range(len(self.trees)),desc="Training trees"):
+        for i in tqdm.tqdm(range(len(self.trees)), desc="Training trees"):
             if i == 0:
-                self.trees[i].fit(np.array(self.X_train_local),np.array(self.y_train_local))
+                self.trees[i].fit(np.array(self.X_train_local), np.array(self.y_train_local))
             else:
-                self.trees[i].fit(self.training_data_time[i-1][0],self.training_data_time[i-1][2])
+                self.trees[i].fit(self.training_data_time[i - 1][0], self.training_data_time[i - 1][2])
         print("Training Time: %s seconds" % (str(time.time() - start)))
 
+    def get_heatmap_of_this_sample(self,sample_number):
+        pass
+    def which_mean_heatmap_is_corr_biggest(self,current_heatmap):
+        pass
     def evaluate(self):
+        # number_of_times_right_tree_chosen = 0
+        # count = 0
+        # for movement in tqdm.tqdm(range(len(self.movements)),desc="Evaluating trees"):
+        #     truth = self.res[self.movements[movement]]["y_test_local"]
+        #     results = []
+        #     res = self.trees[movement].predict(self.res[self.movements[movement]]["X_test_local"])
+        #     mae = mean_absolute_error(truth, res, multioutput='raw_values')
+        #     mse = mean_squared_error(truth, res, multioutput='raw_values')
+        #     r2 = r2_score(truth, res, multioutput='raw_values')
+        #     print("local Mean Absolute Error perfect fit: ", mae)
+        #     print("local Mean Squared Error perfect fit: ", mse)
+        #     print("local R^2 Score perfect fit: ", r2)
+        #
+        #     for j in range(len(results)):
+        #         for k in range(len(results[j])):
+        #             count +=1
+        #
+        #
+        #         mae = mean_absolute_error(truth, res, multioutput='raw_values')
+        #         mse = mean_squared_error(truth, res, multioutput='raw_values')
+        #         r2 = r2_score(truth, res, multioutput='raw_values')
+        #
+        #
+        #
+        #         print("local Mean Absolute Error: ", mae)
+        #         print("local Mean Squared Error : ", mse)
+        #         print("local R^2 Score : ", r2)
         for i in tqdm.tqdm(range(len(self.trees)), desc="Evaluating trees"):
             if i == 0:
                 res = self.trees[i].predict(self.X_test_local)
                 truth = self.y_test_local
-                mae = mean_absolute_error(truth, res, multioutput='raw_values')
-                mse = mean_squared_error(truth, res, multioutput='raw_values')
-                r2 = r2_score(truth, res, multioutput='raw_values')
+                if not self.classification:
+                    mae = mean_absolute_error(truth, res, multioutput='raw_values')
+                    mse = mean_squared_error(truth, res, multioutput='raw_values')
+                    r2 = r2_score(truth, res, multioutput='raw_values')
 
-                print("local Mean Absolute Error: ", mae)
-                print("local Mean Squared Error : ", mse)
-                print("local R^2 Score : ", r2)
+                    print("local Mean Absolute Error: ", mae)
+                    print("local Mean Squared Error : ", mse)
+                    print("local R^2 Score : ", r2)
+                else:
+                    print("local accuracy: ", accuracy_score(truth, res))
+                    print("local precision: ", precision_score(truth, res, average='weighted'))
+                    print("local recall: ", recall_score(truth, res, average='weighted'))
+
+
+
 
 
             else:
                 res = self.trees[i].predict(self.training_data_time[i - 1][1])
                 truth = self.training_data_time[i - 1][3]
-                mae = mean_absolute_error(truth, res, multioutput='raw_values')
-                mse = mean_squared_error(truth, res, multioutput='raw_values')
-                r2 = r2_score(truth, res, multioutput='raw_values')
+                if not self.classification:
+                    mae = mean_absolute_error(truth, res, multioutput='raw_values')
+                    mse = mean_squared_error(truth, res, multioutput='raw_values')
+                    r2 = r2_score(truth, res, multioutput='raw_values')
 
-                print("time Mean Absolute Error for tree " +str(i)+" : ", mae)
-                print("time Mean Squared Error for tree " +str(i)+" : ", mse)
-                print("time R^2 Score for tree " +str(i)+" : ", r2)
+                    print("time Mean Absolute Error for tree " + str(i) + " : ", mae)
+                    print("time Mean Squared Error for tree " + str(i) + " : ", mse)
+                    print("time R^2 Score for tree " + str(i) + " : ", r2)
+                else:
+                    print("time accuracy for tree " + str(i) + " : ", accuracy_score(truth, res))
+                    print("time precision for tree " + str(i) + " : ", precision_score(truth, res, average='weighted'))
+                    print("time recall for tree " + str(i) + " : ", recall_score(truth, res, average='weighted'))
+
 
     def save_trainings_data(self):
 
@@ -284,20 +377,20 @@ class MultiDimensionalDecisionTree:
 if __name__ == "__main__":
     #movements = ["thumb_slow", "thumb_fast", "index_slow", "index_fast","2pinch"]
     movements = ["thumb_slow",  "index_slow", "2pinch"]
-    #movements = ["ring_slow", "index_slow"]
 
-    mean_heatmaps = extract_mean_heatmaps(movements, r"D:\Lab\data\extracted\Sub2")
-    #important_channels = extract_important_channels(movements, r"D:\Lab\data\extracted\Sub2")
-    #print("there were following number of important channels found: ",len(important_channels))
-    #channels = []
-    #for important_channel in important_channels:
+    #mean_heatmaps = extract_mean_heatmaps(movements, r"D:\Lab\data\extracted\Sub2")
+
+    # important_channels = extract_important_channels(movements, r"D:\Lab\data\extracted\Sub2")
+    # print("there were following number of important channels found: ",len(important_channels))
+    # channels = []
+    # for important_channel in important_channels:
     #    channels.append(from_grid_position_to_row_position(important_channel))
-    #print("there were following number of important channels found: ",len(channels))
+    # print("there were following number of important channels found: ",len(channels))
 
     channels= range(320)
-    model = MultiDimensionalDecisionTree(important_channels=channels,movements=movements,mean_heatmaps=mean_heatmaps)
+    model = MultiDimensionalDecisionTree(important_channels=channels,movements=movements,mean_heatmaps=None,classification= False)
     model.build_training_data(model.movements, r"D:\Lab\data\extracted\Sub2")
-    #odel.load_trainings_data()
+    #model.load_trainings_data()
     model.save_trainings_data()
     model.train()
     model.evaluate()

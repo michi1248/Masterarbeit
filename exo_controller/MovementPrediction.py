@@ -14,7 +14,7 @@ class MultiDimensionalDecisionTree:
         self.emg_data= emg
         self.patient_number = patient_number
         self.ref_data = ref
-        self.sample_difference_overlap = sample_difference_overlap
+        self.sample_difference_overlap = sample_difference_overlap # amount of new datapoints coming in
         self.max_depth = max_depth # max depth of the tree
         self.min_samples_split = min_samples_split # min number of samples to split
         self.important_channels = important_channels # all the channels that are important between 0-320
@@ -25,7 +25,7 @@ class MultiDimensionalDecisionTree:
         self.window_size = windom_size # window size for the data ( length of the window in ms)
         self.window_size_in_samples = int((self.window_size / 1000) * 2048) # window size in samples
         self.sample_difference_overlap = sample_difference_overlap # difference between the start of the next window and the start of the previous window in samples
-        self.overlap = self.window_size_in_samples - sample_difference_overlap # overlap between windows in samples
+        self.overlap = self.window_size_in_samples - sample_difference_overlap # overlap between windows in samples ( amount of still the same)
         self.movment_dict = {}
         if num_previous_samples is None:
             num_previous_samples = self.select_default_num_previous()
@@ -60,13 +60,15 @@ class MultiDimensionalDecisionTree:
             #self.trees.append(MultiOutputRegressor(SVR(kernel="linear",C=0.5,epsilon=0.2)))
             self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=30, min_samples_split=self.min_samples_split, min_samples_leaf=15)))
 
-    def select_default_num_previous(self,middle_time_difference = 100):
-
-        overlap_in_time = self.sample_difference_overlap / 2048
-        middle_time_difference_in_samples = middle_time_difference/1000
-        middle_selected_default = middle_time_difference_in_samples/ overlap_in_time
-        self.num_previous_samples = [int(middle_selected_default/2),int(middle_selected_default),int(middle_selected_default*2),int(middle_selected_default*3)]
-        print("Selected default number of previous samples: ",self.num_previous_samples)
+    def select_default_num_previous(self):
+        """
+        Select the default number of previous samples to use for the time difference model.
+        We take the windows size (f.e 150 ms) and calculate the number of samples for 1, 2, 3 and 4 times the window size.
+        later we will be at a point in time t and make the difference heatmap between t and t-1*(window_size_in_samples), t-2*(window_size_in_samples), t-3*(window_size_in_samples) and t-4*(window_size_in_samples)
+                """
+        self.num_previous_samples = [int(self.window_size_in_samples / 2), int(self.window_size_in_samples),
+                                     int(self.window_size_in_samples * 2), int(self.window_size_in_samples * 3)]
+        print("Selected default number of previous samples: ", self.num_previous_samples)
         return self.num_previous_samples
 
     def predict(self, X ,tree_numbers):
@@ -93,8 +95,7 @@ class MultiDimensionalDecisionTree:
 
         return averaged_predictions
 
-    def build_training_data(self, movement_names, window_size=int((150 / 1000) * 2048),
-                            overlap=int((150 / 1000) * 2048) - 150, split_ratio=0.8):
+    def build_training_data(self, movement_names, split_ratio=0.8):
         """
         This function builds the training data for the random forest
         the format for one input value should be [[movement1, movement2, ....][value1, value2, ....]] for ref labels
@@ -109,6 +110,9 @@ class MultiDimensionalDecisionTree:
         segments = []
         labels = []
 
+        window_size = self.window_size_in_samples
+
+
         for movement in tqdm.tqdm(movement_names,desc="Building training data for local differences"):
 
             ref_erweitert = np.zeros((self.num_movements,len(self.ref_data[movement]))) # [num_movements x num_samples]
@@ -121,7 +125,7 @@ class MultiDimensionalDecisionTree:
                 for k in range(2):
                     ref_erweitert[k, :] = ref_data[:, k]
             emg_data= self.emg_data[movement][self.important_channels,:]
-            for i in range(0, len(emg_data[0]) - window_size + 1, window_size - overlap): # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
+            for i in range(0, len(emg_data[0]) - window_size + 1, self.sample_difference_overlap): # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
                 if i <= ref_data.shape[0]:
                     segment = calculate_emg_rms_row(emg_data,i,self.window_size_in_samples)
                     segment = normalize_2D_array(segment)
@@ -158,7 +162,7 @@ class MultiDimensionalDecisionTree:
                     for k in range(2):
                         ref_erweitert[k, :] = ref_data[:, k] # TODO maybe change back to k if do not want both values to be the same
                 emg_data = self.emg_data[movement][self.important_channels, :]
-                for i in range(0, len(emg_data[0]) - window_size + 1, window_size - overlap):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
+                for i in range(0, len(emg_data[0]) - window_size + 1, self.sample_difference_overlap):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
                     if (i <= ref_data.shape[0]) and ( i-idx >= 0):
                         heatmap = calculate_emg_rms_row(emg_data, i, self.window_size_in_samples)
                         heatmap = normalize_2D_array(heatmap)
@@ -182,7 +186,7 @@ class MultiDimensionalDecisionTree:
             y_train, y_test = combined_ys[:split_index], combined_ys[split_index:]
 
             results.append((X_train, X_test, y_train, y_test))
-            self.training_data_time = results
+        self.training_data_time = results
 
     def load_trainings_data(self):
         self.X_test_local = np.array(load_pickle_file( r"trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/X_test_local.pkl"))

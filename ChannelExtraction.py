@@ -61,8 +61,32 @@ class ChannelExtraction:
 
         self.global_counter += 1
 
+    def heatmap_extraction(self):
+        if self.number_heatmaps_flex > 0 :
+            mean_flex_heatmap = helpers.normalize_2D_array(np.divide(self.heatmaps_flex, self.number_heatmaps_flex))
+        if self.number_heatmaps_ex > 0:
+            mean_ex_heatmap = helpers.normalize_2D_array(np.divide(self.heatmaps_ex, self.number_heatmaps_ex))
+        if self.number_heatmaps_flex > 0 and self.number_heatmaps_ex > 0:
+            difference_heatmap = helpers.normalize_2D_array(np.abs(np.subtract(mean_ex_heatmap, mean_flex_heatmap)))
+        return mean_flex_heatmap, mean_ex_heatmap, difference_heatmap
+    def get_heatmaps(self):
+        # samples = all sample values when using all samples with self.frame_duration in between
+        self.samples = np.linspace(0, self.sample_length, self.num_samples, endpoint=False, dtype=int)
+        self.samples = [element for element in self.samples if element <= self.ref_data.shape[0]]
+        # make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
+        num_rows, num_cols = self.emg_data.shape
+        self.heatmaps_flex = np.zeros((num_rows, num_cols))
+        self.heatmaps_ex = np.zeros((num_rows, num_cols))
+        self.number_heatmaps_flex = 0
+        self.number_heatmaps_ex = 0
+        self.local_maxima, self.local_minima = helpers.get_locations_of_all_maxima(self.ref_data[:])
+        important_channels = []
+        heatmap_list = {}
+        for i in self.samples:
+            self.make_heatmap_emg(i)
 
-
+        heatmap_flex, heatmap_ex, heatmap_difference = self.heatmap_extraction()
+        return heatmap_flex, heatmap_ex, heatmap_difference
 
     def move_to_closest(self):
         current_value = int(self.slider.get())
