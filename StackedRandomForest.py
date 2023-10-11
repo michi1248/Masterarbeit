@@ -13,7 +13,7 @@ from sklearn.linear_model import Ridge
 
 #TODO min_samples 5 besser als 30
 class MultiDimensionalDecisionTree:
-    def __init__(self, important_channels, movements, mean_heatmaps= None,windom_size=150, num_trees=1, sample_difference_overlap=64, max_depth = 10, min_samples_split=20,
+    def __init__(self, important_channels, movements, mean_heatmaps= None,windom_size=150, num_trees=40, sample_difference_overlap=64, max_depth = 15, min_samples_split=5,
                  num_previous_samples=None,classification = False):
         self.classification = classification # whether to use classification or regression
         self.mean_heatmaps = mean_heatmaps
@@ -66,9 +66,12 @@ class MultiDimensionalDecisionTree:
             #self.trees.append(MultiOutputRegressor(
             #    Ridge()))
             if self.classification:
-                self.trees.append(RandomForestClassifier(n_estimators=70, min_samples_split=self.min_samples_split, min_samples_leaf=15))
+                self.trees.append(RandomForestClassifier(n_estimators=self.num_trees, min_samples_split=self.min_samples_split, max_depth=self.max_depth,warm_start=True))
             else:
-                self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=70, min_samples_split=self.min_samples_split, min_samples_leaf=15)))
+                self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=self.num_trees, min_samples_split=self.min_samples_split,max_depth=self.max_depth,warm_start=True)))
+
+    def compare_predictions(self, predictions, truth,tree_number=None):
+        plot_predictions(predictions, truth)
 
     def select_default_num_previous(self):
         """
@@ -169,9 +172,9 @@ class MultiDimensionalDecisionTree:
             # res[movement] = dict
             # self.res = res
 
+        split_index = int(len(labels) * split_ratio)
         segments, labels = shuffle(segments, labels, random_state=42)
         print("number of samples generated for local: : ", len(labels))
-        split_index = int(len(labels) * split_ratio)
         self.X_train_local, self.X_test_local = segments[:split_index], segments[split_index:]
         self.y_train_local, self.y_test_local = labels[:split_index], labels[split_index:]
 
@@ -205,7 +208,8 @@ class MultiDimensionalDecisionTree:
                         heatmap = normalize_2D_array(heatmap)
                         previous_heatmap = calculate_emg_rms_row(emg_data, i-idx, self.window_size_in_samples)
                         previous_heatmap = normalize_2D_array(previous_heatmap)
-                        difference_heatmap = np.abs(np.subtract(heatmap , previous_heatmap))
+                        #difference_heatmap = np.abs(np.subtract(heatmap , previous_heatmap))
+                        difference_heatmap = normalize_2D_array(np.subtract(heatmap, previous_heatmap))
                         #difference_heatmap = normalize_2D_array(difference_heatmap)
                         #difference_heatmap = normalize_2D_array(calculate_emg_rms_row(emg_data, i,idx *(self.window_size_in_samples-self.sample_difference_overlap)))
 
@@ -307,6 +311,7 @@ class MultiDimensionalDecisionTree:
             if i == 0:
                 res = self.trees[i].predict(self.X_test_local)
                 truth = self.y_test_local
+                self.compare_predictions(res, truth,tree_number= i)
                 if not self.classification:
                     mae = mean_absolute_error(truth, res, multioutput='raw_values')
                     mse = mean_squared_error(truth, res, multioutput='raw_values')
@@ -320,13 +325,11 @@ class MultiDimensionalDecisionTree:
                     print("local precision: ", precision_score(truth, res, average='weighted'))
                     print("local recall: ", recall_score(truth, res, average='weighted'))
 
-
-
-
-
             else:
                 res = self.trees[i].predict(self.training_data_time[i - 1][1])
                 truth = self.training_data_time[i - 1][3]
+                self.compare_predictions(res, truth,tree_number= i)
+
                 if not self.classification:
                     mae = mean_absolute_error(truth, res, multioutput='raw_values')
                     mse = mean_squared_error(truth, res, multioutput='raw_values')
@@ -339,6 +342,30 @@ class MultiDimensionalDecisionTree:
                     print("time accuracy for tree " + str(i) + " : ", accuracy_score(truth, res))
                     print("time precision for tree " + str(i) + " : ", precision_score(truth, res, average='weighted'))
                     print("time recall for tree " + str(i) + " : ", recall_score(truth, res, average='weighted'))
+
+        for i in tqdm.tqdm(range(len(self.trees)-1), desc="Evaluating trees"):
+            res_local = self.trees[0].predict(self.X_test_local)
+            truth = self.y_test_local
+            pred_time_tree = self.trees[i+1].predict(self.training_data_time[i][1])
+            combined=  (res_local + pred_time_tree)/2
+
+            if not self.classification:
+                res= combined
+                self.compare_predictions(res, truth, tree_number=i)
+                mae = mean_absolute_error(truth, res, multioutput='raw_values')
+                mse = mean_squared_error(truth, res, multioutput='raw_values')
+                r2 = r2_score(truth, res, multioutput='raw_values')
+
+                print("combined Mean Absolute Error for tree " + str(i) + " : ", mae)
+                print("combined Mean Squared Error for tree " + str(i) + " : ", mse)
+                print("combined R^2 Score for tree " + str(i) + " : ", r2)
+            else:
+                res = int(combined)
+                self.compare_predictions(res, truth, tree_number=i)
+                print("combined accuracy for tree " + str(i) + " : ", accuracy_score(truth, res))
+                print("combined precision for tree " + str(i) + " : ", precision_score(truth, res, average='weighted'))
+                print("combined recall for tree " + str(i) + " : ", recall_score(truth, res, average='weighted'))
+
 
 
     def save_trainings_data(self):
@@ -389,11 +416,12 @@ if __name__ == "__main__":
 
     channels= range(320)
     model = MultiDimensionalDecisionTree(important_channels=channels,movements=movements,mean_heatmaps=None,classification= False)
-    model.build_training_data(model.movements, r"D:\Lab\data\extracted\Sub2")
-    #model.load_trainings_data()
-    model.save_trainings_data()
+    #model.build_training_data(model.movements, r"D:\Lab\data\extracted\Sub2")
+    model.load_trainings_data()
+    #model.save_trainings_data()
     model.train()
     model.evaluate()
+
 
 
 

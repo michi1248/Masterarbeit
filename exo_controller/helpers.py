@@ -382,6 +382,57 @@ def check_to_which_movement_cycle_sample_belongs(sample_position,local_maxima,lo
     else:
         return 2 , distance_to_minima
 
+def plot_predictions(ground_truth,prediction,tree_number= None):
+    """
+    Plots ground truth and predictions from two regression models for two movement regressions.
+
+    Args:
+        ground_truth (numpy.ndarray): The ground truth values for both regressions.
+        prediction (numpy.ndarray): The predicted values for both regressions.
+        tree_number (int): The number of the tree that was used to make the predictions.
+    """
+
+    plt.figure(figsize=(12, 6))
+
+    num_rows= ground_truth.shape[0]
+    x_values= list(range(num_rows))
+
+    if ground_truth.ndim == 1:
+        plt.scatter(x_values,ground_truth, label='Ground Truth', color='blue',s=10)
+        plt.scatter(x_values,prediction, label='Prediction', color='green', s=10)
+        for i in range(ground_truth.shape[0]):
+            plt.plot([i,i],[ground_truth[i],prediction[i]],color='grey')
+        plt.legend()
+        plt.title('Ground Truth vs. Predictions for tree number : ' + str(tree_number))
+        plt.xlabel('Sample Index')
+        plt.ylabel('Values')
+        plt.tight_layout()
+        plt.show()
+
+    else:
+        plt.subplot(1, 2, 1)
+        plt.scatter(x_values,ground_truth[:,0], label='Ground Truth flexion', color='blue',s=10)
+        plt.scatter(x_values,prediction[:,0], label='flexion value prediction', color='green', s=10)
+        for i in range(ground_truth.shape[0]):
+            plt.plot([i,i],[ground_truth[i,0],prediction[i,0]],color='grey')
+        plt.legend()
+        plt.title('Ground Truth 1 vs. Predictions for tree number : ' + str(tree_number))
+        plt.xlabel('Sample Index')
+        plt.ylabel('Values')
+
+        plt.subplot(1, 2, 2)
+        plt.scatter(x_values,ground_truth[:,1], label='Ground Truth extension', color='blue',s=10)
+        plt.scatter(x_values,prediction[:,1], label='extension value prediction', color='green',s=10)
+        for i in range(ground_truth.shape[0]):
+            plt.plot([i,i],[ground_truth[i,1],prediction[i,1]],color='grey')
+        plt.legend()
+        plt.title('Ground Truth 2 vs. Predictions for tree number : ' + str(tree_number))
+        plt.xlabel('Sample Index')
+        plt.ylabel('Values')
+
+        # Displaying the plot
+        plt.tight_layout()
+        plt.show()
 
 def get_locations_of_all_maxima(movement_signal, distance=3000):
 

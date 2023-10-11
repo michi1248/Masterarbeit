@@ -188,6 +188,8 @@ class MultiDimensionalDecisionTree:
             results.append((X_train, X_test, y_train, y_test))
         self.training_data_time = results
 
+    def compare_predictions(self, predictions, truth, tree_number=None):
+        plot_predictions(predictions, truth)
     def load_trainings_data(self):
         self.X_test_local = np.array(load_pickle_file( r"trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/X_test_local.pkl"))
         self.y_test_local = np.array(load_pickle_file( r"trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/y_test_local.pkl"))
