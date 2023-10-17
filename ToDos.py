@@ -12,4 +12,11 @@
 
 # TODO: verwende 2d crosscorr um ein gelernten aktivierungsbereich mit heatmpa zu vergleichen
 
-# TODO:
+# TODO beim erstellen der trainingsdata: muss ich die anfänge skippen für time data weil sonst heatmap über zu wenige samples geht und das outlier sein könnten
+# einfach abfragen ob samples mehr als time:window_samples zur verfügung steht
+
+# TODO remove offset von ref data
+
+
+# TODO  trainings data abspeichern in realtime anwendung und dann laden
+# TODO  trainierte bäume abspeichern und laden und plotten am ende

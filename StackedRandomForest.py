@@ -9,11 +9,15 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from sklearn.linear_model import Ridge
+from scipy.signal import butter, filtfilt
+from sklearn.preprocessing import normalize
+import gc
+
 
 
 #TODO min_samples 5 besser als 30
 class MultiDimensionalDecisionTree:
-    def __init__(self, important_channels, movements, mean_heatmaps= None,windom_size=150, num_trees=40, sample_difference_overlap=64, max_depth = 15, min_samples_split=5,
+    def __init__(self, important_channels, movements, mean_heatmaps= None,windom_size=200, num_trees=30, sample_difference_overlap=64, max_depth = 320, min_samples_split=5,
                  num_previous_samples=None,classification = False):
         self.classification = classification # whether to use classification or regression
         self.mean_heatmaps = mean_heatmaps
@@ -70,8 +74,8 @@ class MultiDimensionalDecisionTree:
             else:
                 self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=self.num_trees, min_samples_split=self.min_samples_split,max_depth=self.max_depth,warm_start=True)))
 
-    def compare_predictions(self, predictions, truth,tree_number=None):
-        plot_predictions(predictions, truth)
+    def compare_predictions(self, predictions, truth,tree_number=None,realtime=False):
+        plot_predictions(truth, predictions,tree_number=tree_number,realtime= realtime)
 
     def select_default_num_previous(self):
         """
@@ -108,26 +112,27 @@ class MultiDimensionalDecisionTree:
 
         return averaged_predictions
 
-    def build_training_data(self, movement_names, path_to_subject_dat, split_ratio=0.85):
+    def build_training_data(self, movement_names, path_to_subject_dat, split_ratio=0.8,keep_time_aspect=False):
         """
         This function builds the training data for the random forest
         the format for one input value should be [[movement1, movement2, ....][value1, value2, ....]] for ref labels
         and [320x1] for emg data
-        :param movement_names:
-        :param path_to_subject_dat:
-        :param window_size:
-        :param overlap:
-        :param split_ratio:
+        :param movement_names: list with strings of all movements to consider
+        :param path_to_subject_dat: # string with path to data
+        :param split_ratio: # ratio of data to use for training between 0 and 1
+        :param keep_time_aspect: if true for every movement only the samples until split ratio are used and all for trainings data
         :return:
         """
-        res= {}
+        if keep_time_aspect == False:
+            stop = 1
+        else:
+            stop = split_ratio
         segments = []
         labels = []
-
+        self.emg_data_local_for_realtime=[]
+        self.labels_local_for_realtime = []
         window_size = self.window_size_in_samples
-
         for movement in tqdm.tqdm(movement_names,desc="Building training data for local differences"):
-            heatmaps = []
             emg_data, Mu_data, ref_data = open_all_files_for_one_patient_and_movement(path_to_subject_dat, movement)
             ref_erweitert = np.zeros((self.num_movements,len(ref_data))) # [num_movements x num_samples]
             if movement != "2pinch":
@@ -138,9 +143,11 @@ class MultiDimensionalDecisionTree:
             else:
                 for k in range(2):
                     ref_erweitert[k, :] = ref_data[:, k]
+            self.labels_local_for_realtime.append(ref_erweitert)  # save data for later realtime processing
             emg_data = reshape_emg_channels_into_320(emg_data)
             emg_data= emg_data[self.important_channels,:]
-            for i in range(0, len(emg_data[0]) - window_size + 1, self.sample_difference_overlap): # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
+            self.emg_data_local_for_realtime.append(emg_data) # save data for later realtime processing
+            for i in range(0, int(len(emg_data[0]) * stop) , self.sample_difference_overlap): # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
                 if i <= ref_data.shape[0]:
                     segment = calculate_emg_rms_row(emg_data,i,self.window_size_in_samples)
                     segment = normalize_2D_array(segment)
@@ -172,13 +179,14 @@ class MultiDimensionalDecisionTree:
             # res[movement] = dict
             # self.res = res
 
-        split_index = int(len(labels) * split_ratio)
+        if keep_time_aspect:
+            split_index = int(len(labels))
+        else:
+            split_index = int(len(labels) * split_ratio)
         segments, labels = shuffle(segments, labels, random_state=42)
         print("number of samples generated for local: : ", len(labels))
         self.X_train_local, self.X_test_local = segments[:split_index], segments[split_index:]
         self.y_train_local, self.y_test_local = labels[:split_index], labels[split_index:]
-
-
 
 
 
@@ -202,17 +210,13 @@ class MultiDimensionalDecisionTree:
                         ref_erweitert[k, :] = ref_data[:, k] # TODO maybe change back to k if do not want both values to be the same
                 emg_data = reshape_emg_channels_into_320(emg_data)
                 emg_data = emg_data[self.important_channels, :]
-                for i in range(0, len(emg_data[0]) - window_size + 1, self.sample_difference_overlap):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
+                for i in range(0, int(len(emg_data[0]) * stop), self.sample_difference_overlap):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
                     if (i <= ref_data.shape[0]) and ( i-idx >= 0):
                         heatmap = calculate_emg_rms_row(emg_data, i, self.window_size_in_samples)
                         heatmap = normalize_2D_array(heatmap)
                         previous_heatmap = calculate_emg_rms_row(emg_data, i-idx, self.window_size_in_samples)
                         previous_heatmap = normalize_2D_array(previous_heatmap)
-                        #difference_heatmap = np.abs(np.subtract(heatmap , previous_heatmap))
                         difference_heatmap = normalize_2D_array(np.subtract(heatmap, previous_heatmap))
-                        #difference_heatmap = normalize_2D_array(difference_heatmap)
-                        #difference_heatmap = normalize_2D_array(calculate_emg_rms_row(emg_data, i,idx *(self.window_size_in_samples-self.sample_difference_overlap)))
-
 
                         if self.classification:
                             maxima, minima = get_locations_of_all_maxima(ref_data[:, 0])
@@ -229,7 +233,10 @@ class MultiDimensionalDecisionTree:
 
             # Shuffle and split the combined data for the current index
             combined_diffs, combined_ys = shuffle(combined_diffs, combined_ys, random_state=42)
-            split_index = int(len(combined_diffs) * split_ratio)
+            if keep_time_aspect:
+                split_index = int(len(labels))
+            else:
+                split_index = int(len(labels) * split_ratio)
             X_train, X_test = combined_diffs[:split_index], combined_diffs[split_index:]
             y_train, y_test = combined_ys[:split_index], combined_ys[split_index:]
 
@@ -274,39 +281,7 @@ class MultiDimensionalDecisionTree:
             else:
                 self.trees[i].fit(self.training_data_time[i - 1][0], self.training_data_time[i - 1][2])
         print("Training Time: %s seconds" % (str(time.time() - start)))
-
-    def get_heatmap_of_this_sample(self,sample_number):
-        pass
-    def which_mean_heatmap_is_corr_biggest(self,current_heatmap):
-        pass
     def evaluate(self):
-        # number_of_times_right_tree_chosen = 0
-        # count = 0
-        # for movement in tqdm.tqdm(range(len(self.movements)),desc="Evaluating trees"):
-        #     truth = self.res[self.movements[movement]]["y_test_local"]
-        #     results = []
-        #     res = self.trees[movement].predict(self.res[self.movements[movement]]["X_test_local"])
-        #     mae = mean_absolute_error(truth, res, multioutput='raw_values')
-        #     mse = mean_squared_error(truth, res, multioutput='raw_values')
-        #     r2 = r2_score(truth, res, multioutput='raw_values')
-        #     print("local Mean Absolute Error perfect fit: ", mae)
-        #     print("local Mean Squared Error perfect fit: ", mse)
-        #     print("local R^2 Score perfect fit: ", r2)
-        #
-        #     for j in range(len(results)):
-        #         for k in range(len(results[j])):
-        #             count +=1
-        #
-        #
-        #         mae = mean_absolute_error(truth, res, multioutput='raw_values')
-        #         mse = mean_squared_error(truth, res, multioutput='raw_values')
-        #         r2 = r2_score(truth, res, multioutput='raw_values')
-        #
-        #
-        #
-        #         print("local Mean Absolute Error: ", mae)
-        #         print("local Mean Squared Error : ", mse)
-        #         print("local R^2 Score : ", r2)
         for i in tqdm.tqdm(range(len(self.trees)), desc="Evaluating trees"):
             if i == 0:
                 res = self.trees[i].predict(self.X_test_local)
@@ -347,25 +322,60 @@ class MultiDimensionalDecisionTree:
             res_local = self.trees[0].predict(self.X_test_local)
             truth = self.y_test_local
             pred_time_tree = self.trees[i+1].predict(self.training_data_time[i][1])
-            combined=  (res_local + pred_time_tree)/2
+            difference = res_local.shape[0] - pred_time_tree.shape[0]
+            combined=  np.divide((res_local[difference:] + pred_time_tree),2)
 
             if not self.classification:
                 res= combined
-                self.compare_predictions(res, truth, tree_number=i)
-                mae = mean_absolute_error(truth, res, multioutput='raw_values')
-                mse = mean_squared_error(truth, res, multioutput='raw_values')
-                r2 = r2_score(truth, res, multioutput='raw_values')
+                self.compare_predictions(res, truth[difference:], tree_number=i)
+                mae = mean_absolute_error(truth[difference:], res, multioutput='raw_values')
+                mse = mean_squared_error(truth[difference:], res, multioutput='raw_values')
+                r2 = r2_score(truth[difference:], res, multioutput='raw_values')
 
                 print("combined Mean Absolute Error for tree " + str(i) + " : ", mae)
                 print("combined Mean Squared Error for tree " + str(i) + " : ", mse)
                 print("combined R^2 Score for tree " + str(i) + " : ", r2)
             else:
                 res = int(combined)
-                self.compare_predictions(res, truth, tree_number=i)
-                print("combined accuracy for tree " + str(i) + " : ", accuracy_score(truth, res))
-                print("combined precision for tree " + str(i) + " : ", precision_score(truth, res, average='weighted'))
-                print("combined recall for tree " + str(i) + " : ", recall_score(truth, res, average='weighted'))
+                self.compare_predictions(res, truth[difference:], tree_number=i)
+                print("combined accuracy for tree " + str(i) + " : ", accuracy_score(truth[difference:], res))
+                print("combined precision for tree " + str(i) + " : ", precision_score(truth[difference:], res, average='weighted'))
+                print("combined recall for tree " + str(i) + " : ", recall_score(truth[difference:], res, average='weighted'))
 
+    def realtime_evaluation(self,grount_truth,local_pred,time_preds):
+        for i in tqdm.tqdm(range(len(self.trees)), desc="Evaluating trees"):
+            if i == 0:
+                res = local_pred
+                truth = grount_truth
+                if not self.classification:
+                    mae = mean_absolute_error(truth, res, multioutput='raw_values')
+                    mse = mean_squared_error(truth, res, multioutput='raw_values')
+                    r2 = r2_score(truth, res, multioutput='raw_values')
+
+                    print("local Mean Absolute Error: ", mae)
+                    print("local Mean Squared Error : ", mse)
+                    print("local R^2 Score : ", r2)
+                else:
+                    print("local accuracy: ", accuracy_score(truth, res))
+                    print("local precision: ", precision_score(truth, res, average='weighted'))
+                    print("local recall: ", recall_score(truth, res, average='weighted'))
+
+            else:
+                res = time_preds[i - 1]
+                res = np.squeeze(res,axis=1)
+                truth = grount_truth
+                if not self.classification:
+                    mae = mean_absolute_error(truth, res, multioutput='raw_values')
+                    mse = mean_squared_error(truth, res, multioutput='raw_values')
+                    r2 = r2_score(truth, res, multioutput='raw_values')
+
+                    print("time Mean Absolute Error for tree " + str(i) + " : ", mae)
+                    print("time Mean Squared Error for tree " + str(i) + " : ", mse)
+                    print("time R^2 Score for tree " + str(i) + " : ", r2)
+                else:
+                    print("time accuracy for tree " + str(i) + " : ", accuracy_score(truth, res))
+                    print("time precision for tree " + str(i) + " : ", precision_score(truth, res, average='weighted'))
+                    print("time recall for tree " + str(i) + " : ", recall_score(truth, res, average='weighted'))
 
 
     def save_trainings_data(self):
@@ -393,13 +403,95 @@ class MultiDimensionalDecisionTree:
         import pydot
         estimator = self.trees[0].estimators_[5]
         export_graphviz(estimator, out_file='tree.dot',
-                        feature_names=['x', 'y'],
+                        feature_names=['flexion', 'extension'],
                         class_names=['0', '1', '2'],
                         rounded=True, proportion=False,
                         precision=2, filled=True)
 
         (graph,) = pydot.graph_from_dot_file('tree.dot')
         graph.write_png('tree.png')
+
+    def realtime_prediction(self):
+
+        split_number = 0.8  # how much of the data should be used for training
+        # make data for training and train
+        self.build_training_data(self.movements, r"D:\Lab\data\extracted\Sub2", split_ratio=split_number,
+                                 keep_time_aspect=True)
+        self.train()
+
+        emg_datas = self.emg_data_local_for_realtime # [num_movements x #channels x #samples]
+
+        #emg_data = np.concatenate(emg_data,axis=-1) # new shape = 320 x movements*samples
+
+        labels = self.labels_local_for_realtime     # #movements x #samples
+
+
+        plt.figure()
+        plt.plot(labels[0][0,:])
+        plt.plot(labels[0][1,:])
+        plt.show()
+        plt.figure()
+        plt.plot(labels[1][0,:])
+        plt.plot(labels[1][1, :])
+        plt.show()
+        plt.figure()
+        plt.plot(labels[2][0, :])
+        plt.plot(labels[2][1, :])
+        plt.show()
+
+
+
+        #labels = np.concatenate(labels, axis = -1)
+        max_chunk_number = np.ceil(max(self.num_previous_samples)/64)# calculate number of how many chunks we have to store till we delete old
+
+        all_time_predictions = [[] for _ in range(len(self.num_previous_samples))]
+        all_local_predictions = []
+        all_truths = []
+        list_with_time_predictions_for_all_times_and_movements = []
+        for movement in range(len(emg_datas)):
+            truths = []
+            emg_buffer = []
+            emg_data = emg_datas[movement]
+            predictions_time = [[] for _ in range(len(self.num_previous_samples))]
+            results_local = []
+            for i in range(int(len(emg_data[movement]) * split_number), int(len(emg_data[movement]))-65 , 64):  # gehe über emg in schritten von 64 da 64 samples in chunks von emg bekomme in echt
+                if i <= labels[movement].shape[1]:
+                    emg_buffer.append(emg_data[:, i:i + 64])
+                    if len(emg_buffer) > max_chunk_number: # check if now too many sampels are in the buffer and i can delete old one
+                        emg_buffer.pop(0)
+                    data = np.concatenate(emg_buffer,axis=-1)
+                    heatmap_local = calculate_emg_rms_row(data, data[0].shape[0], self.window_size_in_samples)
+                    heatmap_local = normalize_2D_array(heatmap_local)
+                    res_local = self.trees[0].predict([heatmap_local])
+                    ground_truth = labels[movement][:,i]
+                    truths.append(ground_truth)
+                    results_local.append(res_local)
+                    count = 1
+                    for past_times in self.num_previous_samples:
+                        previous_heatmap = calculate_emg_rms_row(data, data[0].shape[0] - past_times, self.window_size_in_samples) #TODO maybe change to less samples like 64
+                        previous_heatmap = normalize_2D_array(previous_heatmap)
+                        difference_heatmap = normalize_2D_array(np.subtract(heatmap_local, previous_heatmap))
+                        if np.isnan(difference_heatmap).any():
+                            pred = np.array([[-1,-1]])
+                        else:
+                            pred = self.trees[count].predict([difference_heatmap])
+                        predictions_time[count-1].append(pred)
+                        all_time_predictions[count-1].append(pred)
+                        count += 1
+            all_local_predictions.append(results_local)
+            all_truths.append(truths)
+            self.compare_predictions(np.array(results_local),np.array(truths), tree_number="local",realtime=True)
+            list_with_time_predictions_for_all_times_and_movements.append(predictions_time)
+
+        for movement in range(len(emg_datas)):
+            for i in range(len(self.num_previous_samples)):
+                self.compare_predictions(np.array(list_with_time_predictions_for_all_times_and_movements[movement][i]), np.array(all_truths[movement]), tree_number=str("time : " + str(i)),realtime=True)
+        all_local_predictions = np.concatenate(all_local_predictions,axis=0)
+        all_truths = np.concatenate(all_truths,axis=0)
+        all_local_predictions = all_local_predictions.squeeze(axis=1)
+        self.realtime_evaluation(np.array(all_truths),np.array(all_local_predictions),np.array(all_time_predictions))
+
+
 
 if __name__ == "__main__":
     #movements = ["thumb_slow", "thumb_fast", "index_slow", "index_fast","2pinch"]
@@ -417,10 +509,14 @@ if __name__ == "__main__":
     channels= range(320)
     model = MultiDimensionalDecisionTree(important_channels=channels,movements=movements,mean_heatmaps=None,classification= False)
     #model.build_training_data(model.movements, r"D:\Lab\data\extracted\Sub2")
-    model.load_trainings_data()
+    #model.load_trainings_data()
+    model.realtime_prediction()
+    model.visualize_tree()
+    gc.collect()
+
     #model.save_trainings_data()
-    model.train()
-    model.evaluate()
+    #model.train()
+    #model.evaluate()
 
 
 

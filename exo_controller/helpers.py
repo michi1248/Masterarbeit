@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema
 import torch
 from scipy.signal import find_peaks
+from scipy.signal import butter
 #from ChannelExtraction import ChannelExtraction
 import sys
 import os
@@ -317,10 +318,13 @@ def from_grid_position_to_row_position(grid_position):
         if row_position > 320:
             print("error in helper function from_grid_position_to_row_position , this positon is out of range")
     return row_position
-def normalize_2D_array(data,axis=None):
+def normalize_2D_array(data,axis=None,negative = False):
     """
     normalizes a 2D array
-    :param array:
+
+    :param array: the data to be normalized
+    :param axis: which axis should be normalized, if None, the whole array will be normalized if 0 columns will be normalized, if 1 rows will be normalized
+    :param negative: if True, the data will be normalized between -1 and 1, if False, the data will be normalized between 0 and 1
     :return:
     """
     if axis is None:
@@ -329,6 +333,9 @@ def normalize_2D_array(data,axis=None):
     else:
         data = np.array(data)
         norm = (data-np.min(data,axis=axis))/(np.max(data,axis=axis)-np.min(data,axis=axis))
+
+    if negative == True:
+        norm = (norm * 2) - 1
     return norm
 
 
@@ -382,7 +389,12 @@ def check_to_which_movement_cycle_sample_belongs(sample_position,local_maxima,lo
     else:
         return 2 , distance_to_minima
 
-def plot_predictions(ground_truth,prediction,tree_number= None):
+def butter_highpass(cutoff, fs, order=5):
+    nyquist = 0.5 * fs
+    normal_cutoff = cutoff / nyquist
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
+    return b, a
+def plot_predictions(ground_truth,prediction,tree_number= None,realtime = False):
     """
     Plots ground truth and predictions from two regression models for two movement regressions.
 
@@ -396,35 +408,42 @@ def plot_predictions(ground_truth,prediction,tree_number= None):
 
     num_rows= ground_truth.shape[0]
     x_values= list(range(num_rows))
+    if realtime == True:
+        prediction = prediction.squeeze(axis=1)
 
     if ground_truth.ndim == 1:
-        plt.scatter(x_values,ground_truth, label='Ground Truth', color='blue',s=10)
-        plt.scatter(x_values,prediction, label='Prediction', color='green', s=10)
         for i in range(ground_truth.shape[0]):
             plt.plot([i,i],[ground_truth[i],prediction[i]],color='grey')
+        plt.scatter(x_values,ground_truth, label='Ground Truth', color='blue',s=10)
+        plt.scatter(x_values,prediction, label='Prediction', color='green', s=10)
+
         plt.legend()
         plt.title('Ground Truth vs. Predictions for tree number : ' + str(tree_number))
         plt.xlabel('Sample Index')
         plt.ylabel('Values')
         plt.tight_layout()
+        plt.ylim(0,1)
         plt.show()
 
     else:
         plt.subplot(1, 2, 1)
-        plt.scatter(x_values,ground_truth[:,0], label='Ground Truth flexion', color='blue',s=10)
-        plt.scatter(x_values,prediction[:,0], label='flexion value prediction', color='green', s=10)
         for i in range(ground_truth.shape[0]):
             plt.plot([i,i],[ground_truth[i,0],prediction[i,0]],color='grey')
+        plt.scatter(x_values,ground_truth[:,0], label='Ground Truth flexion', color='blue',s=10)
+        plt.scatter(x_values,prediction[:,0], label='flexion value prediction', color='green', s=10)
+
         plt.legend()
         plt.title('Ground Truth 1 vs. Predictions for tree number : ' + str(tree_number))
         plt.xlabel('Sample Index')
+        plt.ylim(0, 1)
         plt.ylabel('Values')
 
         plt.subplot(1, 2, 2)
-        plt.scatter(x_values,ground_truth[:,1], label='Ground Truth extension', color='blue',s=10)
-        plt.scatter(x_values,prediction[:,1], label='extension value prediction', color='green',s=10)
         for i in range(ground_truth.shape[0]):
             plt.plot([i,i],[ground_truth[i,1],prediction[i,1]],color='grey')
+        plt.scatter(x_values,ground_truth[:,1], label='Ground Truth extension', color='blue',s=10)
+        plt.scatter(x_values,prediction[:,1], label='extension value prediction', color='green',s=10)
+
         plt.legend()
         plt.title('Ground Truth 2 vs. Predictions for tree number : ' + str(tree_number))
         plt.xlabel('Sample Index')
@@ -432,9 +451,16 @@ def plot_predictions(ground_truth,prediction,tree_number= None):
 
         # Displaying the plot
         plt.tight_layout()
+        plt.ylim(0, 1)
         plt.show()
 
 def get_locations_of_all_maxima(movement_signal, distance=3000):
+
+    if movement_signal.ndim == 2:
+        if movement_signal.shape[1] == 1:
+            movement_signal = movement_signal.squeeze(axis=1)
+        else:
+            movement_signal = movement_signal[:,0]
 
     local_maxima,_ = find_peaks(movement_signal,distance=distance)
     local_minima,_ = find_peaks(-movement_signal,distance=distance)
@@ -492,18 +518,16 @@ def choose_possible_channels(difference_heatmap,mean_flex_heatmap,mean_ex_heatma
                     flex_list.append([i, j])
                 else:
                     ex_list.append([i, j])
-            # else:
-            #     print("Slope difference too high or other value in neighborhood is higher")
-            #     print("row: ", i, " col: ", j)
-            if (this_value<= min(neighbours) and (min(differences)<= threshold_neighbours) and (this_value is not None) and (this_value !=  0.0)):
-                activity_in_movement_1 = mean_flex_heatmap[i][j]
-                activity_in_movement_2 = mean_ex_heatmap[i][j]
-                print("refference channel found for low acitivity")
-                # Assign the channel to the respective list based on activity
-                if activity_in_movement_1 < activity_in_movement_2:
-                    flex_list.append([i, j])
-                else:
-                    ex_list.append([i, j])
+
+            # if (this_value<= min(neighbours) and (min(differences)<= threshold_neighbours) and (this_value is not None) and (this_value !=  0.0)):
+            #     activity_in_movement_1 = mean_flex_heatmap[i][j]
+            #     activity_in_movement_2 = mean_ex_heatmap[i][j]
+            #     #print("refference channel found for low acitivity")
+            #     # Assign the channel to the respective list based on activity
+            #     if activity_in_movement_1 < activity_in_movement_2:
+            #         flex_list.append([i, j])
+            #     else:
+            #         ex_list.append([i, j])
 
 
     return flex_list, ex_list
