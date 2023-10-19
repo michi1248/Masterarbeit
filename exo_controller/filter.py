@@ -1,581 +1,182 @@
-from typing import List, Optional, Tuple
-
-import numba
-
 import numpy as np
-import torch
-from numba.typed import List as NumbaList
-from torchmetrics import PearsonCorrCoef
-
-
-@numba.njit
-def _normalize_numpy(matrix: np.ndarray) -> np.ndarray:
-    return matrix / np.linalg.norm(matrix)
-
-
-@torch.jit.script
-def _normalize_torch(matrix) -> torch.Tensor:
-    return matrix / torch.linalg.norm(matrix)
-
-
-def _append_to_tensor(tensor: torch.Tensor, to_append: torch.Tensor):
-    return torch.concat([tensor, to_append[None, ...]], dim=0)
-
-
-def _pop_first_in_tensor(tensor: Optional[torch.Tensor]):
-    return tensor[1:]
-
-
-@numba.njit
-def _additional_filter(last_avg: List, prediction, weight_additional_filter: float):
-    new = last_avg[-2] + (
-        _normalize_numpy(np.sqrt(np.square(prediction - last_avg[-2]))) / weight_additional_filter
-    ) * (prediction - last_avg[-2])
-    last_avg[-1] = new
-
-    return new
-
-
-@numba.njit
-def _coeff_mat(x, deg):
-    mat_ = np.zeros(shape=(x.shape[0], deg + 1))
-    const = np.ones_like(x)
-    mat_[:, 0] = const
-    mat_[:, 1] = x
-    if deg > 1:
-        for n in range(2, deg + 1):
-            mat_[:, n] = x**n
-    return mat_
-
-
-@numba.njit
-def _fit_x(a, b):
-    # linalg solves ax = b
-    return np.linalg.lstsq(a, b)[0]
-
-
-@numba.jit
-def fit_poly(x, y, deg):
-    a = _coeff_mat(x, deg)
-    p = _fit_x(a, y)
-    # Reverse order so p[0] is coefficient of highest order
-    return p[::-1]
-
-
-@numba.njit
-def eval_polynomial(P, x):
-    """
-    Compute polynomial P(x) where P is a vector of coefficients, highest
-    order coefficient at P[0].  Uses Horner's Method.
-    """
-    result = 0
-    for coeff in P:
-        result = x * result + coeff
-    return result
-
-
-# def _normalize_cupy(matrix) -> cupy.ndarray:
-#     return matrix / cupy.linalg.norm(matrix)
-#
-#
-# def _append_to_cupy(array: cupy.ndarray, to_append: cupy.ndarray):
-#     return cupy.concatenate([array, to_append[None, ...]], axis=0)
-#
-#
-# def _pop_first_in_cupy(array: Optional[cupy.ndarray]):
-#     return array[1:]
-
+import cupy as cp
 
 class MichaelFilter:
-    """Michael's filter implementation
+    def __init__(self,output_smoothing = True, additinal_filter = True, only_additional_filter = False, weight_prediction_impact_on_regression = 0.75, weight_additional_filter = 2, degree_regressions = 1, buffer_length = 10, skip_predictions = 1, num_fingers = 2):
 
-    Parameters
-    ----------
-    window_size : int
-        The window size for the moving average
-    threshold : float
-        The threshold for the additional filter
-    additional_filter : bool
-        Whether to use the additional filter or not
-    only_additional_filter : bool
-        Whether to only use the additional filter or not
-    weight_prediction_impact_on_regression : float
-        The weight of the prediction impact on the regression (0.5 means that the prediction has the same impact as the
-        regression)
-    weight_additional_filter : float
-        The weight of the additional filter (higher means that the additional filter has a higher impact)
-    buffer_length : int
-        The buffer length for the additional filter
-    skip_predictions : int
-        The number of predictions to skip before using the additional filter
-    cuda : bool
-        Whether to use cuda or not
-    num_outputs : int
-        The number of outputs
+        self.last_val = []
+        self.last_avg = []
+        self.output_smoothing = output_smoothing
+        self.additinal_filter = additinal_filter
+        self.only_additional_filter = only_additional_filter
+        # a new prediciton is genereated, which is between the regresion prediction and the ai prediction. This
+        # weight regulats the influence of the ai prediction on the new prediciton.
+        self.weight_prediction_impact_on_regression = weight_prediction_impact_on_regression
+        #the distance ( how much changes from last to this point) gets divided by this and then normalized
+        # how much of the change willl be taken -> the hiher the weight the less change will be taken
+        self.weight_additional_filter = weight_additional_filter
+        # which degree of polynomial regression shuld be used.
+        # degree 1 has to be used
+        self.degree_regressions = degree_regressions
+        # how many last predictions/averages should be regarded f.e for regression
+        self.buffer_length = buffer_length
+        # how many samples in the future should be predicted
+        self.skip_predictions = skip_predictions
+        # num fingers is how many fingers we want to predict i.e how many values one prediction has
+        self.num_fingers = num_fingers
+
+    def normalize(self,matrix):
+        return matrix / np.linalg.norm(matrix)
 
 
-    Returns
-    -------
-    np.ndarray
-        The filtered data
+    def filter(self, prediction):
+        self.last_avg.append(prediction)
+        self.last_val.append(prediction)
 
-    Notes
-    -----
-        Original ("naive") implementation made by Michael März (michael.maerz@fau.de)
-        during his bachelor thesis at the Nsquared-Lab at
-        Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU) in 2022.
+        if ((len(self.last_avg) == 0) or len(self.last_avg) == 1):
+            return prediction
 
-        Subsequent improvements made by Raul C. Sîmpetru (raul.simpetru@fau.de).
+        if (self.only_additional_filter):
+            new = self.last_avg[-2] + (self.normalize(
+                np.sqrt(np.square(prediction - self.last_avg[-2]))) / self.weight_additional_filter
+                                  ) * (prediction - self.last_avg[-2])
+            self.last_avg[-1] = new
+            prediction = new
+            if (len(self.last_avg) > self.buffer_length):
+                self.last_avg.pop(0)
 
-    """
+            return prediction
 
-    def __init__(
-        self,
-        threshold: float = 0.5,
-        additional_filter: bool = True,
-        only_additional_filter: bool = False,
-        weight_prediction_impact_on_regression: float = 0.5,
-        weight_additional_filter: float = 3,
-        buffer_length: int = 15,
-        skip_predictions: int = 1,
-        cuda: bool = False,
-        num_outputs: int = 60,
-    ):
-        self.threshold = threshold
-        self.additional_filter = additional_filter
+        if 1 < len(self.last_avg) < self.buffer_length:
+            new = self.last_avg[-2] + (self.normalize(
+                np.sqrt(np.square(prediction - self.last_avg[-2]))) / self.weight_additional_filter
+                                       ) * (prediction - self.last_avg[-2])
+            self.last_avg[-1] = new
+            prediction = new
+            return prediction
+
+        for i in range(self.num_fingers):
+            last_joint_preds = []
+            last_joint_avgs = []
+            for l in range(self.buffer_length - 1):
+                last_joint_preds.append(self.last_val[l][i])
+                last_joint_avgs.append(self.last_avg[l][i])
+
+            mymodel3 = np.poly1d(
+                np.polyfit(np.linspace(1, self.buffer_length - 1, self.buffer_length - 1), last_joint_preds,
+                           self.degree_regressions))
+            res = []
+            for u in range(self.buffer_length):
+                res.append(mymodel3(u))
+            # plt.scatter(np.linspace(1,buffer_length,buffer_length), p, color='red')
+            # plt.plot(np.linspace(1,buffer_length,buffer_length), res, color='green')
+            pred_reg = (mymodel3(self.buffer_length + self.skip_predictions) + prediction[i] * self.weight_prediction_impact_on_regression) / (self.weight_prediction_impact_on_regression + 1)
+
+            mymodel = np.poly1d(
+                np.polyfit(np.linspace(1, self.buffer_length - 1, self.buffer_length - 1), last_joint_avgs,
+                           self.degree_regressions))
+            avg_reg = (mymodel(self.buffer_length + self.skip_predictions) + prediction[i] * self.weight_prediction_impact_on_regression) / (self.weight_prediction_impact_on_regression + 1)
+            res2 = []
+            for u in range(self.buffer_length):
+                res2.append(mymodel(u))
+            # plt.plot(np.linspace(1, buffer_length, buffer_length), res2, color='blue')
+            # plt.scatter(np.linspace(1, buffer_length, buffer_length), q, color='black')
+            # plt.show()
+
+            crozzcoeff = np.abs(np.corrcoef(res2, res)[0, 1])
+            if (np.isnan(crozzcoeff)):
+                crozzcoeff = 1
+
+            ges_pred = (avg_reg * crozzcoeff + pred_reg) / (crozzcoeff + 1)
+            # ges_pred = ((mymodel3(buffer_length) + mymodel(buffer_length) + prediction[i][j]*var2) / (2 + var2))
+
+            self.last_avg[-1][i] = ges_pred
+
+        if (self.additinal_filter == True):
+            new = self.last_avg[-2] + (self.normalize(
+                np.sqrt(np.square(self.last_avg[-1] - self.last_avg[-2]))) / self.weight_additional_filter
+                                  ) * (self.last_avg[-1] - self.last_avg[-2])
+            self.last_avg[-1] = new
+            self.last_val.pop(0)
+            self.last_avg.pop(0)
+            prediction = new
+            return prediction
+
+        self.last_val.pop(0)
+        self.last_avg.pop(0)
+        prediction = self.last_avg[-1]
+        return prediction
+
+
+
+class MichaelFilterCupy:
+    def __init__(self, output_smoothing=True, additinal_filter=True, only_additional_filter=False,
+                 weight_prediction_impact_on_regression=0.75, weight_additional_filter=2,
+                 degree_regressions=1, buffer_length=10, skip_predictions=1, num_fingers=2):
+
+        self.last_val = cp.array([])
+        self.last_avg = cp.array([])
+        self.output_smoothing = output_smoothing
+        self.additinal_filter = additinal_filter
         self.only_additional_filter = only_additional_filter
         self.weight_prediction_impact_on_regression = weight_prediction_impact_on_regression
         self.weight_additional_filter = weight_additional_filter
+        self.degree_regressions = degree_regressions
         self.buffer_length = buffer_length
         self.skip_predictions = skip_predictions
-        self.cuda = cuda
-        self.num_outputs = num_outputs
+        self.num_fingers = num_fingers
 
-        self._last_avg = None
-        self._last_val = None
+    def normalize(self, matrix):
+        return matrix / cp.linalg.norm(matrix)
 
-        self._xs = torch.arange(0, self.buffer_length, 1, device="cpu" if not self.cuda else "cuda")
-        self._pearson = PearsonCorrCoef(device="cpu" if not self.cuda else "cuda", num_outputs=self.num_outputs)
-        self._A = torch.ones(
-            (self.num_outputs, self.buffer_length, 2),
-            device="cpu" if not self.cuda else "cuda",
-            dtype=torch.float32,
-        )
-        self._A[:, :, 1] = self._xs
+    def filter(self, prediction):
+        prediction = cp.array(prediction)
+        cp.append(self.last_avg, prediction)
+        cp.append(self.last_val, prediction)
 
-    def naive_filter(self, prediction: torch.FloatTensor) -> np.ndarray:
-        prediction = prediction.T
-
-        if self._last_avg is None and self._last_val is None:
-            self._last_avg = [prediction]
-            self._last_val = [prediction]
-        else:
-            self._last_avg.append(prediction)
-            self._last_val.append(prediction)
-
-        if len(self._last_avg) <= 1:
-            return prediction
+        if len(self.last_avg) <= 1:
+            return cp.asnumpy(prediction)
 
         if self.only_additional_filter:
-            new = self._last_avg[-2] + (
-                _normalize_numpy(np.sqrt(np.square(prediction - self._last_avg[-2]))) / self.weight_additional_filter
-            ) * (prediction - self._last_avg[-2])
-            self._last_avg[-1] = new
-            if len(self._last_avg) > self.buffer_length:
-                self._last_avg.pop(0)
+            new = self.last_avg[-2] + (self.normalize(cp.sqrt(cp.square(prediction - self.last_avg[-2]))) / self.weight_additional_filter) * (prediction - self.last_avg[-2])
+            self.last_avg[-1] = new
+            if len(self.last_avg) > self.buffer_length:
+                self.last_avg = self.last_avg[1:]
+            return cp.asnumpy(new)
+
+        if 1 < len(self.last_avg) < self.buffer_length:
+            new = self.last_avg[-2] + (self.normalize(cp.sqrt(cp.square(prediction - self.last_avg[-2]))) / self.weight_additional_filter) * (prediction - self.last_avg[-2])
+            self.last_avg[-1] = new
+            return cp.asnumpy(new)
+
+        x = cp.linspace(1, self.buffer_length - 1, self.buffer_length - 1)
+        for i in range(self.num_fingers):
+            last_joint_preds = self.last_val[:self.buffer_length-1, i]
+            last_joint_avgs = self.last_avg[:self.buffer_length-1, i]
+
+            coef_preds = cp.polyfit(x, last_joint_preds, self.degree_regressions)
+            coef_avgs = cp.polyfit(x, last_joint_avgs, self.degree_regressions)
+
+            mymodel_preds = cp.poly1d(coef_preds)
+            mymodel_avgs = cp.poly1d(coef_avgs)
+
+            pred_reg = (mymodel_preds(self.buffer_length + self.skip_predictions) + prediction[i] * self.weight_prediction_impact_on_regression) / (self.weight_prediction_impact_on_regression + 1)
+            avg_reg = (mymodel_avgs(self.buffer_length + self.skip_predictions) + prediction[i] * self.weight_prediction_impact_on_regression) / (self.weight_prediction_impact_on_regression + 1)
+
+            crozzcoeff = abs(cp.corrcoef(mymodel_avgs(x), mymodel_preds(x))[0, 1])
+            crozzcoeff = 1 if cp.isnan(crozzcoeff) else crozzcoeff
+
+            ges_pred = (avg_reg * crozzcoeff + pred_reg) / (crozzcoeff + 1)
+            self.last_avg[-1, i] = ges_pred
+
+        if self.additinal_filter:
+            new = self.last_avg[-2] + (self.normalize(cp.sqrt(cp.square(self.last_avg[-1] - self.last_avg[-2]))) / self.weight_additional_filter) * (self.last_avg[-1] - self.last_avg[-2])
+            self.last_avg[-1] = new
+            self.last_val = self.last_val[1:]
+            self.last_avg = self.last_avg[1:]
+            return cp.asnumpy(new)
+
+        self.last_val = self.last_val[1:]
+        self.last_avg = self.last_avg[1:]
+        return cp.asnumpy(self.last_avg[-1])
 
-            return new
-
-        if 1 < len(self._last_avg) < self.buffer_length:
-            new = self._last_avg[-2] + (
-                _normalize_numpy(np.sqrt(np.square(prediction - self._last_avg[-2]))) / self.weight_additional_filter
-            ) * (prediction - self._last_avg[-2])
-            self._last_avg[-1] = new
-
-            return new
-
-        for i in range(prediction.shape[0]):
-            for j in range(prediction.shape[1]):
-                last_joint_preds = []
-                last_joint_avgs = []
-                for k in range(self.buffer_length - 1):
-                    last_joint_preds.append(self._last_val[k][i][j])
-                    last_joint_avgs.append(self._last_avg[k][i][j])
-
-                mymodel3 = np.poly1d(
-                    np.polyfit(
-                        np.linspace(1, self.buffer_length - 1, self.buffer_length - 1),
-                        last_joint_preds,
-                        1,
-                    )
-                )
-                res = []
-                for u in range(self.buffer_length):
-                    res.append(mymodel3(u))
-                # plt.scatter(np.linspace(1,buffer_length,buffer_length), p, color='red')
-                # plt.plot(np.linspace(1,buffer_length,buffer_length), res, color='green')
-                pred_reg = (
-                    mymodel3(self.buffer_length + self.skip_predictions)
-                    + prediction[i][j] * self.weight_prediction_impact_on_regression
-                ) / (self.weight_prediction_impact_on_regression + 1)
-
-                mymodel = np.poly1d(
-                    np.polyfit(
-                        np.linspace(1, self.buffer_length - 1, self.buffer_length - 1),
-                        last_joint_avgs,
-                        1,
-                    )
-                )
-                avg_reg = (
-                    mymodel(self.buffer_length + self.skip_predictions)
-                    + prediction[i][j] * self.weight_prediction_impact_on_regression
-                ) / (self.weight_prediction_impact_on_regression + 1)
-                res2 = []
-                for u in range(self.buffer_length):
-                    res2.append(mymodel(u))
-                # plt.plot(np.linspace(1, buffer_length, buffer_length), res2, color='blue')
-                # plt.scatter(np.linspace(1, buffer_length, buffer_length), q, color='black')
-                # plt.show()
-
-                crozzcoeff = np.abs(np.corrcoef(res2, res)[0, 1])
-                if np.isnan(crozzcoeff):
-                    crozzcoeff = 1
-
-                ges_pred = (avg_reg * crozzcoeff + pred_reg) / (crozzcoeff + 1)
-                # ges_pred = ((mymodel3(buffer_length) + mymodel(buffer_length) + prediction[i][j]*var2) / (2 + var2))
-
-                self._last_avg[-1][i][j] = ges_pred
-
-        if self.additional_filter:
-            new = self._last_avg[-2] + (
-                _normalize_numpy(np.sqrt(np.square(self._last_avg[-1] - self._last_avg[-2]))) / 3
-            ) * (self._last_avg[-1] - self._last_avg[-2])
-            self._last_avg[-1] = new
-
-            self._last_val.pop(0)
-            self._last_avg.pop(0)
-
-            return new
-
-        self._last_val.pop(0)
-        self._last_avg.pop(0)
-
-        return self._last_avg[-1]
-
-    def torch_enhanced_filter(self, prediction: torch.Tensor) -> np.ndarray:
-        prediction = torch.from_numpy(prediction.T)
-
-        if self._last_avg is None and self._last_val is None:
-            self._last_avg = prediction[None, ...]
-            self._last_val = prediction[None, ...]
-        else:
-            self._last_avg = _append_to_tensor(self._last_avg, prediction)
-            self._last_val = _append_to_tensor(self._last_val, prediction)
-
-        xs = np.arange(0, self.buffer_length, 1)
-
-        if self._last_avg.shape[0] <= 1:
-            return prediction.numpy()
-
-        if self.only_additional_filter:
-            pred_last_avg = prediction - self._last_avg[-2]
-            new = (
-                self._last_avg[-2]
-                + (_normalize_torch(pred_last_avg.abs()) / self.weight_additional_filter) * pred_last_avg
-            )
-            self._last_avg[-1] = new
-
-            if self._last_avg.shape[0] > self.buffer_length:
-                self._last_avg = _pop_first_in_tensor(self._last_avg)
-
-            return new.numpy()
-
-        if 1 < self._last_avg.shape[0] < self.buffer_length:
-            pred_last_avg = prediction - self._last_avg[-2]
-            new = (
-                self._last_avg[-2]
-                + (_normalize_torch(pred_last_avg.abs()) / self.weight_additional_filter) * pred_last_avg
-            )
-            self._last_avg[-1] = new
-
-            return new.numpy()
-
-        last_val_models = np.polyfit(xs, self._last_val.reshape(self.buffer_length, -1), 1).T
-        last_avg_models = np.polyfit(xs, self._last_avg.reshape(self.buffer_length, -1), 1).T
-
-        last_val_res = np.array(list(map(lambda x: np.poly1d(x)(xs), last_val_models)))
-        last_avg_res = np.array(list(map(lambda x: np.poly1d(x)(xs), last_avg_models)))
-
-        pred_reg = (
-            torch.from_numpy(
-                np.array(
-                    list(map(lambda x: np.poly1d(x)(self.buffer_length + self.skip_predictions), last_val_models))
-                ).reshape(prediction.shape)
-            )
-            + prediction * self.weight_prediction_impact_on_regression
-        ) / (self.weight_prediction_impact_on_regression + 1)
-
-        avg_reg = (
-            torch.from_numpy(
-                np.array(
-                    list(map(lambda x: np.poly1d(x)(self.buffer_length + self.skip_predictions), last_avg_models))
-                ).reshape(prediction.shape)
-            )
-            + prediction * self.weight_prediction_impact_on_regression
-        ) / (self.weight_prediction_impact_on_regression + 1)
-
-        crosscoeffs = torch.tensor(
-            np.array(
-                list(
-                    map(
-                        lambda x, y: np.nan_to_num(np.abs(np.corrcoef(x, y)[0, 1]), nan=1),
-                        last_avg_res,
-                        last_val_res,
-                    )
-                )
-            ).reshape(prediction.shape)
-        )
-
-        self._last_avg[-1] = (avg_reg * crosscoeffs + pred_reg) / (crosscoeffs + 1)
-
-        if self.additional_filter:
-            last_avg_1_minus_2 = self._last_avg[-1] - self._last_avg[-2]
-
-            new = self._last_avg[-2] + (_normalize_torch(last_avg_1_minus_2.abs()) / 3) * last_avg_1_minus_2
-            self._last_avg[-1] = new
-
-            self._last_avg = _pop_first_in_tensor(self._last_avg)
-            self._last_val = _pop_first_in_tensor(self._last_val)
-
-            return new.numpy()
-
-        self._last_avg = _pop_first_in_tensor(self._last_avg)
-        self._last_val = _pop_first_in_tensor(self._last_val)
-
-        return self._last_avg[-1].numpy()
-
-    def torch_enhanced_filter_v2(self, prediction: torch.Tensor) -> np.ndarray:
-        prediction = prediction
-
-        if self._last_avg is None and self._last_val is None:
-            self._last_avg = [prediction]
-            self._last_val = [prediction]
-        else:
-            self._last_avg.append(prediction)
-            self._last_val.append(prediction)
-
-        if len(self._last_avg) <= 1:
-            return prediction.cpu().numpy()
-
-        if self.only_additional_filter:
-            pred_last_avg = prediction - self._last_avg[-2]
-            new = (
-                self._last_avg[-2]
-                + (_normalize_torch(pred_last_avg.abs()) / self.weight_additional_filter) * pred_last_avg
-            )
-            self._last_avg[-1] = new
-
-            if len(self._last_avg) > self.buffer_length:
-                self._last_avg.pop(0)
-
-            return new.cpu().numpy()
-
-        if 1 < len(self._last_avg) < self.buffer_length:
-            pred_last_avg = prediction - self._last_avg[-2]
-            new = (
-                self._last_avg[-2]
-                + (_normalize_torch(pred_last_avg.abs()) / self.weight_additional_filter) * pred_last_avg
-            )
-            self._last_avg[-1] = new
-
-            return new.cpu().numpy()
-
-        last_val_res, last_avg_res, pred_reg, avg_reg = _compute_torch_optimized_michael_filter(
-            self._A,
-            self._xs,
-            prediction,
-            torch.stack(self._last_val),
-            torch.stack(self._last_avg),
-            self.buffer_length,
-            self.skip_predictions,
-            self.weight_prediction_impact_on_regression,
-        )
-
-        crosscoeffs = torch.nan_to_num(
-            torch.abs(self._pearson(last_val_res, last_avg_res).view(prediction.shape)),
-            nan=1,
-        )
-
-        self._last_avg[-1] = (avg_reg * crosscoeffs + pred_reg) / (crosscoeffs + 1)
-
-        if self.additional_filter:
-            last_avg_1_minus_2 = self._last_avg[-1] - self._last_avg[-2]
-
-            new = self._last_avg[-2] + (_normalize_torch(last_avg_1_minus_2.abs()) / 3) * last_avg_1_minus_2
-            self._last_avg[-1] = new
-
-            self._last_avg.pop(0)
-            self._last_val.pop(0)
-
-            return new.cpu().numpy()
-
-        self._last_avg.pop(0)
-        self._last_val.pop(0)
-
-        return self._last_avg[-1].cpu().numpy()
-
-    def numba_enhanced_filter(self, prediction: torch.FloatTensor) -> np.ndarray:
-        prediction = prediction.T
-
-        if self._last_avg is None and self._last_val is None:
-            self._last_avg = NumbaList([prediction])
-            self._last_val = NumbaList([prediction])
-        else:
-            self._last_avg.append(prediction)
-            self._last_val.append(prediction)
-
-        if len(self._last_avg) <= 1:
-            return prediction
-
-        if self.only_additional_filter:
-            new = _additional_filter(
-                last_avg=self._last_avg, prediction=prediction, weight_additional_filter=self.weight_additional_filter
-            )
-
-            if len(self._last_avg) > self.buffer_length:
-                self._last_avg.pop(0)
-
-            return new
-
-        if 1 < len(self._last_avg) < self.buffer_length:
-            return _additional_filter(
-                last_avg=self._last_avg, prediction=prediction, weight_additional_filter=self.weight_additional_filter
-            )
-
-        for i in range(prediction.shape[0]):
-            for j in range(prediction.shape[1]):
-                last_joint_preds = []
-                last_joint_avgs = []
-                for k in range(self.buffer_length - 1):
-                    last_joint_preds.append(self._last_val[k][i][j])
-                for k in range(self.buffer_length - 1):
-                    last_joint_avgs.append(self._last_avg[k][i][j])
-
-                mymodel3 = fit_poly(
-                    np.linspace(1, self.buffer_length - 1, self.buffer_length - 1),
-                    np.array(last_joint_preds),
-                    1,
-                )
-
-                res = NumbaList()
-                for u in range(self.buffer_length):
-                    res.append(eval_polynomial(mymodel3, u))
-                # plt.scatter(np.linspace(1,buffer_length,buffer_length), p, color='red')
-                # plt.plot(np.linspace(1,buffer_length,buffer_length), res, color='green')
-                pred_reg = (
-                    eval_polynomial(mymodel3, self.buffer_length + self.skip_predictions)
-                    + prediction[i][j] * self.weight_prediction_impact_on_regression
-                ) / (self.weight_prediction_impact_on_regression + 1)
-
-                mymodel = fit_poly(
-                    np.linspace(1, self.buffer_length - 1, self.buffer_length - 1),
-                    np.array(last_joint_avgs),
-                    1,
-                )
-
-                avg_reg = (
-                    eval_polynomial(mymodel, self.buffer_length + self.skip_predictions)
-                    + prediction[i][j] * self.weight_prediction_impact_on_regression
-                ) / (self.weight_prediction_impact_on_regression + 1)
-                res2 = []
-                for u in range(self.buffer_length):
-                    res2.append(eval_polynomial(mymodel, u))
-                # plt.plot(np.linspace(1, buffer_length, buffer_length), res2, color='blue')
-                # plt.scatter(np.linspace(1, buffer_length, buffer_length), q, color='black')
-                # plt.show()
-
-                crozzcoeff = np.abs(np.corrcoef(res2, res)[0, 1])
-                if np.isnan(crozzcoeff):
-                    crozzcoeff = 1
-
-                ges_pred = (avg_reg * crozzcoeff + pred_reg) / (crozzcoeff + 1)
-                # ges_pred = ((mymodel3(buffer_length) + mymodel(buffer_length) + prediction[i][j]*var2) / (2 + var2))
-
-                self._last_avg[-1][i][j] = ges_pred
-
-        if self.additional_filter:
-            new = self._last_avg[-2] + (
-                _normalize_numpy(np.sqrt(np.square(self._last_avg[-1] - self._last_avg[-2]))) / 3
-            ) * (self._last_avg[-1] - self._last_avg[-2])
-            self._last_avg[-1] = new
-
-            self._last_val.pop(0)
-            self._last_avg.pop(0)
-
-            return new
-
-        self._last_val.pop(0)
-        self._last_avg.pop(0)
-
-        return self._last_avg[-1]
-
-
-@torch.jit.script
-def _compute_torch_optimized_michael_filter(
-    A: torch.Tensor,
-    xs: torch.Tensor,
-    prediction: torch.Tensor,
-    _last_val: torch.Tensor,
-    _last_avg: torch.Tensor,
-    buffer_length: int,
-    skip_prediction: int,
-    weight_prediction_impact_on_regression: float,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Compute torch optimized michael filter
-
-    Parameters
-    ----------
-    A : torch.Tensor
-        The A matrix used for Ax = b
-    xs : torch.Tensor
-        The xs vector used for Ax = b
-    prediction : torch.Tensor
-        The prediction
-    _last_val : torch.Tensor
-        The last values
-    _last_avg : torch.Tensor
-        The last averages
-    buffer_length : int
-        The buffer length
-    skip_prediction : int
-        The skip prediction
-    weight_prediction_impact_on_regression : float
-        The weight prediction impact on regression
-
-    Returns
-    -------
-    Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
-        The new last values, the new last averages, the new prediction and the new average
-    """
-
-    # Do Ax = b to basically get an 1 deg polynomial fit. The highest order coefficient is the last one in the vector!
-    last_val_models = torch.linalg.lstsq(A, _last_val.view(buffer_length, -1).T, rcond=None)[0]
-    last_avg_models = torch.linalg.lstsq(A, _last_avg.view(buffer_length, -1).T, rcond=None)[0]
-
-    # Use Horner's method (yes ... I also didn't think I'll use it after my 1st semester ... life do be like that)
-    # to evaluate the polynomial. Such wow. Much performance. Very fast.
-    last_val_res = last_val_models[:, 1].expand(len(xs), -1) * xs[:, None] + last_val_models[:, 0].expand(len(xs), -1)
-    last_avg_res = last_avg_models[:, 1].expand(len(xs), -1) * xs[:, None] + last_avg_models[:, 0].expand(len(xs), -1)
-
-    # Do some regression stuff defined in the original implementation by Michael.
-    pred_reg = (
-        (last_val_models[:, 1] * (buffer_length + skip_prediction) + last_val_models[:, 0]).view(prediction.shape)
-        + prediction * weight_prediction_impact_on_regression
-    ) / (weight_prediction_impact_on_regression + 1)
-
-    avg_reg = (
-        (last_avg_models[:, 1] * (buffer_length + skip_prediction) + last_avg_models[:, 0]).view(prediction.shape)
-        + prediction * weight_prediction_impact_on_regression
-    ) / (weight_prediction_impact_on_regression + 1)
-
-    return last_val_res, last_avg_res, pred_reg, avg_reg

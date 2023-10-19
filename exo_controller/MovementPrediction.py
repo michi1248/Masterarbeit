@@ -9,7 +9,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 #TODO min_samples 5 besser als 30
 class MultiDimensionalDecisionTree:
-    def __init__(self, important_channels, movements,emg,ref,patient_number, windom_size=150, num_trees=1, sample_difference_overlap=64, max_depth = 10, min_samples_split=20,
+    def __init__(self, important_channels, movements,emg,ref,patient_number, windom_size=200, num_trees=30, sample_difference_overlap=64, max_depth = 320, min_samples_split=5,
                  num_previous_samples=None):
         self.emg_data= emg
         self.patient_number = patient_number
@@ -30,6 +30,10 @@ class MultiDimensionalDecisionTree:
         if num_previous_samples is None:
             num_previous_samples = self.select_default_num_previous()
         self.num_previous_samples = num_previous_samples
+        self.neuromuscular_delay = 50  # neuromuscucular delay in miliseconds
+        self.neuromuscular_delay_in_samples = int(
+            (self.neuromuscular_delay / 1000) * 2048)  # neuromuscucular delay in samples
+
         count = 0
         for i in range(len(self.movements)): #check if finger already in dict and add the movement number to the dict
             if self.movements[i] in ["2pinch","3pinch","fist"]:
@@ -58,7 +62,7 @@ class MultiDimensionalDecisionTree:
             # epsilo = margin of tolerance where no penalty is assigned to errors
             # low epsilon = more overfitting
             #self.trees.append(MultiOutputRegressor(SVR(kernel="linear",C=0.5,epsilon=0.2)))
-            self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=30, min_samples_split=self.min_samples_split, min_samples_leaf=15)))
+            self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=self.num_trees, min_samples_split=self.min_samples_split,max_depth=self.max_depth,warm_start=True,n_jobs=-1)))
 
     def select_default_num_previous(self):
         """
@@ -132,6 +136,15 @@ class MultiDimensionalDecisionTree:
                     # feature = calculate_rms(segment)
                     # segments.append(feature)
                     label = ref_erweitert[:,i]
+
+                    # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
+                    # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
+                    if ((i + self.neuromuscular_delay_in_samples) < ref_erweitert[0].shape[0]):
+                        for skip in range(64, self.neuromuscular_delay_in_samples, 64):
+                            ref_in_the_future = ref_erweitert[:, i + skip]
+                            segments.append(segment)
+                            labels.append(ref_in_the_future)
+
                     segments.append(segment)
                     labels.append(label)
 
@@ -168,10 +181,17 @@ class MultiDimensionalDecisionTree:
                         heatmap = normalize_2D_array(heatmap)
                         previous_heatmap = calculate_emg_rms_row(emg_data, i-idx, self.window_size_in_samples)
                         previous_heatmap = normalize_2D_array(previous_heatmap)
-                        difference_heatmap = np.abs(np.subtract(heatmap , previous_heatmap))
-                        #difference_heatmap = normalize_2D_array(difference_heatmap)
-                        #difference_heatmap = normalize_2D_array(calculate_emg_rms_row(emg_data, i,idx *(self.window_size_in_samples-self.sample_difference_overlap)))
+                        difference_heatmap = normalize_2D_array(np.subtract(heatmap, previous_heatmap))
                         label = ref_erweitert[:, i]
+
+                        # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
+                        # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
+                        if ((i + self.neuromuscular_delay_in_samples) < ref_erweitert[0].shape[0]):
+                            for skip in range(64, self.neuromuscular_delay_in_samples, 64):
+                                ref_in_the_future = ref_erweitert[:, i + skip]
+                                combined_diffs.append(difference_heatmap)
+                                combined_ys.append(ref_in_the_future)
+
                         combined_diffs.append(difference_heatmap)
                         combined_ys.append(label)
 
@@ -188,8 +208,8 @@ class MultiDimensionalDecisionTree:
             results.append((X_train, X_test, y_train, y_test))
         self.training_data_time = results
 
-    def compare_predictions(self, predictions, truth, tree_number=None):
-        plot_predictions(predictions, truth)
+    def compare_predictions(self, predictions, truth, tree_number=None, realtime=False):
+        plot_predictions(truth, predictions, tree_number=tree_number, realtime=realtime)
     def load_trainings_data(self):
         self.X_test_local = np.array(load_pickle_file( r"trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/X_test_local.pkl"))
         self.y_test_local = np.array(load_pickle_file( r"trainings_data/resulting_trainings_data/subject_"+str(self.patient_number)+"/y_test_local.pkl"))
@@ -211,9 +231,6 @@ class MultiDimensionalDecisionTree:
         self.y_test_time = y_test
 
 
-    def normalize_emg(self, emg_data):
-        return normalize_2D_array(emg_data)
-
     def train(self):
         start = time.time()
         for i in tqdm.tqdm(range(len(self.trees)),desc="Training trees"):
@@ -221,9 +238,11 @@ class MultiDimensionalDecisionTree:
                 self.trees[i].fit(np.array(self.X_train_local),np.array(self.y_train_local))
             else:
                 self.trees[i].fit(self.training_data_time[i-1][0],self.training_data_time[i-1][2])
-        print("Training Time: %s seconds" % (str(time.time() - start)))
+        print("Total Training Time: %s seconds" % (str(time.time() - start)))
 
-    def evaluate(self):
+    def evaluate(self,give_best_time_tree=False):
+        best_time_tree = -1
+        r2_of_best_time_tree = -1
         for i in tqdm.tqdm(range(len(self.trees)), desc="Evaluating trees"):
             if i == 0:
                 res = self.trees[i].predict(self.X_test_local)
@@ -243,11 +262,19 @@ class MultiDimensionalDecisionTree:
                 mae = mean_absolute_error(truth, res, multioutput='raw_values')
                 mse = mean_squared_error(truth, res, multioutput='raw_values')
                 r2 = r2_score(truth, res, multioutput='raw_values')
+                if give_best_time_tree:
+                    if r2[0]+ r2[1] > r2_of_best_time_tree:
+                        best_time_tree = i
+                        r2_of_best_time_tree = r2[0] + r2[1]
 
                 print("time Mean Absolute Error for tree " +str(i)+" : ", mae)
                 print("time Mean Squared Error for tree " +str(i)+" : ", mse)
                 print("time R^2 Score for tree " +str(i)+" : ", r2)
 
+        if give_best_time_tree:
+            print("best time tree: ", best_time_tree)
+            print("r2 of best time tree: ", r2_of_best_time_tree/2)
+            return best_time_tree
     def save_trainings_data(self):
 
 
@@ -269,19 +296,7 @@ class MultiDimensionalDecisionTree:
                 score = np.mean(np.abs(np.subtract(res, self.training_data_time[i-1][3])),axis=0)
                 print("time differences for tree " + str(i)+ " : ", (1 - score[0]) * 100,(1 - score[1]) * 100)
 
-    def visualize_trees(self):
-        for i in range(len(self.trees)):
-            print("Tree number: ",i)
-            print("Tree depth: ",self.trees[i].get_depth())
-            print("Number of leaves: ",self.trees[i].get_n_leaves())
-            print("Number of samples: ",self.trees[i].get_n_leaves())
-            print("Feature importance: ",self.trees[i].feature_importances_)
-            print("Number of features: ",self.trees[i].n_features_)
-            print("Number of outputs: ",self.trees[i].n_outputs_)
-            print("Number of classes: ",self.trees[i].n_classes_)
-            print("Number of samples: ",self.trees[i].n_samples_)
-            print("Number of features: ",self.trees[i].n_features_)
-            print("Number of features: ",self.trees[i].n_features_)
+
 
 if __name__ == "__main__":
     #movements = ["thumb_slow", "thumb_fast", "index_slow", "index_fast","2pinch"]

@@ -90,14 +90,7 @@ class EMG_Interface:
             np.frombuffer(self.emgSocket.recv(self.BufferSize), dtype=np.int16).reshape((408, -1), order="F")[
                 self.emg_indices
             ]
-            #self.queue_emg.append(emg_chunk[None, ...])
 
-            ##emg_input = np.concatenate(self.queue_emg, axis=-1)[None, ...].astype(np.float32)
-            #emg_input = np.concatenate([emg_input, sosfiltfilt(self.filter_sos, emg_input, axis=-1)], axis=1).astype(
-            #    np.float16
-            #)
-            #self.queue_emg.pop(0)
-            #return emg_input
             return emg_chunk.astype(np.float32)
 
         except Exception as e:

@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 from sklearn.utils import shuffle
 import time
 from exo_controller.helpers import *
+from exo_controller.filter import MichaelFilter
+from exo_controller.filter import MichaelFilterCupy
 import numpy as np
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.ensemble import RandomForestRegressor
@@ -270,9 +272,6 @@ class MultiDimensionalDecisionTree:
         self.y_test_time = y_test
 
 
-    def normalize_emg(self, emg_data):
-        return normalize_2D_array(emg_data)
-
     def train(self):
         # start = time.time()
         # for i in tqdm.tqdm(range(len(self.trees)),desc="Training trees"):
@@ -428,6 +427,7 @@ class MultiDimensionalDecisionTree:
         graph.write_png('tree.png')
 
     def realtime_prediction(self):
+        filter = MichaelFilterCupy()
 
         split_number = 0.8  # how much of the data should be used for training
         # make data for training and train
@@ -456,7 +456,11 @@ class MultiDimensionalDecisionTree:
         plt.plot(labels[2][1, :])
         plt.show()
 
-
+        time_heatmaps = 0
+        time_predictions = 0
+        time_filter = 0
+        time_total = 0
+        counter = 0
 
         #labels = np.concatenate(labels, axis = -1)
         max_chunk_number = np.ceil(max(self.num_previous_samples)/64)# calculate number of how many chunks we have to store till we delete old
@@ -466,12 +470,15 @@ class MultiDimensionalDecisionTree:
         all_truths = []
         list_with_time_predictions_for_all_times_and_movements = []
         for movement in range(len(emg_datas)):
+
             truths = []
             emg_buffer = []
             emg_data = emg_datas[movement]
             predictions_time = [[] for _ in range(len(self.num_previous_samples))]
             results_local = []
             for i in range(int(len(emg_data[movement]) * split_number), int(len(emg_data[movement]))-65 , 64):  # gehe über emg in schritten von 64 da 64 samples in chunks von emg bekomme in echt
+                start_time = time.time()
+                counter += 1
                 if i <= labels[movement].shape[1]:
                     emg_buffer.append(emg_data[:, i:i + 64])
                     if len(emg_buffer) > max_chunk_number: # check if now too many sampels are in the buffer and i can delete old one
@@ -479,7 +486,16 @@ class MultiDimensionalDecisionTree:
                     data = np.concatenate(emg_buffer,axis=-1)
                     heatmap_local = calculate_emg_rms_row(data, data[0].shape[0], self.window_size_in_samples)
                     heatmap_local = normalize_2D_array(heatmap_local)
+                    time_heatmaps += time.time() - start_time
+
+                    start_time_pred = time.time()
                     res_local = self.trees[0].predict([heatmap_local])
+                    time_predictions += time.time() - start_time_pred
+
+                    time_filter = time.time()
+                    res_local = [filter.filter(np.array(res_local[0]))]
+                    time_filter = time.time() - time_filter
+
                     ground_truth = labels[movement][:,i]
                     truths.append(ground_truth)
                     results_local.append(res_local)
@@ -495,6 +511,7 @@ class MultiDimensionalDecisionTree:
                         predictions_time[count-1].append(pred)
                         all_time_predictions[count-1].append(pred)
                         count += 1
+                    time_total += time.time() - start_time
             all_local_predictions.append(results_local)
             all_truths.append(truths)
             self.compare_predictions(np.array(results_local),np.array(truths), tree_number="local",realtime=True)
@@ -508,6 +525,10 @@ class MultiDimensionalDecisionTree:
         all_local_predictions = all_local_predictions.squeeze(axis=1)
         self.realtime_evaluation(np.array(all_truths),np.array(all_local_predictions),np.array(all_time_predictions))
 
+        print("time for heatmaps: ", time_heatmaps/counter)
+        print("time for predictions: ", time_predictions/counter)
+        print("time for filter: ", time_filter/counter)
+        print("time total: ", time_total/counter)
 
 
 if __name__ == "__main__":

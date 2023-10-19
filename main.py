@@ -4,8 +4,10 @@ from exo_controller.helpers import *
 from exo_controller.MovementPrediction import MultiDimensionalDecisionTree
 from exo_controller.emg_interface import EMG_Interface
 from exo_controller.exo_controller import Exo_Control
+from exo_controller.filter import MichaelFilter
 from scipy.signal import resample
 import keyboard
+import torch
 
 def remove_nan_values(data):
     """
@@ -77,7 +79,9 @@ if __name__ == "__main__":
     #model.load_trainings_data()
     model.save_trainings_data()
     model.train()
-    model.evaluate()
+    best_time_tree = model.evaluate(give_best_time_tree=True)
+    filter_local = MichaelFilter()
+    filter_time = MichaelFilter()
 
 
 
@@ -86,16 +90,47 @@ if __name__ == "__main__":
     emg_interface = EMG_Interface()
     emg_interface.initialize_all()
 
+    max_chunk_number = np.ceil(max(model.num_previous_samples) / 64)  # calculate number of how many chunks we have to store till we delete old
+    emg_buffer = []
+
     while True:
         try:
             chunk = emg_interface.get_EMG_chunk()
+            emg_buffer.append(chunk)
+            if len(emg_buffer) > max_chunk_number:  # check if now too many sampels are in the buffer and i can delete old one
+                emg_buffer.pop(0)
+            data = np.concatenate(emg_buffer, axis=-1)
+            heatmap_local = calculate_emg_rms_row(data, data[0].shape[0], model.window_size_in_samples)
+            heatmap_local = normalize_2D_array(heatmap_local)
+            res_local = model.trees[0].predict([heatmap_local]) # result has shape 1,2
 
-            # TODO chunk is in the shape of  320 x 64 ( has last 2 and new  64 samples chunk in it ==> so i have to remove the old ones)
-            #TODO liste mit alten EMG werten und predict muss unterschiedliche inputs für unterschiedliche bäume erhalten
-            input = model.predict(chunk,[0,1,2,3,4])
-            res = [round(input[0], 3), 0, round(input[1], 3), 0, 0, 0, 0, 0, 0]
-            exo_controller.move_exo(res)
-            if keyboard.read_key() == "p":
+            prediction_local = filter_local.filter(np.array(res_local[0]))  # fileter the predcition with my filter from my Bachelor thesis
+
+            previous_heatmap = calculate_emg_rms_row(data, data[0].shape[0] - model.num_previous_samples[best_time_tree-1],model.window_size_in_samples)
+            previous_heatmap = normalize_2D_array(previous_heatmap)
+            difference_heatmap = normalize_2D_array(np.subtract(heatmap_local, previous_heatmap))
+            if np.isnan(difference_heatmap).any():
+                res_time = np.array([[-1, -1]])
+                prediction_time = np.array([[-1, -1]])
+            else:
+                res_time = model.trees[best_time_tree].predict([difference_heatmap])
+                prediction_time = filter_time.filter(np.array(res_time[0]))  # fileter the predcition with my filter from my Bachelor thesis
+
+            if prediction_time > 1:
+                prediction_time = 1
+            if prediction_time < 0:
+                prediction_time = 0
+
+            if prediction_local > 1:
+                prediction_local = 1
+            if prediction_local < 0:
+                prediction_local = 0
+
+            #res = [round(input[0], 3), 0, round(input[1], 3), 0, 0, 0, 0, 0, 0]
+            #exo_controller.move_exo(res)
+            print("before: " + str(res_local) + "  " + str(res_time)+ "  " )
+            print("after: " + str(prediction_local) + "  " + str(prediction_time) + "  ")
+            if keyboard.is_pressed("q"):
                 break
         except Exception as e:
             print(e)
@@ -103,5 +138,8 @@ if __name__ == "__main__":
             print("Connection closed")
 
     #TODO filter einführen für letzte predictions von model und diese zusätzlich smoothen
+
+
+
 
 
