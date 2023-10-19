@@ -403,9 +403,9 @@ def plot_predictions(ground_truth,prediction,tree_number= None,realtime = False)
         prediction (numpy.ndarray): The predicted values for both regressions.
         tree_number (int): The number of the tree that was used to make the predictions.
     """
-
+    ground_truth = np.array(ground_truth)
+    prediction = np.array(prediction)
     plt.figure(figsize=(12, 6))
-
     num_rows= ground_truth.shape[0]
     x_values= list(range(num_rows))
     if realtime == True:

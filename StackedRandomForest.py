@@ -37,6 +37,9 @@ class MultiDimensionalDecisionTree:
         if num_previous_samples is None:
             num_previous_samples = self.select_default_num_previous()
         self.num_previous_samples = num_previous_samples
+        self.neuromuscular_delay = 50 # neuromuscucular delay in miliseconds
+        self.neuromuscular_delay_in_samples = int((self.neuromuscular_delay / 1000) * 2048) # neuromuscucular delay in samples
+
 
 
         count = 0
@@ -72,7 +75,7 @@ class MultiDimensionalDecisionTree:
             if self.classification:
                 self.trees.append(RandomForestClassifier(n_estimators=self.num_trees, min_samples_split=self.min_samples_split, max_depth=self.max_depth,warm_start=True))
             else:
-                self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=self.num_trees, min_samples_split=self.min_samples_split,max_depth=self.max_depth,warm_start=True)))
+                self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=self.num_trees, min_samples_split=self.min_samples_split,max_depth=self.max_depth,warm_start=True,n_jobs=-1)))
 
     def compare_predictions(self, predictions, truth,tree_number=None,realtime=False):
         plot_predictions(truth, predictions,tree_number=tree_number,realtime= realtime)
@@ -157,27 +160,21 @@ class MultiDimensionalDecisionTree:
                         maxima,minima = get_locations_of_all_maxima(ref_data[:,0])
                         belongs_to_movement,_ = check_to_which_movement_cycle_sample_belongs(i,maxima,minima)
                         label = belongs_to_movement
-                        # plt.figure()
-                        # plt.plot(ref_data[:,0])
-                        # plt.title("belong to movement: " + str(belongs_to_movement))
-                        # plt.scatter(i,ref_data[i,0],c="red")
-                        # plt.scatter(maxima,ref_data[maxima,0],c="green")
-                        # plt.scatter(minima,ref_data[minima,0],c="blue")
-                        # #plt.xlim(i,i+20000)
-                        # plt.show()
+
                     else:
                         label = ref_erweitert[:,i]
+
+                        #after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
+                        # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
+                        if ((i+self.neuromuscular_delay_in_samples) < ref_erweitert[0].shape[0]):
+                            for skip in range(64, self.neuromuscular_delay_in_samples, 64):
+                                ref_in_the_future = ref_erweitert[:,i+skip]
+                                segments.append(segment)
+                                labels.append(ref_in_the_future)
+
                     segments.append(segment)
                     labels.append(label)
 
-
-            # segments, labels = shuffle(segments, labels, random_state=42)
-            # split_index = int(len(labels) * split_ratio)
-            # X_train_local, X_test_local = segments[:split_index], segments[split_index:]
-            # y_train_local, y_test_local = labels[:split_index], labels[split_index:]
-            # dict = {"X_train_local":X_train_local,"X_test_local":X_test_local,"y_train_local":y_train_local,"y_test_local":y_test_local}
-            # res[movement] = dict
-            # self.res = res
 
         if keep_time_aspect:
             split_index = int(len(labels))
@@ -224,6 +221,15 @@ class MultiDimensionalDecisionTree:
                             label = belongs_to_movement
                         else:
                             label = ref_erweitert[:, i]
+
+                            # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
+                            # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
+                            if ((i + self.neuromuscular_delay_in_samples) < ref_erweitert[0].shape[0]):
+                                for skip in range(64, self.neuromuscular_delay_in_samples, 64):
+                                    ref_in_the_future = ref_erweitert[:, i + skip]
+                                    combined_diffs.append(difference_heatmap)
+                                    combined_ys.append(ref_in_the_future)
+
                         combined_diffs.append(difference_heatmap)
                         combined_ys.append(label)
 
@@ -281,7 +287,9 @@ class MultiDimensionalDecisionTree:
             else:
                 self.trees[i].fit(self.training_data_time[i - 1][0], self.training_data_time[i - 1][2])
         print("Training Time: %s seconds" % (str(time.time() - start)))
-    def evaluate(self):
+    def evaluate(self,give_best_time_tree=False):
+        best_time_tree = -1
+        r2_of_best_time_tree = -1
         for i in tqdm.tqdm(range(len(self.trees)), desc="Evaluating trees"):
             if i == 0:
                 res = self.trees[i].predict(self.X_test_local)
@@ -309,6 +317,10 @@ class MultiDimensionalDecisionTree:
                     mae = mean_absolute_error(truth, res, multioutput='raw_values')
                     mse = mean_squared_error(truth, res, multioutput='raw_values')
                     r2 = r2_score(truth, res, multioutput='raw_values')
+                    if give_best_time_tree:
+                        if r2 > best_time_tree:
+                            best_time_tree = i
+                            r2_of_best_time_tree = r2
 
                     print("time Mean Absolute Error for tree " + str(i) + " : ", mae)
                     print("time Mean Squared Error for tree " + str(i) + " : ", mse)
@@ -317,6 +329,10 @@ class MultiDimensionalDecisionTree:
                     print("time accuracy for tree " + str(i) + " : ", accuracy_score(truth, res))
                     print("time precision for tree " + str(i) + " : ", precision_score(truth, res, average='weighted'))
                     print("time recall for tree " + str(i) + " : ", recall_score(truth, res, average='weighted'))
+        if give_best_time_tree:
+            print("best time tree: ", best_time_tree)
+            print("r2 of best time tree: ", r2_of_best_time_tree)
+            return best_time_tree
 
         for i in tqdm.tqdm(range(len(self.trees)-1), desc="Evaluating trees"):
             res_local = self.trees[0].predict(self.X_test_local)
@@ -418,6 +434,7 @@ class MultiDimensionalDecisionTree:
         self.build_training_data(self.movements, r"D:\Lab\data\extracted\Sub2", split_ratio=split_number,
                                  keep_time_aspect=True)
         self.train()
+        #best_time_tree = self.evaluate(give_best_time_tree=True)
 
         emg_datas = self.emg_data_local_for_realtime # [num_movements x #channels x #samples]
 
@@ -511,8 +528,8 @@ if __name__ == "__main__":
     #model.build_training_data(model.movements, r"D:\Lab\data\extracted\Sub2")
     #model.load_trainings_data()
     model.realtime_prediction()
-    model.visualize_tree()
-    gc.collect()
+    #model.visualize_tree()
+    #gc.collect()
 
     #model.save_trainings_data()
     #model.train()
