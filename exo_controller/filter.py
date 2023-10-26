@@ -2,7 +2,7 @@ import numpy as np
 import cupy as cp
 
 class MichaelFilter:
-    def __init__(self,output_smoothing = True, additinal_filter = True, only_additional_filter = False, weight_prediction_impact_on_regression = 0.75, weight_additional_filter = 2, degree_regressions = 1, buffer_length = 10, skip_predictions = 1, num_fingers = 2):
+    def __init__(self,output_smoothing = True, additinal_filter = True, only_additional_filter = False, weight_prediction_impact_on_regression = 0.75, weight_additional_filter = 3, degree_regressions = 1, buffer_length = 5, skip_predictions = 1, num_fingers = 2):
 
         self.last_val = []
         self.last_avg = []
@@ -111,8 +111,8 @@ class MichaelFilter:
 
 class MichaelFilterCupy:
     def __init__(self, output_smoothing=True, additinal_filter=True, only_additional_filter=False,
-                 weight_prediction_impact_on_regression=0.75, weight_additional_filter=2,
-                 degree_regressions=1, buffer_length=10, skip_predictions=1, num_fingers=2):
+                 weight_prediction_impact_on_regression=0.75, weight_additional_filter=3,
+                 degree_regressions=1, buffer_length=5, skip_predictions=1, num_fingers=2):
 
         self.last_val = cp.array([])
         self.last_avg = cp.array([])

@@ -30,8 +30,8 @@ class Exo_Control:
         """
         #self.clients = [1212, 1236]
         self.exoIP = "127.0.0.1"  # mit welcher IP verbinden
-        self.exoPort = 1235  # Port von diesem Pc Server
-        self.port_from_exo= 1236   #Port von exo client
+        self.exoPort = 1236  # Port von diesem Pc Server
+        self.port_from_exo= 1333   #Port von exo client
         #self.connected_to_exo = False
         #while not self.connected_to_exo:
         self.exoSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -39,7 +39,7 @@ class Exo_Control:
         # self.exoSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         while True:
             try:
-                self.exoSocket.bind((self.exoIP, self.exoPort))
+                self.exoSocket.bind((self.exoIP, self.port_from_exo))
                 break
             except Exception as e:
                 print(e)
@@ -48,7 +48,7 @@ class Exo_Control:
                 print("defining new port: ", self.exoPort)
                 pass
         self.exoSocket.setblocking(False)
-        print("Connection opened")
+        print("Connection opened to exo skeleton")
         #self.exoSocket.listen()
 
 
@@ -76,10 +76,10 @@ class Exo_Control:
             # Encode message to utf-8 bytes
 
             encoded_message = str(values).encode("utf-8")
-            print(encoded_message)
+            #print(encoded_message)
 
             #  definiere IP  und Port von Client
-            print(self.exoSocket.sendto(encoded_message, (self.exoIP, self.port_from_exo)))
+            print(self.exoSocket.sendto(encoded_message, (self.exoIP, self.exoPort)))
             #print("data sent...\n")
         except Exception as e:
             pass

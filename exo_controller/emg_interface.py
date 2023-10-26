@@ -94,7 +94,9 @@ class EMG_Interface:
             return emg_chunk.astype(np.float32)
 
         except Exception as e:
+
             print("error while receiving emg chunkg")
+            return np.empty()
 
     def close_connection(self):
         """

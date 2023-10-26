@@ -20,3 +20,5 @@
 
 # TODO  trainings data abspeichern in realtime anwendung und dann laden
 # TODO  trainierte bäume abspeichern und laden und plotten am ende
+
+# TODO in filter.py : gewichte die punkte in der vergangenheit unterschiedliche -> letzte smoothed prediction trägt mehr zu vorhersage bei als die vor 10 mal

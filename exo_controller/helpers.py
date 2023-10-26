@@ -56,7 +56,7 @@ def extract_important_channels(movement_list,path_to_subject_dat):
 def extract_important_channels_realtime(movement_list,emg,ref):
     important_channels = []
     for movement in tqdm.tqdm(movement_list,desc="Extracting important channels for from all movements"):
-        extractor = ChannelExtraction(movement, emg,ref)
+        extractor = ExtractImportantChannels.ChannelExtraction(movement, emg,ref)
         channels = extractor.get_channels()
         for channel in channels:
             if channel not in important_channels:

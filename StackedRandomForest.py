@@ -19,7 +19,7 @@ import gc
 
 #TODO min_samples 5 besser als 30
 class MultiDimensionalDecisionTree:
-    def __init__(self, important_channels, movements, mean_heatmaps= None,windom_size=200, num_trees=30, sample_difference_overlap=64, max_depth = 320, min_samples_split=5,
+    def __init__(self, important_channels, movements, mean_heatmaps= None,windom_size=200, num_trees=20, sample_difference_overlap=64, max_depth = 150, min_samples_split=5,
                  num_previous_samples=None,classification = False):
         self.classification = classification # whether to use classification or regression
         self.mean_heatmaps = mean_heatmaps

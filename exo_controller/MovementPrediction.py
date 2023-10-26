@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import joblib
 
 
 #TODO min_samples 5 besser als 30
@@ -75,6 +76,21 @@ class MultiDimensionalDecisionTree:
         print("Selected default number of previous samples: ", self.num_previous_samples)
         return self.num_previous_samples
 
+    def save_model(self,  subject):
+        if not os.path.exists(r"D:\Lab\MasterArbeit\trainings_data\trained_models/" + subject):
+            os.makedirs(r"D:\Lab\MasterArbeit\trainings_data\trained_models/" + subject)
+        for i, model in enumerate(self.trees):
+            filename = f'model_{i}.pkl'
+            joblib.dump(model, r"D:\Lab\MasterArbeit\trainings_data\trained_models/"+ subject + "/" +filename)
+
+
+    def load_model(self, subject):
+
+        trees = []
+        for i in os.listdir(r"D:\Lab\MasterArbeit\trainings_data\trained_models/"+ subject ):
+            trees.append(joblib.load(r"D:\Lab\MasterArbeit\trainings_data\trained_models/"+ subject + "/" +i))
+        self.trees = trees
+
     def predict(self, X ,tree_numbers):
         """
         Predict the target values using the list of trained models and average the results.
@@ -125,9 +141,12 @@ class MultiDimensionalDecisionTree:
             ref_data = normalize_2D_array(self.ref_data[movement],axis=0)
             if movement != "2pinch":
                 ref_erweitert[self.movment_dict[movement],:] = ref_data[:,0] # jetzt werte für die bewegung an passenden index eintragen für anderen finger einträge auf 0.5 setzen
-            else:
+            else: # in 2 pinch case
+                # thumb has to be 0.45 and index 0.6
                 for k in range(2):
                     ref_erweitert[k, :] = ref_data[:, k]
+                ref_erweitert[0,:] = np.multiply(ref_erweitert[0,:], 0.45)
+                ref_erweitert[1,:]= np.multiply(ref_erweitert[1, :], 0.6)
             emg_data= self.emg_data[movement][self.important_channels,:]
             for i in range(0, len(emg_data[0]) - window_size + 1, self.sample_difference_overlap): # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
                 if i <= ref_data.shape[0]:

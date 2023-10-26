@@ -20,11 +20,11 @@ class ChannelExtraction:
           """
         self.movement_name = movement_name
         self.important_channels = []
-        self.emg_data = emg
+        self.emg_data = list(emg.values())
         self.ref_data = ref
-
-        self.ref_data = self.ref_data.to_numpy()
-        self.sample_length = self.emg_data[0][1][0].shape[0]
+        self.ref_data = list(ref.values())
+        self.sample_lengths = [len(self.emg_data[i][0]) for i in range (len(self.emg_data))]
+        self.sample_length = min(self.sample_lengths)
         self.sampling_frequency = sampling_frequency
         self.num_samples = int(self.sample_length / (self.sampling_frequency * (frame_duration / 1000)))
         self.frame_duration = frame_duration
@@ -76,7 +76,7 @@ class ChannelExtraction:
     def get_heatmaps(self):
         # samples = all sample values when using all samples with self.frame_duration in between
         self.samples = np.linspace(0, self.sample_length, self.num_samples, endpoint=False, dtype=int)
-        self.samples = [element for element in self.samples if element <= self.ref_data.shape[0]]
+        self.samples = [element for element in self.samples if element <= len(self.ref_data)]
         # make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
         num_rows, num_cols = self.emg_data.shape
         self.heatmaps_flex = np.zeros((num_rows, num_cols))
@@ -96,7 +96,7 @@ class ChannelExtraction:
     def get_channels(self):
         # samples = all sample values when using all samples with self.frame_duration in between
         self.samples = np.linspace(0, self.sample_length, self.num_samples, endpoint=False, dtype=int)
-        self.samples = [element for element in self.samples if element <= self.ref_data.shape[0]]
+        self.samples = [element for element in self.samples if element <= len(self.ref_data)]
         # make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
         num_rows, num_cols = self.emg_data.shape
         self.heatmaps_flex = np.zeros((num_rows, num_cols))
