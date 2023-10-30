@@ -37,17 +37,18 @@ def resample_reference_data(ref_data, emg_data):
 if __name__ == "__main__":
 
     use_important_channels = False # wheather to use only the important channels or every channel
-    use_local = True # wheather to use the local model or the time model
-    output_on_exo = True # stream output to exo or print it
-    filter_output = True # wheather to filter the output with Bachelor filter or not
-    time_for_each_movement_recording = 40 # time in seconds for each movement recording
+    use_local = 1 # whether to use the local model or the time model
+    output_on_exo = 1 # stream output to exo or print it
+    filter_output = True # whether to filter the output with Bachelor filter or not
+    time_for_each_movement_recording = 15 # time in seconds for each movement recording
     load_trained_model = True # wheather to load a trained model or not
 
 
 
-
-    patient_id = "sub1"
-    movements = ["thumb", "index", "2pinch"]
+    #2 was again after the other tests 1 for different poses after training
+    #3 was after that
+    patient_id = "Michi_Test3"
+    movements = ["thumb", "index", "2pinch","rest"]
     if not load_trained_model:
         patient = Realtime_Datagenerator(debug=False, patient_id=patient_id, sampling_frequency_emg=2048, recording_time=time_for_each_movement_recording)
         patient.run_parallel()
@@ -128,6 +129,8 @@ if __name__ == "__main__":
 
         if filter_output:
             res_local = filter_local.filter(np.array(res_local[0]))  # fileter the predcition with my filter from my Bachelor thesis
+        else:
+            res_local = np.array(res_local[0])
 
         previous_heatmap = calculate_emg_rms_row(data, data[0].shape[0] - model.num_previous_samples[best_time_tree-1],model.window_size_in_samples)
         previous_heatmap = normalize_2D_array(previous_heatmap)
@@ -138,6 +141,8 @@ if __name__ == "__main__":
             res_time = model.trees[best_time_tree].predict([difference_heatmap])
             if filter_output:
                 res_time = filter_time.filter(np.array(res_time[0]))  # fileter the predcition with my filter from my Bachelor thesis
+            else:
+                res_time = np.array(res_time[0])
 
         for i in range(2):
             if res_time[i]> 1:

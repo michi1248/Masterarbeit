@@ -10,7 +10,7 @@ import joblib
 
 #TODO min_samples 5 besser als 30
 class MultiDimensionalDecisionTree:
-    def __init__(self, important_channels, movements,emg,ref,patient_number, windom_size=200, num_trees=30, sample_difference_overlap=64, max_depth = 320, min_samples_split=5,
+    def __init__(self, important_channels, movements,emg,ref,patient_number, windom_size=200, num_trees=50, sample_difference_overlap=64, max_depth = 320, min_samples_split=20,
                  num_previous_samples=None):
         self.emg_data= emg
         self.patient_number = patient_number
@@ -37,7 +37,7 @@ class MultiDimensionalDecisionTree:
 
         count = 0
         for i in range(len(self.movements)): #check if finger already in dict and add the movement number to the dict
-            if self.movements[i] in ["2pinch","3pinch","fist"]:
+            if self.movements[i] in ["2pinch","3pinch","fist","rest"]:
                 continue
             matches = []
             part = self.movements[i].split("_")[0]
@@ -138,8 +138,13 @@ class MultiDimensionalDecisionTree:
             ref_erweitert = np.zeros((self.num_movements,len(self.ref_data[movement]))) # [num_movements x num_samples]
             if movement != "2pinch":
                 ref_erweitert[ref_erweitert == 0.0] = 0.0
-            ref_data = normalize_2D_array(self.ref_data[movement],axis=0)
-            if movement != "2pinch":
+
+            if movement != "rest":
+                ref_data = normalize_2D_array(self.ref_data[movement],axis=0)
+            else:
+                ref_data = self.ref_data[movement]
+
+            if (movement != "2pinch") and (movement != "rest"):
                 ref_erweitert[self.movment_dict[movement],:] = ref_data[:,0] # jetzt werte für die bewegung an passenden index eintragen für anderen finger einträge auf 0.5 setzen
             else: # in 2 pinch case
                 # thumb has to be 0.45 and index 0.6
@@ -187,8 +192,12 @@ class MultiDimensionalDecisionTree:
                 ref_erweitert = np.zeros((self.num_movements, len(self.ref_data[movement])))  # [num_movements x num_samples]
                 if movement != "2pinch":
                     ref_erweitert[ref_erweitert == 0.0] = 0.0
-                ref_data = normalize_2D_array(self.ref_data[movement],axis=0)
-                if movement != "2pinch":
+                if movement != "rest":
+                    ref_data = normalize_2D_array(self.ref_data[movement], axis=0)
+                else:
+                    ref_data = self.ref_data[movement]
+
+                if (movement != "2pinch") and (movement != "rest"):
                     ref_erweitert[self.movment_dict[movement], :] = ref_data[:,0]  # jetzt werte für die bewegung an passenden index eintragen für anderen finger einträge auf 0.5 setzen
                 else:
                     for k in range(2):
