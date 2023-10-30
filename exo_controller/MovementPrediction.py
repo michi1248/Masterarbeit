@@ -115,7 +115,7 @@ class MultiDimensionalDecisionTree:
 
         return averaged_predictions
 
-    def build_training_data(self, movement_names, split_ratio=0.8):
+    def build_training_data(self, movement_names, split_ratio=0.9):
         """
         This function builds the training data for the random forest
         the format for one input value should be [[movement1, movement2, ....][value1, value2, ....]] for ref labels

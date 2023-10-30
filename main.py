@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-
+from scipy.signal import resample
 from exo_controller.datastream import Realtime_Datagenerator
 from exo_controller.helpers import *
 from exo_controller.MovementPrediction import MultiDimensionalDecisionTree
@@ -40,14 +40,14 @@ if __name__ == "__main__":
     use_local = 1 # whether to use the local model or the time model
     output_on_exo = 1 # stream output to exo or print it
     filter_output = True # whether to filter the output with Bachelor filter or not
-    time_for_each_movement_recording = 15 # time in seconds for each movement recording
-    load_trained_model = True # wheather to load a trained model or not
+    time_for_each_movement_recording = 2 # time in seconds for each movement recording
+    load_trained_model = False # wheather to load a trained model or not
 
 
 
     #2 was again after the other tests 1 for different poses after training
     #3 was after that
-    patient_id = "Michi_Test3"
+    patient_id = "sub1"
     movements = ["thumb", "index", "2pinch","rest"]
     if not load_trained_model:
         patient = Realtime_Datagenerator(debug=False, patient_id=patient_id, sampling_frequency_emg=2048, recording_time=time_for_each_movement_recording)
@@ -56,10 +56,21 @@ if __name__ == "__main__":
         resulting_file = r"trainings_data/resulting_trainings_data/subject_" + str(patient_id) + "/emg_data" + ".pkl"
         emg_data = load_pickle_file(resulting_file)
         ref_data = load_pickle_file(r"trainings_data/resulting_trainings_data/subject_" + str(patient_id) + "/3d_data.pkl")
+        # following lines to resample the ref data to the same length as the emg data since they have different sampling frequencies this is necessary
+
 
         for i in emg_data.keys():
             emg_data[i] = np.array(emg_data[i].transpose(1,0,2).reshape(320,-1)) # reshape emg data such as it has the shape 320 x #samples for each movement
         print("emg data shape: ", emg_data["thumb"].shape)
+        resampling_factor = 2048 / 120
+        for movement in movements:
+            num_samples_emg = emg_data[movement].shape[1]
+            num_samples_resampled_ref = int(ref_data[movement].shape[0] * resampling_factor)
+            resampled_ref = np.empty((num_samples_resampled_ref, 2))
+            ref_data[movement] = resample(ref_data[movement], num_samples_resampled_ref)
+
+            print("length of the resampled ref data: ", len(resampled_ref), file=sys.stderr)
+            print("length of the emg data: ", num_samples_emg, file=sys.stderr)
          # convert emg data to dict with key = movement and value = emg data
         # resample reference data such as it has the same length and shape as the emg data
         ref_data = resample_reference_data(ref_data, emg_data)

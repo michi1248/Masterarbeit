@@ -108,23 +108,24 @@ class Realtime_Datagenerator:
             # from seconds to samples like this
             start = int((self.values_movie_start_emg[i] * 120))
             # print(start, int((start + (5 * 120))))
-            # times 10 because of 10 seconds movement we want to have
             stop = int((start + (self.recording_time * 120))) # TODO change 120 to variable to also support other fps in the video
             data = data[start:stop]
 
             # hoch much one incoming emg chunk is in samples in the video
             # e.g hw much is 64 samples in emg in secondds in the video
-            #skip = int(np.round((64 / 2048) * 120))
-            #chunk_size__samples = skip * 3
+            # the following lines are necessary to ressample the kinematics data to the emg data
+            skip = int(np.round((64 / 2048) * 120))
 
-            #distance_between_chunks__samples = skip
-            #kinematics_temp = []
-            #k = 0
-            #while k + chunk_size__samples <= data.shape[0]:
-                #to_append = data[k : k + chunk_size__samples].mean(axis=0)
-                #kinematics_temp.append(to_append)
-                #k += distance_between_chunks__samples
-            #kinematics_data[i] = np.array(kinematics_temp)
+            # chunk_size__samples = skip * 3
+            #
+            # distance_between_chunks__samples = skip
+            # kinematics_temp = []
+            # k = 0
+            # while k + chunk_size__samples <= data.shape[0]:
+            #     to_append = data[k : k + chunk_size__samples].mean(axis=0)
+            #     kinematics_temp.append(to_append)
+            #     k += distance_between_chunks__samples
+            # kinematics_data[i] = np.array(kinematics_temp)
             kinematics_data[i] = np.array(data)
         print("Step 2: \t Saving Kinematics Data")
         if not self.debug:

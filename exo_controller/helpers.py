@@ -232,7 +232,7 @@ def calculate_emg_rms_grid(emg_grid,position,interval_in_samples):
     - numpy.ndarray: An array of RMS values for each channel.
     """
 
-    num_rows, num_cols = emg_grid.shape
+    num_rows, num_cols,_ = emg_grid.shape
     rms_values = np.zeros((num_rows, num_cols))
 
     for row_idx in range(num_rows):
