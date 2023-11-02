@@ -15,6 +15,7 @@ import os
 #sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 from exo_controller import ExtractImportantChannels
 from scipy.signal import convolve2d
+from scipy.signal import resample
 
 import ChannelExtraction
 
@@ -217,7 +218,21 @@ def calculate_emg_rms_row(emg_grid,position,interval_in_samples):
             rms_value = 0
         rms_values[row_idx] = rms_value
     return rms_values
+def resample_ref_to_emg_length(ref_data,emg_data):
+    """
+    resamples the reference data to the same length as the emg data the sampling frequencies are supposed to be 2048 / 120
+    :param ref_data: reference data !! FOR ONE MOVEMENT !! in shape #samples,2
+    :param emg_data: emg data !! FOR ONE MOVEMENT !! in shape 320, #samples
+    :return: reshaped ref data in shape 320, #samples of emg
+    """
 
+    resampling_factor = 2048 / 120
+    num_samples_emg = emg_data.shape[1]
+    num_samples_resampled_ref = int(ref_data.shape[0] * resampling_factor)
+    resampled_ref = np.empty((num_samples_resampled_ref, 2))
+
+    ref_data = resample(ref_data, num_samples_resampled_ref)
+    return ref_data
 def calculate_emg_rms_grid(emg_grid,position,interval_in_samples):
     """
     Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.

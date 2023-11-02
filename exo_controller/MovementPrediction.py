@@ -10,7 +10,7 @@ import joblib
 
 #TODO min_samples 5 besser als 30
 class MultiDimensionalDecisionTree:
-    def __init__(self, important_channels, movements,emg,ref,patient_number, windom_size=200, num_trees=50, sample_difference_overlap=64, max_depth = 320, min_samples_split=20,
+    def __init__(self, important_channels, movements,emg,ref,patient_number, windom_size=150, num_trees=70, sample_difference_overlap=64, max_depth = 50, min_samples_split=20,
                  num_previous_samples=None):
         self.emg_data= emg
         self.patient_number = patient_number
@@ -55,7 +55,7 @@ class MultiDimensionalDecisionTree:
 
         self.trees = []
         #for _ in range(self.num_trees * self.num_movements * len(self.num_previous_samples)):
-        for _ in range(5):
+        for _ in range(len(self.num_previous_samples)):
             #self.trees.append(DecisionTreeRegressor(max_depth=self.max_depth, min_samples_split=self.min_samples_split))
             #self.trees.append(MultiOutputRegressor(DecisionTreeRegressor( min_samples_split=self.min_samples_split)))
             # decrease C to reduce overfitting

@@ -76,7 +76,7 @@ class Exo_Control:
             # Encode message to utf-8 bytes
 
             encoded_message = str(values).encode("utf-8")
-            print(encoded_message)
+            #print(encoded_message)
 
             #  definiere IP  und Port von Client
             success = self.exoSocket.sendto(encoded_message, (self.exoIP, self.exoPort))
