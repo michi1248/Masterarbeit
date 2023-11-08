@@ -33,16 +33,22 @@ class Grid_Arrangement:
         """
         try:
             row, col = np.where(self.upper_grids == number_of_channel)
-            grid_number = np.ceil(col / 8)
-            return row[0], col[0], int(grid_number[0])
+            if col[0] == 0:
+                grid_number = 1
+            else:
+                grid_number = np.ceil(col[0] / 8)
+            return row[0], col[0], int(grid_number)
 
         except:
             pass
 
         try:
             row, col = np.where(self.lower_grids == number_of_channel)
-            grid_number = np.ceil(col / 8) + 3
-            return row[0], col[0], int(grid_number[0])
+            if col[0] == 0:
+                grid_number = 4
+            else:
+                grid_number = np.ceil(col[0] / 8) + 3
+            return row[0], col[0], int(grid_number)
         except:
             pass
 
@@ -55,15 +61,15 @@ class Grid_Arrangement:
         :return: upper_grid,lower_grid (for 5 grids) or upper_grid (for 3 grids)
         """
         if self.num_grids == 3:
-            grid = np.empty((8, 8 * 3, min(len(row) for row in input)))
+            grid = np.zeros((8, 8 * 3, min(len(row) for row in input)))
             for row in range (input.shape[0]):
                 res_row,res_col,res_grid = self.get_channel_position_and_grid_number(row+1)
                 grid[res_row,res_col,:] = input[row]
             return grid,None
 
         elif self.num_grids == 5:
-            upper_grid = np.empty((8, 8 * 3, min(len(row) for row in input)))
-            lower_grid = np.empty((8, 8 * 2, min(len(row) for row in input)))
+            upper_grid = np.zeros((8, 8 * 3, min(len(row) for row in input)))
+            lower_grid = np.zeros((8, 8 * 2, min(len(row) for row in input)))
             for row in range (input.shape[0]):
                 res_row,res_col,res_grid = self.get_channel_position_and_grid_number(row+1)
                 if res_grid < 4:
@@ -98,7 +104,7 @@ class Grid_Arrangement:
 
 
 
-a = Grid_Arrangement([2,1,3,5,4])
-a.make_grid()
-electrode_values = np.random.rand(320, 100)
-grid, lower_grid= a.transfer_320_into_grid_arangement(electrode_values)
+#a = Grid_Arrangement([2,1,3,5,4])
+#a.make_grid()
+#electrode_values = np.random.rand(320, 100)
+#grid, lower_grid= a.transfer_320_into_grid_arangement(electrode_values)

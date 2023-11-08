@@ -11,13 +11,6 @@ from scipy.signal import resample
 import keyboard
 import torch
 
-class Realtime_Application:
-    def __init__(self,patient_id, movements = ["thumb", "index", "2pinch", "rest"],application= 1 ):
-        # following applications are possible:
-        # 1: realtime data generation, training and prediction to exo
-
-        self.patient_id = patient_id
-        self.movements = movements
 
 def remove_nan_values(data):
     """
@@ -31,16 +24,7 @@ def remove_nan_values(data):
         data[i][np.isnan(data[i])] = 0
 
     return data
-def resample_reference_data(ref_data, emg_data):
-    """
-    resample the reference data such as it has the same length and shape as the emg data
-    :param ref_data:
-    :param emg_data:
-    :return:
-    """
-    for movement in ref_data.keys():
-        ref_data[movement] = resample(ref_data[movement], emg_data[movement].shape[1], axis=0)
-    return ref_data
+
 
 if __name__ == "__main__":
 
@@ -51,7 +35,7 @@ if __name__ == "__main__":
     time_for_each_movement_recording = 20 # time in seconds for each movement recording
     load_trained_model = True # wheather to load a trained model or not
     save_trained_model = True # wheather to save the trained model or not
-    use_recorded_data =  r"trainings_data/resulting_trainings_data/subject_Michi_Test3/" # wheather to use recorded data for prediction in realtime or use recorded data (None if want to use realtime data)
+    use_recorded_data =  r"trainings_data/resulting_trainings_data/subject_Michi_Test2/" # wheather to use recorded data for prediction in realtime or use recorded data (None if want to use realtime data)
 
 
 
@@ -116,6 +100,11 @@ if __name__ == "__main__":
         #model.load_trainings_data()
         model.save_trainings_data()
         model.train()
+
+        # get the maximal and minimal emg values for each channel over all movements from the trainings data for normalization
+        max_emg_value = model.max_value
+        min_emg_value = model.min_value
+
         if save_trained_model:
             model.save_model(subject=patient_id)
             print("model saved")
@@ -125,6 +114,13 @@ if __name__ == "__main__":
                                              ref=None, patient_number=patient_id)
         model.load_model(subject=patient_id)
         best_time_tree = 2
+        emg_data = load_pickle_file(r"trainings_data/resulting_trainings_data/subject_" + str(patient_id) + "/emg_data.pkl")
+        for i in emg_data.keys():
+            emg_data[i] = np.array(emg_data[i].transpose(1,0,2).reshape(320,-1))
+        emg_data = remove_nan_values(emg_data)
+        #max_emg_value, min_emg_value = find_max_min_values_for_each_movement_and_channel(emg_data, channels, movements)
+        q1,q2,median = find_q_median_values_for_each_movement_and_channel(emg_data, channels, movements)
+
 
     filter_local = MichaelFilter()
     filter_time = MichaelFilter()
@@ -159,7 +155,7 @@ if __name__ == "__main__":
                     emg_buffer.pop(0)
                 data = np.concatenate(emg_buffer, axis=-1)
                 heatmap_local = calculate_emg_rms_row(data, data[0].shape[0], model.window_size_in_samples)
-                heatmap_local = normalize_2D_array(heatmap_local)
+                heatmap_local = normalize_2D_array(heatmap_local,max_value=max_emg_value,min_value=min_emg_value)
                 res_local = model.trees[0].predict([heatmap_local])  # result has shape 1,2
 
                 if filter_output:
@@ -170,8 +166,9 @@ if __name__ == "__main__":
 
                 previous_heatmap = calculate_emg_rms_row(data, data[0].shape[0] - model.num_previous_samples[
                     best_time_tree - 1], model.window_size_in_samples)
-                previous_heatmap = normalize_2D_array(previous_heatmap)
-                difference_heatmap = normalize_2D_array(np.subtract(heatmap_local, previous_heatmap))
+                previous_heatmap = normalize_2D_array(previous_heatmap,max_value=max_emg_value,min_value=min_emg_value)
+                #difference_heatmap = normalize_2D_array(np.subtract(heatmap_local, previous_heatmap))
+                difference_heatmap = np.subtract(heatmap_local, previous_heatmap)
                 if np.isnan(difference_heatmap).any():
                     res_time = np.array([-1, -1])
                 else:
@@ -233,7 +230,7 @@ if __name__ == "__main__":
             emg_buffer.pop(0)
         data = np.concatenate(emg_buffer, axis=-1)
         heatmap_local = calculate_emg_rms_row(data, data[0].shape[0], model.window_size_in_samples)
-        heatmap_local = normalize_2D_array(heatmap_local)
+        heatmap_local = normalize_2D_array(heatmap_local,max_value=max_emg_value,min_value=min_emg_value)
         res_local = model.trees[0].predict([heatmap_local]) # result has shape 1,2
 
         if filter_output:
@@ -242,8 +239,9 @@ if __name__ == "__main__":
             res_local = np.array(res_local[0])
 
         previous_heatmap = calculate_emg_rms_row(data, data[0].shape[0] - model.num_previous_samples[best_time_tree-1],model.window_size_in_samples)
-        previous_heatmap = normalize_2D_array(previous_heatmap)
-        difference_heatmap = normalize_2D_array(np.subtract(heatmap_local, previous_heatmap))
+        previous_heatmap = normalize_2D_array(previous_heatmap,max_value=max_emg_value,min_value=min_emg_value)
+        #difference_heatmap = normalize_2D_array(np.subtract(heatmap_local, previous_heatmap))
+        difference_heatmap = np.subtract(heatmap_local, previous_heatmap)
         if np.isnan(difference_heatmap).any():
             res_time = np.array([-1, -1])
         else:

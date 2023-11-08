@@ -163,7 +163,12 @@ def check_available_gpus():
         print("No GPUs are available.")
 
 def open_all_files_for_one_patient_and_movement(folder_path, movement_name):
-    """opens all files (EMG,MU,ref) for one patient and one movement and returns the data as a dict"""
+    """
+    opens all files (EMG,MU,ref) for one patient and one movement and returns the data as a dictionary
+    :param folder_path: path to the folder that contains data.pkl and the 12 csv files for kinematics
+    :param movement_name: which movement you want to open all the files for
+    :return: dictionarys for emg_data,MU_data,ref_data
+    """
     movement_list = ["thumb_slow", "thumb_fast", "index_slow", "index_fast", "middle_slow", "middle_fast", "ring_slow",
                      "ring_fast", "pinky_slow", "pinky_fast", "fist", "2pinch", "3pinch"]
     movement_number = movement_list.index(movement_name)+1
@@ -218,20 +223,15 @@ def calculate_emg_rms_row(emg_grid,position,interval_in_samples):
             rms_value = 0
         rms_values[row_idx] = rms_value
     return rms_values
-def resample_ref_to_emg_length(ref_data,emg_data):
+def resample_reference_data(ref_data, emg_data):
     """
-    resamples the reference data to the same length as the emg data the sampling frequencies are supposed to be 2048 / 120
-    :param ref_data: reference data !! FOR ONE MOVEMENT !! in shape #samples,2
-    :param emg_data: emg data !! FOR ONE MOVEMENT !! in shape 320, #samples
-    :return: reshaped ref data in shape 320, #samples of emg
+    resample the reference data such as it has the same length and shape as the emg data
+    :param ref_data: dictionary with keys as movement names and values as the reference data
+    :param emg_data: dictionary with keys as movement names and values as the emg data
+    :return: resampled reference data
     """
-
-    resampling_factor = 2048 / 120
-    num_samples_emg = emg_data.shape[1]
-    num_samples_resampled_ref = int(ref_data.shape[0] * resampling_factor)
-    resampled_ref = np.empty((num_samples_resampled_ref, 2))
-
-    ref_data = resample(ref_data, num_samples_resampled_ref)
+    for movement in ref_data.keys():
+        ref_data[movement] = resample(ref_data[movement], emg_data[movement].shape[1], axis=0)
     return ref_data
 def calculate_emg_rms_grid(emg_grid,position,interval_in_samples):
     """
@@ -333,16 +333,76 @@ def from_grid_position_to_row_position(grid_position):
         if row_position > 320:
             print("error in helper function from_grid_position_to_row_position , this positon is out of range")
     return row_position
-def normalize_2D_array(data,axis=None,negative = False):
+
+def find_max_min_values_for_each_movement_and_channel(emg_data,important_channels,movements):
+    """
+    This function finds the max and min values for each channel in the emg data.
+    It will return the max and min values for each channel over all movements.
+    This is needed to normalize the data later on.
+    :return: max and min values for each channel
+    """
+    max_values = np.zeros(len(important_channels))
+    min_values = np.zeros(len(important_channels))
+    for movement in movements:
+        for channel in important_channels:
+            if np.max(emg_data[movement][channel]) > max_values[channel]:
+                max_values[channel] = np.max(emg_data[movement][channel])
+            if np.min(emg_data[movement][channel]) < min_values[channel]:
+                min_values[channel] = np.min(emg_data[movement][channel])
+
+    return max_values, min_values
+
+
+def find_q_median_values_for_each_movement_and_channel(emg_data,important_channels,movements):
+    """
+    This function finds the max and min values for each channel in the emg data.
+    It will return the max and min values for each channel over all movements.
+    This is needed to normalize the data later on.
+    :return: max and min values for each channel
+    """
+    # TODO wie will ich das hier machen ?? welche median und quantiles nehme ich ??  ich sollte eigentlich genau so machen (größtes 1 und 3 quantile) median keine ahnung :D 
+    q1 = np.zeros(len(important_channels))
+    q2 = np.zeros(len(important_channels))
+    median = np.zeros(len(important_channels))
+
+    for movement in movements:
+        for channel in important_channels:
+            median[channel] += np.median(emg_data[movement][channel])
+            if np.quantile(emg_data[movement][channel],0.25) < q1[channel]:
+                q1[channel] = np.quantile(emg_data[movement][channel],0.25)
+            if np.quantile(emg_data[movement][channel],0.75) > q2[channel]:
+                q2[channel] = np.quantile(emg_data[movement][channel],0.75)
+
+    for i in range(len(important_channels)):
+        median[i] = median[i]/len(movements)
+    return q1,q2,median
+
+def robust_scaling(data, q1,q2,median):
+    """
+    scales the data with robust scaling
+    :param data:
+    :param q1:
+    :param q2:
+    :param median:
+    :return:
+    """
+    return (data - median) / ((q2 - q1))
+def normalize_2D_array(data,axis=None,negative = False, max_value = None, min_value = None):
     """
     normalizes a 2D array
 
-    :param array: the data to be normalized
+    :param data: the data to be normalized
     :param axis: which axis should be normalized, if None, the whole array will be normalized if 0 columns will be normalized, if 1 rows will be normalized
     :param negative: if True, the data will be normalized between -1 and 1, if False, the data will be normalized between 0 and 1
+    :param max_value: if given we do not want to make max/ min scaling on this sample but for every channel based on max min of the whole trainings data
+    :param min_value: if given we do not want to make max/ min scaling on this sample but for every channel based on max min of the whole trainings data
     :return:
     """
-    if axis is None:
+    if (max_value is not None) and (min_value is not None):
+        data = np.array(data)
+        norm = (data - min_value) / ((max_value - min_value) )
+
+    elif axis is None:
         data = np.array(data)
         norm = (data-np.min(data))/(np.max(data)-np.min(data))
     else:
@@ -386,23 +446,22 @@ def spikeTriggeredAveraging(SIG, MUPulses, STA_window, emg_length, fsamp):
 def check_to_which_movement_cycle_sample_belongs(sample_position,local_maxima,local_minima):
     """
     Checks to which movement cycle a sample belongs to (i.e. the sample is closer to the next local maxima or minima)
+    chooses the maxima/minima like marius mentioned (if sample is after minima it belongs to the next maxima)
     :param sample_position:
     :param local_maxima:
     :param local_minima:
     :return:
     """
+
     # Find the nearest local maxima and minima to the sample position
     closest_maxima = min(local_maxima, key=lambda x: abs(sample_position - x))
     closest_minima = min(local_minima, key=lambda x: abs(sample_position - x))
-    # Calculate the distances from the sample to the closest maxima and minima
-    distance_to_maxima = abs(sample_position - closest_maxima)
-    distance_to_minima = abs(sample_position - closest_minima)
 
     # 1 = flexion , 2 = extension
-    if distance_to_maxima < distance_to_minima:
-        return 1 , distance_to_maxima
+    if sample_position < closest_maxima:
+        return 1 , abs(sample_position - closest_maxima)
     else:
-        return 2 , distance_to_minima
+        return 2 , abs(sample_position - closest_minima)
 
 def butter_highpass(cutoff, fs, order=5):
     nyquist = 0.5 * fs
@@ -564,7 +623,7 @@ def reshape_emg_channels_into_320(emg_data):
 
 def is_near_extremum(frame,local_maxima, local_minima,time_window,sampling_frequency):
     """
-    Checks if the frame is near a local maxima or minima
+    Checks if the frame is near a local maxima or minima (i.e. the frame is within a certain time window of the local maxima or minima)
     :param frame:
     :param local_maxima:
     :param local_minima:

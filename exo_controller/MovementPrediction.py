@@ -65,6 +65,23 @@ class MultiDimensionalDecisionTree:
             #self.trees.append(MultiOutputRegressor(SVR(kernel="linear",C=0.5,epsilon=0.2)))
             self.trees.append(MultiOutputRegressor(RandomForestRegressor(n_estimators=self.num_trees, min_samples_split=self.min_samples_split,max_depth=self.max_depth,warm_start=True,n_jobs=-1)))
 
+
+    def find_max_min_values_for_each_movement_and_channel(self):
+        """
+        This function finds the max and min values for each channel in the emg data.
+        It will return the max and min values for each channel over all movements.
+        This is needed to normalize the data later on.
+        :return: max and min values for each channel
+        """
+        max_values = np.zeros((self.num_channels))
+        min_values = np.zeros((self.num_channels))
+        for movement in self.movements:
+            for channel in self.important_channels:
+                if np.max(self.emg_data[movement][channel]) > max_values[channel]:
+                    max_values[channel] = np.max(self.emg_data[movement][channel])
+                if np.min(self.emg_data[movement][channel]) < min_values[channel]:
+                    min_values[channel] = np.min(self.emg_data[movement][channel])
+        return max_values, min_values
     def select_default_num_previous(self):
         """
         Select the default number of previous samples to use for the time difference model.
@@ -131,7 +148,7 @@ class MultiDimensionalDecisionTree:
         labels = []
 
         window_size = self.window_size_in_samples
-
+        self.max_value, self.min_value = self.find_max_min_values_for_each_movement_and_channel()
 
         for movement in tqdm.tqdm(movement_names,desc="Building training data for local differences"):
 
@@ -156,7 +173,7 @@ class MultiDimensionalDecisionTree:
             for i in range(0, len(emg_data[0]) - window_size + 1, self.sample_difference_overlap): # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
                 if i <= ref_data.shape[0]:
                     segment = calculate_emg_rms_row(emg_data,i,self.window_size_in_samples)
-                    segment = normalize_2D_array(segment)
+                    segment = normalize_2D_array(segment,max_value=self.max_value,min_value=self.min_value)
                     # feature = calculate_rms(segment)
                     # segments.append(feature)
                     label = ref_erweitert[:,i]
@@ -206,10 +223,11 @@ class MultiDimensionalDecisionTree:
                 for i in range(0, len(emg_data[0]) - window_size + 1, self.sample_difference_overlap):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
                     if (i <= ref_data.shape[0]) and ( i-idx >= 0):
                         heatmap = calculate_emg_rms_row(emg_data, i, self.window_size_in_samples)
-                        heatmap = normalize_2D_array(heatmap)
+                        heatmap = normalize_2D_array(heatmap,max_value=self.max_value,min_value=self.min_value)
                         previous_heatmap = calculate_emg_rms_row(emg_data, i-idx, self.window_size_in_samples)
-                        previous_heatmap = normalize_2D_array(previous_heatmap)
-                        difference_heatmap = normalize_2D_array(np.subtract(heatmap, previous_heatmap))
+                        previous_heatmap = normalize_2D_array(previous_heatmap,max_value=self.max_value,min_value=self.min_value)
+                        #difference_heatmap = normalize_2D_array(np.subtract(heatmap, previous_heatmap))  # TODO this needded ????
+                        difference_heatmap = np.subtract(heatmap, previous_heatmap)
                         label = ref_erweitert[:, i]
 
                         # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
