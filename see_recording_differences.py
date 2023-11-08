@@ -17,7 +17,7 @@ from exo_controller import *
 
 
 class Heatmap:
-    def __init__(self, movement_name,path_to_subject_dat,sampling_frequency=2048,path_to_save_plots=r"D:\Lab\differences_train_test_heatmaps",frame_duration=150,additional_term = "",method = "roboust"):
+    def __init__(self, movement_name,path_to_subject_dat,sampling_frequency=2048,path_to_save_plots=r"D:\Lab\differences_train_test_heatmaps",frame_duration=150,additional_term = "",method = "roboust",mean_flex_rest=None,mean_ex_rest=None):
         """
         NOTE !!!! at the moment if there are more than one ref dimension is given (2pinch,fist,etc,) for the plot the first one is taken!!!
         :param movement_name:
@@ -34,14 +34,20 @@ class Heatmap:
         print("NOTE !!!! at the moment if there are more than one ref dimension is given (2pinch,fist,etc,) for the plot the first one is taken!!!",file=sys.stderr )
 
         self.movement_name = movement_name
-
+        self.mean_ex = mean_ex_rest
+        self.mean_flex = mean_flex_rest
         if not os.path.exists(os.path.join(path_to_save_plots, str(frame_duration)+ "ms_rms_window",method, movement_name+ "_" + additional_term)):
             os.makedirs(os.path.join(path_to_save_plots, str(frame_duration)+ "ms_rms_window",method, movement_name+ "_" + additional_term))
         self.path_to_save_plots = os.path.join(path_to_save_plots, str(frame_duration)+ "ms_rms_window",method, movement_name+ "_" + additional_term)
         self.emg_data = load_pickle_file(os.path.join(path_to_subject_dat, "emg_data.pkl"))[movement_name].transpose(1,0,2).reshape(320,-1)
         emg_data_for_max_min = load_pickle_file(os.path.join(path_to_subject_dat, "emg_data.pkl"))
+        grid_aranger = grid_arrangement.Grid_Arrangement([1, 2, 3, 4, 5])
+        grid_aranger.make_grid()
         for i in emg_data_for_max_min.keys():
             emg_data_for_max_min[i] = np.array(emg_data_for_max_min[i].transpose(1,0,2).reshape(320,-1))
+            if (self.mean_ex is not None) and (self.mean_flex is not None):
+                # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
+                emg_data_for_max_min[i] = emg_data_for_max_min[i] - self.mean_ex
         if method == "Min_Max_Scaling_over_whole_data" :
             self.max_values,self.min_values = find_max_min_values_for_each_movement_and_channel(emg_data_for_max_min,range(320),list(emg_data_for_max_min.keys()))
             self.max_values = self.max_values.reshape(320,1)
@@ -52,8 +58,7 @@ class Heatmap:
             self.q2 = self.q2.reshape(320,1)
             self.median = self.median.reshape(320,1)
 
-        grid_aranger = grid_arrangement.Grid_Arrangement([1,2,3,4,5])
-        grid_aranger.make_grid()
+
         upper,lower = grid_aranger.transfer_320_into_grid_arangement(self.emg_data)
         if method == "Min_Max_Scaling_over_whole_data":
             upper_max,lower_max = grid_aranger.transfer_320_into_grid_arangement(self.max_values)
@@ -146,6 +151,11 @@ class Heatmap:
 
         """
         heatmap = self.calculate_heatmap(self.emg_data, frame, self.number_observation_samples)
+        if method == "no_scaling":
+            if (self.mean_ex is not None) and (self.mean_flex is not None):
+                heatmap = heatmap - self.mean_ex
+            normalized_heatmap = heatmap
+
 
         if method == "Min_Max_Scaling_over_whole_data":
             normalized_heatmap = normalize_2D_array(heatmap,max_value=self.max_values[:,:,0],min_value=self.min_values[:,:,0])
@@ -403,7 +413,7 @@ if __name__ == "__main__":
                 else:
 
                     heatmap = Heatmap(movement, path,frame_duration=window_size, additional_term=additional_term +  "_subtracted_mean_rest_from_emg",
-                                      method=method)
+                                      method=method,mean_flex_rest=mean_flex_rest,mean_ex_rest=mean_ex_rest)
                     heatmap.animate(save=True,mean_flex=mean_flex_rest,mean_ex=mean_ex_rest)
                     heatmap.save_animation(r"D:\Lab\differences_train_test_heatmaps/" + str(
                         window_size) + "ms_rms_window/" + method + "/" + str(movement) + str(

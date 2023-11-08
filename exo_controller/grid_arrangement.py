@@ -52,6 +52,23 @@ class Grid_Arrangement:
         except:
             pass
 
+    def get_channel_position_and_grid_number_backtrans(self,number_of_channel):
+        """
+        returns the row and column of the channel in the grid and the grid number i.e if all grids are normally connected [1,2,3,4,5] then 320 would be in the grid 5, if order is [1,2,3,5,4] then 320 would be in grid 4
+        :param number_of_channel: the channel number [1,320] that we want to have the positions in the grid of
+        :return: row,col,grid_number
+        """
+        if self.num_grids == 5:
+            grid = self.concatenate_upper_and_lower_grid(np.reshape(self.upper_grids,(8,24,1)),np.reshape(self.lower_grids,(8,16,1))).reshape(16,24)
+        else:
+            grid = self.upper_grids
+        try:
+            row, col = np.where(grid == number_of_channel)
+            return row[0], col[0]
+
+        except:
+            pass
+
 
 
     def transfer_320_into_grid_arangement(self,input):
@@ -93,18 +110,30 @@ class Grid_Arrangement:
 
     def transfer_grid_arangement_into_320(self,input):
         if self.num_grids == 3:
-            extracted_data = np.empty((192, input[5,5].shape[0]))
+            extracted_data = np.empty((192, input.shape[2]))
+            for channel in range(192):
+                res_row, res_col = self.get_channel_position_and_grid_number_backtrans(channel + 1)
+                extracted_data[channel] = input[res_row, res_col]
+            return extracted_data
         elif self.num_grids == 5:
             extracted_data = np.empty((320, input.shape[2]))
+            for channel in range(320):
+                res_row, res_col= self.get_channel_position_and_grid_number_backtrans(channel + 1)
+                extracted_data[channel] = input[res_row, res_col]
+            return extracted_data
+
         else:
             raise ValueError("Number of grids not supported")
 
-        # TODO implement this
 
 
 
 
-#a = Grid_Arrangement([2,1,3,5,4])
-#a.make_grid()
+
+
+a = Grid_Arrangement([1,2,3,4,5])
+a.make_grid()
+c = np.ones((16,24,100))
+d = a.transfer_grid_arangement_into_320(c)
 #electrode_values = np.random.rand(320, 100)
 #grid, lower_grid= a.transfer_320_into_grid_arangement(electrode_values)
