@@ -32,7 +32,8 @@ class Heatmap:
         self.global_counter = global_counter is the number of frames that have been plotted, important because for first time we need to plot colorbar and other times not
         """
         print("NOTE !!!! at the moment if there are more than one ref dimension is given (2pinch,fist,etc,) for the plot the first one is taken!!!",file=sys.stderr )
-
+        if method == "Gauss_filter":
+            self.gauss_filter= create_gaussian_filter(sigma=0.55)
         self.movement_name = movement_name
         self.mean_ex = mean_ex_rest
         self.mean_flex = mean_flex_rest
@@ -47,7 +48,7 @@ class Heatmap:
             emg_data_for_max_min[i] = np.array(emg_data_for_max_min[i].transpose(1,0,2).reshape(320,-1))
             if (self.mean_ex is not None) and (self.mean_flex is not None):
                 # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
-                emg_data_for_max_min[i] = emg_data_for_max_min[i] - self.mean_ex
+                emg_data_for_max_min[i] = emg_data_for_max_min[i] - grid_aranger.transfer_grid_arangement_into_320(np.reshape(self.mean_ex,(self.mean_ex.shape[0],self.mean_ex.shape[1],1)))
         if method == "Min_Max_Scaling_over_whole_data" :
             self.max_values,self.min_values = find_max_min_values_for_each_movement_and_channel(emg_data_for_max_min,range(320),list(emg_data_for_max_min.keys()))
             self.max_values = self.max_values.reshape(320,1)
@@ -151,48 +152,42 @@ class Heatmap:
 
         """
         heatmap = self.calculate_heatmap(self.emg_data, frame, self.number_observation_samples)
+        if (self.mean_ex is not None) and (self.mean_flex is not None):
+            heatmap = heatmap - self.mean_ex
         if method == "no_scaling":
-            if (self.mean_ex is not None) and (self.mean_flex is not None):
-                heatmap = heatmap - self.mean_ex
             normalized_heatmap = heatmap
-
 
         if method == "Min_Max_Scaling_over_whole_data":
             normalized_heatmap = normalize_2D_array(heatmap,max_value=self.max_values[:,:,0],min_value=self.min_values[:,:,0])
-            if (self.mean_ex is not None) and (self.mean_flex is not None):
-                print("subtracting mean")
-                normalized_heatmap = normalized_heatmap - normalize_2D_array(self.mean_ex,max_value=self.max_values[:,:,0],min_value=self.min_values[:,:,0])
         if method == "Robust_Scaling":
             normalized_heatmap = robust_scaling(heatmap, q1=self.q1[:,:,0], q2=self.q2[:,:,0], median=self.median[:,:,0])
-            if (self.mean_ex is not None) and (self.mean_flex is not None):
-                print("subtracting mean")
-                normalized_heatmap = normalized_heatmap - robust_scaling(self.mean_ex,q1=self.q1[:,:,0], q2=self.q2[:,:,0], median=self.median[:,:,0])  # does not matter if subtract mean_ex or flex because both are the same for rest position
 
         if method == "Min_Max_Scaling_over_sample":
             normalized_heatmap = normalize_2D_array(heatmap)
 
         if self.movement_name == "rest":
-            self.heatmaps_flex = np.add(self.heatmaps_flex, heatmap)
+            self.heatmaps_flex = np.add(self.heatmaps_flex,heatmap)
             # add heatmap and not normalized heatmap because impact of all heatmaps will be the same but maybe some heatmaps have higher values and i want to use this ??
             # TODO maybe change this (better to use normalized or not ?)
             # IT IS BETER TO USE NORMALIZED BECAUSE IF EMG SCHWANKUNGEN
             self.number_heatmaps_flex += 1
             self.heatmaps_ex = np.add(self.heatmaps_ex,heatmap)
             self.number_heatmaps_ex += 1
+
         #only do the following if +- window size near extrema
-        if (self.movement_name != "rest"): #and (is_near_extremum(frame,self.local_maxima,self.local_minima,time_window=self.frame_duration, sampling_frequency=self.sampling_frequency)) :
+        if (self.movement_name != "rest") and (is_near_extremum(frame,self.local_maxima,self.local_minima,time_window=3*self.frame_duration, sampling_frequency=self.sampling_frequency)) :
             # find out to which part of the movement the current sample belongs (half of flex or ref)
             belongs_to_movement,distance = check_to_which_movement_cycle_sample_belongs(frame,self.local_maxima,self.local_minima)
             # add the heatmap to the list of all heatmaps of the fitting flex/ex for later calculation of difference heatmap
             if (belongs_to_movement == 1):
                 # the closer the sample is to the extrema the more impact it has on the heatmap
-                self.heatmaps_flex = np.add(self.heatmaps_flex, np.multiply(heatmap, 1/(distance+0.1) ))
+                self.heatmaps_flex = np.add(self.heatmaps_flex, heatmap)#np.multiply(heatmap, 1/(distance+0.1) ))
                 # add heatmap and not normalized heatmap because impact of all heatmaps will be the same but maybe some heatmaps have higher values and i want to use this ??
                 #TODO maybe change this (better to use normalized or not ?)
                 #IT IS BETER TO USE NORMALIZED BECAUSE IF EMG SCHWANKUNGEN
                 self.number_heatmaps_flex +=1
             else:
-                self.heatmaps_ex = np.add(self.heatmaps_ex,  np.multiply(heatmap, 1/(distance+0.1) ))
+                self.heatmaps_ex = np.add(self.heatmaps_ex, heatmap) #np.multiply(heatmap, 1/(distance+0.1) ))
                 self.number_heatmaps_ex += 1
 
 
@@ -256,12 +251,11 @@ class Heatmap:
         print("next value is: " + str(next_higher_value))
         self.slider.set(next_higher_value)
 
-    def animate(self,save=False,mean_flex = None,mean_ex = None):
+    def animate(self,save=False):
 
-        self.mean_flex = mean_flex
-        self.mean_ex = mean_ex
+        print("number_observation_samples: " + str(self.number_observation_samples))
         #samples = all sample values when using all samples with self.frame_duration in between
-        self.samples = np.linspace(0, self.sample_length, self.num_samples, endpoint=False, dtype=int)
+        self.samples = np.linspace(self.number_observation_samples, self.sample_length, self.num_samples, endpoint=False, dtype=int)
         self.samples = [element for element in self.samples if element <= self.ref_data.shape[0]]
         #make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
         num_rows, num_cols,_ = self.emg_data.shape
@@ -313,32 +307,35 @@ class Heatmap:
         self.pbar.close()
         ########
         if method == "Min_Max_Scaling_over_whole_data":
-            if (self.mean_ex is not None) and (self.mean_flex is not None):
-                mean_flex_heatmap = normalize_2D_array(np.divide(self.heatmaps_flex, self.number_heatmaps_flex),max_value=self.max_values[:,:,0],min_value=self.min_values[:,:,0]) - normalize_2D_array(self.mean_ex,max_value=self.max_values[:,:,0],min_value=self.min_values[:,:,0])
-                mean_ex_heatmap = normalize_2D_array(np.divide(self.heatmaps_ex, self.number_heatmaps_ex),max_value=self.max_values[:,:,0],min_value=self.min_values[:,:,0])- normalize_2D_array(self.mean_ex,max_value=self.max_values[:,:,0],min_value=self.min_values[:,:,0])
-            else:
-                mean_flex_heatmap = normalize_2D_array(np.divide(self.heatmaps_flex, self.number_heatmaps_flex),
-                                                       max_value=self.max_values[:, :, 0],
-                                                       min_value=self.min_values[:, :, 0]) 
-                mean_ex_heatmap = normalize_2D_array(np.divide(self.heatmaps_ex, self.number_heatmaps_ex),
-                                                     max_value=self.max_values[:, :, 0],
-                                                     min_value=self.min_values[:, :, 0]) - normalize_2D_array(
-                    self.mean_ex, max_value=self.max_values[:, :, 0], min_value=self.min_values[:, :, 0])
+            mean_flex_heatmap = normalize_2D_array(np.divide(self.heatmaps_flex, self.number_heatmaps_flex),
+                                                   max_value=self.max_values[:, :, 0],
+                                                   min_value=self.min_values[:, :, 0])
+            mean_ex_heatmap = normalize_2D_array(np.divide(self.heatmaps_ex, self.number_heatmaps_ex),
+                                                 max_value=self.max_values[:, :, 0],
+                                                 min_value=self.min_values[:, :, 0]) - normalize_2D_array(
+                self.mean_ex, max_value=self.max_values[:, :, 0], min_value=self.min_values[:, :, 0])
         if method == "Robust_Scaling":
-            if (self.mean_ex is not None) and (self.mean_flex is not None):
-                mean_flex_heatmap = robust_scaling(np.divide(self.heatmaps_flex, self.number_heatmaps_flex), q1=self.q1[:,:,0], q2=self.q2[:,:,0], median=self.median[:,:,0]) - robust_scaling(self.mean_ex, q1=self.q1[:,:,0], q2=self.q2[:,:,0], median=self.median[:,:,0])
-                mean_ex_heatmap = robust_scaling(np.divide(self.heatmaps_ex, self.number_heatmaps_ex), q1=self.q1[:,:,0],
-                                                   q2=self.q2[:,:,0], median=self.median[:,:,0]) - robust_scaling(self.mean_ex, q1=self.q1[:,:,0], q2=self.q2[:,:,0], median=self.median[:,:,0])
-            else:
-                mean_flex_heatmap = robust_scaling(np.divide(self.heatmaps_flex, self.number_heatmaps_flex), q1=self.q1[:,:,0], q2=self.q2[:,:,0], median=self.median[:,:,0])
-                mean_ex_heatmap = robust_scaling(np.divide(self.heatmaps_ex, self.number_heatmaps_ex), q1=self.q1[:,:,0],
-                                                   q2=self.q2[:,:,0], median=self.median[:,:,0])
+            #mean_flex_heatmap = np.divide(self.heatmaps_flex, self.number_heatmaps_flex)
+            #mean_ex_heatmap = np.divide(self.heatmaps_ex, self.number_heatmaps_ex)
+            mean_flex_heatmap = robust_scaling(np.divide(self.heatmaps_flex, self.number_heatmaps_flex), q1=self.q1[:,:,0], q2=self.q2[:,:,0], median=self.median[:,:,0])
+            mean_ex_heatmap = robust_scaling(np.divide(self.heatmaps_ex, self.number_heatmaps_ex), q1=self.q1[:,:,0],
+                                               q2=self.q2[:,:,0], median=self.median[:,:,0])
         if method == "Min_Max_Scaling_over_sample":
             mean_flex_heatmap = normalize_2D_array(np.divide(self.heatmaps_flex, self.number_heatmaps_flex))
             mean_ex_heatmap = normalize_2D_array(np.divide(self.heatmaps_ex, self.number_heatmaps_ex))
 
+        if method == "no_scaling":
+            mean_flex_heatmap = np.divide(self.heatmaps_flex, self.number_heatmaps_flex)
+            mean_ex_heatmap = np.divide(self.heatmaps_ex, self.number_heatmaps_ex)
+
+        mean_ex_heatmap[np.isnan(mean_ex_heatmap)] = 0
+        mean_flex_heatmap[np.isnan(mean_flex_heatmap)] = 0
+        mean_ex_heatmap = normalize_2D_array(mean_ex_heatmap) # here normalize again just over this sample because it is nevertheless just  one image
+        mean_flex_heatmap = normalize_2D_array(mean_flex_heatmap)
         #difference_heatmap = normalize_2D_array(np.abs(np.subtract(mean_ex_heatmap, mean_flex_heatmap)))
-        difference_heatmap =np.subtract(mean_ex_heatmap, mean_flex_heatmap)
+        difference_heatmap = np.subtract(mean_ex_heatmap, mean_flex_heatmap)
+        difference_heatmap[np.isnan(difference_heatmap)] = 0
+        difference_heatmap = normalize_2D_array(difference_heatmap)
         if(mark_choosen_channels):
             channels_flexion,channels_extension = choose_possible_channels(difference_heatmap,mean_flex_heatmap,mean_ex_heatmap)
 
@@ -384,9 +381,15 @@ class Heatmap:
         self.ani.save(output_filename, writer='pillow', fps=fps)
 
 if __name__ == "__main__":
-    window_size = 150
+    # a = grid_arrangement.Grid_Arrangement([1,2,3,4,5])
+    # a.make_grid()
+    # con = a.concatenate_upper_and_lower_grid(np.reshape(a.upper_grids,(a.upper_grids.shape[0],a.upper_grids.shape[1],1)),np.reshape(a.lower_grids,(a.lower_grids.shape[0],a.lower_grids.shape[1],1)))
+    # gauss_kernel = create_gaussian_filter(sigma=0.45)
+    # filtered = apply_gaussian_filter(con,gauss_kernel)
 
-    for method in ["Robust_Scaling","Min_Max_Scaling_over_sample","Min_Max_Scaling_over_whole_data"]:
+
+    window_size = 150
+    for method in ["Gauss_filter", "EMG_signals","Robust_Scaling","no_scaling","Min_Max_Scaling_over_sample","Min_Max_Scaling_over_whole_data"]:
         print("method is: ",method)
         mean_flex_rest = None
         mean_ex_rest = None
@@ -414,7 +417,7 @@ if __name__ == "__main__":
 
                     heatmap = Heatmap(movement, path,frame_duration=window_size, additional_term=additional_term +  "_subtracted_mean_rest_from_emg",
                                       method=method,mean_flex_rest=mean_flex_rest,mean_ex_rest=mean_ex_rest)
-                    heatmap.animate(save=True,mean_flex=mean_flex_rest,mean_ex=mean_ex_rest)
+                    heatmap.animate(save=True)
                     heatmap.save_animation(r"D:\Lab\differences_train_test_heatmaps/" + str(
                         window_size) + "ms_rms_window/" + method + "/" + str(movement) + str(
                         fps) + "fps_most_firings.gif", fps=2)

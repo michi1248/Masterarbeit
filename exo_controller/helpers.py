@@ -16,6 +16,7 @@ import os
 from exo_controller import ExtractImportantChannels
 from scipy.signal import convolve2d
 from scipy.signal import resample
+from scipy.stats import norm
 
 import ChannelExtraction
 
@@ -642,6 +643,115 @@ def is_near_extremum(frame,local_maxima, local_minima,time_window,sampling_frequ
         return True
     else:
         return False
+
+def plot_emg_channels(emg_data, shift=1.0):
+    """
+    Plots each EMG channel with a vertical shift.
+
+    :param emg_data: A 2D numpy array with shape (channels, timepoints)
+    :param shift: The vertical shift to apply between each channel
+    """
+    n_channels, n_timepoints = emg_data.shape
+    time = np.arange(n_timepoints) / 2048
+
+    plt.figure(figsize=(15, 10))
+
+    # Plot each channel
+    for i in range(n_channels):
+        # Apply a vertical shift to each channel
+        shifted_data = emg_data[i, :] + i * shift
+        plt.plot(time, shifted_data, label=f'Channel {i+1}')
+
+    plt.xlabel('Time in s')
+    plt.ylabel('EMG signal + Shift')
+    plt.title('EMG Signals Over Time')
+    plt.show()
+
+def create_gaussian_filter(size_filter=3,sigma=None):
+    """
+    Creates a Gaussian filter of the given size and standard deviation.
+
+    :param size: The size of the filter (size x size)
+    :param sigma: The standard deviation of the Gaussian filter. If None, sigma is set to size/6.
+    :return: A 2D numpy array representing the Gaussian filter
+    """
+    if sigma is None:
+        sigma = size_filter / 6.0  # A rule of thumb is to set sigma to 1/6 of the kernel size
+
+    kernel = np.ones((size_filter, size_filter))
+    for row in range(size_filter):
+        for col in range(size_filter):
+            x = col - size_filter // 2
+            y = row - size_filter // 2
+            kernel[row, col] = np.multiply(np.divide(1, 2 * np.pi* sigma**2),
+                                           np.exp(-(x ** 2 + y ** 2) / (2 * sigma ** 2)))
+
+    # Normalize the kernel to ensure the sum of all elements is 1
+    kernel /= np.sum(kernel)
+
+    return kernel
+
+
+def split_grid_into_8x8_grids(grid):
+    """
+    Splits the grid into 8x8 grids.
+
+    :param grid: A numpy array representing the grid i.e with shape f.e.(16, 27)
+    :return: A list of 8x8 numpy arrays
+    """
+    # Initialize an empty list to store the 8x8 grids
+    grids = []
+
+    # Iterate over each row in the grid
+    for i in range(0, grid.shape[0], 8):
+        # Iterate over each column in the grid
+        for j in range(0, grid.shape[1], 8):
+            # Extract the 8x8 grid
+            grids.append(grid[i:i + 8, j:j + 8])
+
+    return grids
+
+
+def apply_gaussian_filter(grid, gaussian_filter):
+    """
+    Applies the Gaussian filter to the grid to smooth the values.
+
+    :param grid: A 16x27 numpy array representing the grid
+    :param gaussian_filter: A 2D numpy array representing the Gaussian filter
+    :return: A 16x27 numpy array with smoothed values
+    """
+
+    # Define the function to handle the border
+    grid = grid.reshape(grid.shape[0],grid.shape[1])
+    grids = split_grid_into_8x8_grids(grid.reshape(grid.shape[0],grid.shape[1]))
+    def filter_function(image, filter):
+        filtered_image = np.zeros_like(image)
+        filter_size = filter.shape[0]
+        pad_width = filter_size // 2
+
+        # Pad the image with the edge values to handle borders
+        padded_image = np.pad(image, pad_width, mode='edge')
+
+        # Iterate over each cell in the original image
+        for i in range(image.shape[0]):
+            for j in range(image.shape[1]):
+                # Define the region of interest in the padded image
+                region = padded_image[i:i + filter_size, j:j + filter_size]
+                # Apply the filter, ignoring the parts that go beyond the borders
+                filtered_value = np.sum(region * filter)
+                filtered_image[i, j] = filtered_value
+
+        return filtered_image
+
+    for one_grid in range(len(grids)):
+        if one_grid <3: # if upper grids
+            grid[0:8,0+8*one_grid:8+8*one_grid] = filter_function(grids[one_grid], gaussian_filter)
+        else: # if lower grids
+            grid[8:16, 0 + 8 * (one_grid-3):8 + 8 * (one_grid-3)] = filter_function(grids[one_grid], gaussian_filter)
+
+    return grid
+
+
 
 
 

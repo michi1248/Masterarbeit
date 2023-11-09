@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class Grid_Arrangement:
     def __init__(self,channel_order = None):
         self.num_grids = len(channel_order)
@@ -131,9 +132,12 @@ class Grid_Arrangement:
 
 
 
-a = Grid_Arrangement([1,2,3,4,5])
-a.make_grid()
-c = np.ones((16,24,100))
-d = a.transfer_grid_arangement_into_320(c)
+#a = Grid_Arrangement([1,2,3,4,5])
+#a.make_grid()
+#con = a.concatenate_upper_and_lower_grid(a.upper_grids,a.lower_grids)
+
+
+
+
 #electrode_values = np.random.rand(320, 100)
 #grid, lower_grid= a.transfer_320_into_grid_arangement(electrode_values)
