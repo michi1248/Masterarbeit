@@ -33,7 +33,7 @@ class Heatmap:
         """
         print("NOTE !!!! at the moment if there are more than one ref dimension is given (2pinch,fist,etc,) for the plot the first one is taken!!!",file=sys.stderr )
         if method == "Gauss_filter":
-            self.gauss_filter= create_gaussian_filter(sigma=0.55)
+            self.gauss_filter= create_gaussian_filter(size_filter=5)
         self.movement_name = movement_name
         self.mean_ex = mean_ex_rest
         self.mean_flex = mean_flex_rest
@@ -45,15 +45,43 @@ class Heatmap:
         grid_aranger = grid_arrangement.Grid_Arrangement([1, 2, 3, 4, 5])
         grid_aranger.make_grid()
         for i in emg_data_for_max_min.keys():
+
             emg_data_for_max_min[i] = np.array(emg_data_for_max_min[i].transpose(1,0,2).reshape(320,-1))
+
             if (self.mean_ex is not None) and (self.mean_flex is not None):
                 # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
                 emg_data_for_max_min[i] = emg_data_for_max_min[i] - grid_aranger.transfer_grid_arangement_into_320(np.reshape(self.mean_ex,(self.mean_ex.shape[0],self.mean_ex.shape[1],1)))
+
+        if method == "EMG_signals" :
+            self.max_values, self.min_values = find_max_min_values_for_each_movement_and_channel(emg_data_for_max_min,
+                                                                                                 range(320), list(
+                    emg_data_for_max_min.keys()))
+            self.max_values = self.max_values.reshape(320, 1)
+            self.min_values = self.min_values.reshape(320, 1)
+            self.q1, self.q2, self.median = find_q_median_values_for_each_movement_and_channel(emg_data_for_max_min,
+                                                                                               range(320), list(
+                    emg_data_for_max_min.keys()))
+            self.q1 = self.q1.reshape(320, 1)
+            self.q2 = self.q2.reshape(320, 1)
+            self.median = self.median.reshape(320, 1)
+
+
+            plot_emg_channels(emg_data_for_max_min[self.movement_name], save_path=self.path_to_save_plots,
+                              movement=self.movement_name + "_raw")
+
+            plot_emg_channels(robust_scaling(emg_data_for_max_min[self.movement_name], self.q1, self.q2, self.median),
+                              save_path=self.path_to_save_plots, movement=self.movement_name + "_robust",shift=3)
+            plot_emg_channels(
+                normalize_2D_array(emg_data_for_max_min[self.movement_name], max_value=self.max_values, min_value=self.min_values),
+                save_path=self.path_to_save_plots, movement=self.movement_name + "_min_max",shift=1)
+
+
+
         if method == "Min_Max_Scaling_over_whole_data" :
             self.max_values,self.min_values = find_max_min_values_for_each_movement_and_channel(emg_data_for_max_min,range(320),list(emg_data_for_max_min.keys()))
             self.max_values = self.max_values.reshape(320,1)
             self.min_values = self.min_values.reshape(320,1)
-        if method == "Robust_Scaling":
+        if (method == "Robust_Scaling") or (method == "Gauss_filter"):
             self.q1,self.q2,self.median = find_q_median_values_for_each_movement_and_channel(emg_data_for_max_min,range(320),list(emg_data_for_max_min.keys()))
             self.q1 = self.q1.reshape(320,1)
             self.q2 = self.q2.reshape(320,1)
@@ -64,7 +92,7 @@ class Heatmap:
         if method == "Min_Max_Scaling_over_whole_data":
             upper_max,lower_max = grid_aranger.transfer_320_into_grid_arangement(self.max_values)
             upper_min,lower_min = grid_aranger.transfer_320_into_grid_arangement(self.min_values)
-        if method == "Robust_Scaling":
+        if (method == "Robust_Scaling") or (method == "Gauss_filter"):
             upper_q1,lower_q1 = grid_aranger.transfer_320_into_grid_arangement(self.q1)
             upper_q2,lower_q2 = grid_aranger.transfer_320_into_grid_arangement(self.q2)
             upper_median, lower_median = grid_aranger.transfer_320_into_grid_arangement(self.median)
@@ -81,7 +109,7 @@ class Heatmap:
         if method == "Min_Max_Scaling_over_whole_data":
             self.max_values = grid_aranger.concatenate_upper_and_lower_grid(upper_max,lower_max)
             self.min_values = grid_aranger.concatenate_upper_and_lower_grid(upper_min, lower_min)
-        if method == "Robust_Scaling":
+        if (method == "Robust_Scaling") or (method == "Gauss_filter"):
             self.median = grid_aranger.concatenate_upper_and_lower_grid(upper_median, lower_median)
             self.q1 = grid_aranger.concatenate_upper_and_lower_grid(upper_q1, lower_q1)
             self.q2 = grid_aranger.concatenate_upper_and_lower_grid(upper_q2, lower_q2)
@@ -152,8 +180,15 @@ class Heatmap:
 
         """
         heatmap = self.calculate_heatmap(self.emg_data, frame, self.number_observation_samples)
+
         if (self.mean_ex is not None) and (self.mean_flex is not None):
             heatmap = heatmap - self.mean_ex
+        if method == "Gauss_filter":
+
+            normalized_heatmap = robust_scaling(heatmap, q1=self.q1[:, :, 0], q2=self.q2[:, :, 0],
+                                                median=self.median[:, :, 0])
+            normalized_heatmap = apply_gaussian_filter(normalized_heatmap, self.gauss_filter)
+
         if method == "no_scaling":
             normalized_heatmap = heatmap
 
@@ -175,9 +210,10 @@ class Heatmap:
             self.number_heatmaps_ex += 1
 
         #only do the following if +- window size near extrema
-        if (self.movement_name != "rest") and (is_near_extremum(frame,self.local_maxima,self.local_minima,time_window=3*self.frame_duration, sampling_frequency=self.sampling_frequency)) :
+        if (self.movement_name != "rest") and (is_near_extremum(frame,self.local_maxima,self.local_minima,time_window=1.5*self.frame_duration, sampling_frequency=self.sampling_frequency)) :
             # find out to which part of the movement the current sample belongs (half of flex or ref)
             belongs_to_movement,distance = check_to_which_movement_cycle_sample_belongs(frame,self.local_maxima,self.local_minima)
+
             # add the heatmap to the list of all heatmaps of the fitting flex/ex for later calculation of difference heatmap
             if (belongs_to_movement == 1):
                 # the closer the sample is to the extrema the more impact it has on the heatmap
@@ -186,12 +222,13 @@ class Heatmap:
                 #TODO maybe change this (better to use normalized or not ?)
                 #IT IS BETER TO USE NORMALIZED BECAUSE IF EMG SCHWANKUNGEN
                 self.number_heatmaps_flex +=1
+                plot_local_maxima_minima(self.ref_data[:, 0], self.local_maxima, self.local_minima,
+                                         current_sample_position=frame, color="black")
             else:
                 self.heatmaps_ex = np.add(self.heatmaps_ex, heatmap) #np.multiply(heatmap, 1/(distance+0.1) ))
                 self.number_heatmaps_ex += 1
-
-
-
+                plot_local_maxima_minima(self.ref_data[:, 0], self.local_maxima, self.local_minima,
+                                        current_sample_position=frame, color="yellow")
 
         if self.global_counter == 0:
             hmap = sns.heatmap(normalized_heatmap, ax=self.ax_emg, cmap='RdBu_r', cbar=True, xticklabels=True, yticklabels=True, cbar_kws={'label': 'norm. RMS'})#,cbar_ax=self.ax_emg,)
@@ -264,10 +301,11 @@ class Heatmap:
         self.number_heatmaps_flex = 0
         self.number_heatmaps_ex = 0
         if ("pinch" in self.movement_name) or ("fist" in self.movement_name) or ("rest" in self.movement_name):
-            self.local_maxima, self.local_minima = get_locations_of_all_maxima(self.ref_data[:,0])
+            self.local_maxima, self.local_minima = get_locations_of_all_maxima(self.ref_data[:,0],distance=5000)
+            plot_local_maxima_minima(self.ref_data[:,0], self.local_maxima, self.local_minima)
         else:
             self.local_maxima,self.local_minima = get_locations_of_all_maxima(self.ref_data[:])
-
+            plot_local_maxima_minima(self.ref_data, self.local_maxima, self.local_minima)
 
 
         if not save:
@@ -306,6 +344,17 @@ class Heatmap:
 
         self.pbar.close()
         ########
+        if method == "Gauss_filter":
+            mean_flex_heatmap = robust_scaling(np.divide(self.heatmaps_flex, self.number_heatmaps_flex),
+                                               q1=self.q1[:, :, 0], q2=self.q2[:, :, 0], median=self.median[:, :, 0])
+            mean_ex_heatmap = robust_scaling(np.divide(self.heatmaps_ex, self.number_heatmaps_ex), q1=self.q1[:, :, 0],
+                                             q2=self.q2[:, :, 0], median=self.median[:, :, 0])
+
+            mean_flex_heatmap = apply_gaussian_filter(mean_flex_heatmap,
+                                                      self.gauss_filter)
+            mean_ex_heatmap = apply_gaussian_filter(mean_ex_heatmap,
+                                                    self.gauss_filter)
+
         if method == "Min_Max_Scaling_over_whole_data":
             mean_flex_heatmap = normalize_2D_array(np.divide(self.heatmaps_flex, self.number_heatmaps_flex),
                                                    max_value=self.max_values[:, :, 0],
@@ -386,35 +435,45 @@ if __name__ == "__main__":
     # con = a.concatenate_upper_and_lower_grid(np.reshape(a.upper_grids,(a.upper_grids.shape[0],a.upper_grids.shape[1],1)),np.reshape(a.lower_grids,(a.lower_grids.shape[0],a.lower_grids.shape[1],1)))
     # gauss_kernel = create_gaussian_filter(sigma=0.45)
     # filtered = apply_gaussian_filter(con,gauss_kernel)
+    plot_emg = False
 
 
     window_size = 150
-    for method in ["Gauss_filter", "EMG_signals","Robust_Scaling","no_scaling","Min_Max_Scaling_over_sample","Min_Max_Scaling_over_whole_data"]:
-        print("method is: ",method)
+    for method in ["Robust_Scaling","no_scaling","Min_Max_Scaling_over_sample","Min_Max_Scaling_over_whole_data","Gauss_filter"]:
+
         mean_flex_rest = None
         mean_ex_rest = None
         for movement in ["rest","thumb","index","2pinch"]:
-            print("movement is: ",movement)
+
             for additional_term in ["before","after"]:
                 if additional_term == "before":
                     path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_Test1" # trainingsdata recorded for training
                 else:
                     path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_Test1_after_training_lehne" # trainingsdata recorded after training
+
+                print("method is: ", method)
+                print("movement is: ", movement)
                 print("additional term is: ",additional_term)
+
                 heatmap = Heatmap(movement,path,frame_duration=window_size,additional_term=additional_term,method=method)
                 heatmap.animate(save=True)
-
                 fps = 2
                 heatmap.save_animation(r"D:\Lab\differences_train_test_heatmaps/" +str(window_size) + "ms_rms_window/"+ method + "/" +str(movement) +str(fps) +"fps_most_firings.gif", fps=2)
                 mean_flex, mean_ex = heatmap.channel_extraction()
                 heatmap.channel_extraction(mark_choosen_channels=True)
 
+                if plot_emg:
+                    # Do the same again for method == EMG_signals to produce emg singals plot
+                    heatmap = Heatmap(movement,path,frame_duration=window_size,additional_term=additional_term,method="EMG_signals")
+
+
                 if movement == "rest":
+                    # if the movement is rest save the mean flex and ex for later subtraction from the other movements
                     mean_ex_rest = mean_ex
                     mean_flex_rest = mean_flex
 
                 else:
-
+                    # if the movement is not rest subtract the mean flex and ex from the rest from the current movement therefore give the means of the rest to the functions
                     heatmap = Heatmap(movement, path,frame_duration=window_size, additional_term=additional_term +  "_subtracted_mean_rest_from_emg",
                                       method=method,mean_flex_rest=mean_flex_rest,mean_ex_rest=mean_ex_rest)
                     heatmap.animate(save=True)
@@ -423,6 +482,12 @@ if __name__ == "__main__":
                         fps) + "fps_most_firings.gif", fps=2)
                     mean_flex, mean_ex = heatmap.channel_extraction()
                     heatmap.channel_extraction(mark_choosen_channels=True)
+
+                    if plot_emg:
+                        # Do the same again for method == EMG_signals to produce emg singals plot
+                        heatmap = Heatmap(movement, path, frame_duration=window_size,
+                                          additional_term=additional_term + "_subtracted_mean_rest_from_emg",
+                                          method="EMG_signals", mean_flex_rest=mean_flex_rest, mean_ex_rest=mean_ex_rest)
 
     # movement = "thumb"
     # heatmap = Heatmap(movement,r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_Test1",additional_term="before")

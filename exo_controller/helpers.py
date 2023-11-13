@@ -387,7 +387,7 @@ def robust_scaling(data, q1,q2,median):
     :param median:
     :return:
     """
-    return (data - median) / ((q2 - q1))
+    return (np.array(data) - np.array(median)) / ((np.array(q2) - np.array(q1)))
 def normalize_2D_array(data,axis=None,negative = False, max_value = None, min_value = None):
     """
     normalizes a 2D array
@@ -399,8 +399,11 @@ def normalize_2D_array(data,axis=None,negative = False, max_value = None, min_va
     :param min_value: if given we do not want to make max/ min scaling on this sample but for every channel based on max min of the whole trainings data
     :return:
     """
+    data = np.array(data)
     if (max_value is not None) and (min_value is not None):
-        data = np.array(data)
+
+        min_value = np.array(min_value)
+        max_value = np.array(max_value)
         norm = (data - min_value) / ((max_value - min_value) )
 
     elif axis is None:
@@ -444,7 +447,7 @@ def spikeTriggeredAveraging(SIG, MUPulses, STA_window, emg_length, fsamp):
                     STA_mean[MU][row][col][:] = np.nanmean(np.array(temp_STA).reshape(len(temp_STA),len(temp_STA[0])),axis=0)  # Compute mean of all these extracted EMG signals
     return STA_mean
 
-def check_to_which_movement_cycle_sample_belongs(sample_position,local_maxima,local_minima):
+def check_to_which_movement_cycle_sample_belongs(sample_position,local_maxima,local_minima,method = "closest_extrema"):
     """
     Checks to which movement cycle a sample belongs to (i.e. the sample is closer to the next local maxima or minima)
     chooses the maxima/minima like marius mentioned (if sample is after minima it belongs to the next maxima)
@@ -458,11 +461,19 @@ def check_to_which_movement_cycle_sample_belongs(sample_position,local_maxima,lo
     closest_maxima = min(local_maxima, key=lambda x: abs(sample_position - x))
     closest_minima = min(local_minima, key=lambda x: abs(sample_position - x))
 
-    # 1 = flexion , 2 = extension
-    if sample_position < closest_maxima:
-        return 1 , abs(sample_position - closest_maxima)
+    if method == "marius":
+        # 1 = flexion , 2 = extension
+        if sample_position < closest_maxima:
+            return 1 , abs(sample_position - closest_maxima)
+        else:
+            return 2 , abs(sample_position - closest_minima)
+    elif method == "closest_extrema":
+        if abs(sample_position - closest_maxima) < abs(sample_position - closest_minima):
+            return 1 , abs(sample_position - closest_maxima)
+        else:
+            return 2 , abs(sample_position - closest_minima)
     else:
-        return 2 , abs(sample_position - closest_minima)
+        print("wrong method given")
 
 def butter_highpass(cutoff, fs, order=5):
     nyquist = 0.5 * fs
@@ -529,7 +540,13 @@ def plot_predictions(ground_truth,prediction,tree_number= None,realtime = False)
         plt.ylim(0, 1)
         plt.show()
 
-def get_locations_of_all_maxima(movement_signal, distance=3000):
+def get_locations_of_all_maxima(movement_signal, distance=2800):
+    """
+    returns the locations of all local maxima and minima in the movement signal, distance is the minimum distance between two maxima/minima
+    :param movement_signal:
+    :param distance:
+    :return:
+    """
 
     if movement_signal.ndim == 2:
         if movement_signal.shape[1] == 1:
@@ -541,6 +558,23 @@ def get_locations_of_all_maxima(movement_signal, distance=3000):
     local_minima,_ = find_peaks(-movement_signal,distance=distance)
 
     return local_maxima, local_minima
+
+def plot_local_maxima_minima(movement_signal,local_maxima,local_minima,current_sample_position=None,color = 'black'):
+    """
+    plots the local maxima and minima on top of the movement signal (maxima with red crosses, minima with green crosses)
+    :param movement_signal:
+    :param local_maxima:
+    :param local_minima:
+    :param current_sample_position: if given, plots a cross in color: color at the current sample position
+    :return:
+    """
+    plt.figure()
+    plt.plot(movement_signal)
+    plt.plot(local_maxima,movement_signal[local_maxima],'x',color='red')
+    plt.plot(local_minima,movement_signal[local_minima],'x',color='green')
+    if current_sample_position is not None:
+        plt.plot(current_sample_position,movement_signal[current_sample_position],'x',color=color)
+    plt.show()
 
 
 def choose_possible_channels(difference_heatmap,mean_flex_heatmap,mean_ex_heatmap,threshold_neighbours=0.25, threshold_difference_amplitude=0.35):
@@ -594,15 +628,15 @@ def choose_possible_channels(difference_heatmap,mean_flex_heatmap,mean_ex_heatma
                 else:
                     ex_list.append([i, j])
 
-            # if (this_value<= min(neighbours) and (min(differences)<= threshold_neighbours) and (this_value is not None) and (this_value !=  0.0)):
-            #     activity_in_movement_1 = mean_flex_heatmap[i][j]
-            #     activity_in_movement_2 = mean_ex_heatmap[i][j]
-            #     #print("refference channel found for low acitivity")
-            #     # Assign the channel to the respective list based on activity
-            #     if activity_in_movement_1 < activity_in_movement_2:
-            #         flex_list.append([i, j])
-            #     else:
-            #         ex_list.append([i, j])
+            if (this_value<= min(neighbours) and (min(differences)<= threshold_neighbours) and (this_value is not None) and (this_value !=  0.0)):
+                activity_in_movement_1 = mean_flex_heatmap[i][j]
+                activity_in_movement_2 = mean_ex_heatmap[i][j]
+                #print("refference channel found for low acitivity")
+                # Assign the channel to the respective list based on activity
+                if activity_in_movement_1 < activity_in_movement_2:
+                    flex_list.append([i, j])
+                else:
+                    ex_list.append([i, j])
 
 
     return flex_list, ex_list
@@ -644,28 +678,41 @@ def is_near_extremum(frame,local_maxima, local_minima,time_window,sampling_frequ
     else:
         return False
 
-def plot_emg_channels(emg_data, shift=1.0):
+def plot_emg_channels(emg_data, shift=1400,save_path=None,movement=None):
     """
     Plots each EMG channel with a vertical shift.
 
     :param emg_data: A 2D numpy array with shape (channels, timepoints)
     :param shift: The vertical shift to apply between each channel
+    :param save_path: The path to save the figure
+    :param movement: The movement name
+    :return: None
     """
+    emg_data= emg_data[:,0:10*2048]
     n_channels, n_timepoints = emg_data.shape
     time = np.arange(n_timepoints) / 2048
 
-    plt.figure(figsize=(15, 10))
-
+    fig = plt.figure(figsize=(10, 25))
+    fig.patch.set_visible(False)
+    for spine in plt.gca().spines.values():
+        spine.set_visible(False)
+    plt.ylim(-300, n_channels * shift + shift)
     # Plot each channel
     for i in range(n_channels):
         # Apply a vertical shift to each channel
         shifted_data = emg_data[i, :] + i * shift
-        plt.plot(time, shifted_data, label=f'Channel {i+1}')
+        plt.plot(time, shifted_data, label=f'Channel {i+1}',linewidth=0.25)
 
     plt.xlabel('Time in s')
     plt.ylabel('EMG signal + Shift')
+    plt.grid()
     plt.title('EMG Signals Over Time')
-    plt.show()
+    plt.tight_layout()
+    fig_name = os.path.join(save_path,  str(movement) + ".pdf")
+    plt.savefig(fig_name, transparent=True)
+    plt.close()
+    #plt.show()
+
 
 def create_gaussian_filter(size_filter=3,sigma=None):
     """
