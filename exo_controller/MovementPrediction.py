@@ -1,6 +1,7 @@
 from sklearn.utils import shuffle
 import time
 from exo_controller.helpers import *
+from exo_controller.grid_arrangement import Grid_Arrangement
 import numpy as np
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.ensemble import RandomForestRegressor
@@ -10,9 +11,19 @@ import joblib
 
 #TODO min_samples 5 besser als 30
 class MultiDimensionalDecisionTree:
-    def __init__(self, important_channels, movements,emg,ref,patient_number, windom_size=150, num_trees=70, sample_difference_overlap=64, max_depth = 50, min_samples_split=20,
-                 num_previous_samples=None):
+    def __init__(self, important_channels, movements,emg,ref,patient_number, windom_size=150, num_trees=3, sample_difference_overlap=64, max_depth = 50, min_samples_split=20,
+                 num_previous_samples=None,grid_order=None):
         self.emg_data= emg
+        if grid_order is None:
+            self.grid_order=[]
+            self.use_spatial_filter = False
+            self.gauss_filter = create_gaussian_filter(size_filter=3)
+            self.grid_aranger = Grid_Arrangement(grid_order)
+            self.grid_aranger.make_grid()
+        else:
+            self.grid_order = grid_order
+            self.use_spatial_filter = True
+
         self.patient_number = patient_number
         self.ref_data = ref
         self.sample_difference_overlap = sample_difference_overlap # amount of new datapoints coming in

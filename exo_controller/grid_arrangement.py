@@ -12,7 +12,17 @@ class Grid_Arrangement:
         creates the grid arrangement for the quattrocento it creates a self variable upper_grid and lower_grid if 5 grids are used otherwise only upper_grid , upper grid = 3 grids besides , lower grid = 2 besides, furthermore it uses the way how we used the outlets from the quattrocento to fit it to the grid positions
         :return:
         """
-        if self.num_grids== 3:
+        if self.num_grids == 2:
+            array = np.arange(1, 8 * 8 + 1).reshape(8, 8)
+            # Rotate the array 90 degrees counterclockwise
+            rotated_grid = np.rot90(array, k=1)
+            self.upper_grids =np.concatenate([rotated_grid + (64 * (self.channel_order[0]-1)), rotated_grid + (64 * (self.channel_order[1]-1))], axis=1)
+        elif self.num_grids == 1:
+            array = np.arange(1, 8 * 8 + 1).reshape(8, 8)
+            # Rotate the array 90 degrees counterclockwise
+            rotated_grid = np.rot90(array, k=1)
+            self.upper_grids =rotated_grid + (64 * (self.channel_order[0]-1))
+        elif self.num_grids== 3:
             array = np.arange(1, 8 * 8 + 1).reshape(8, 8)
             # Rotate the array 90 degrees counterclockwise
             rotated_grid = np.rot90(array, k=1)
@@ -78,8 +88,8 @@ class Grid_Arrangement:
         :param input:
         :return: upper_grid,lower_grid (for 5 grids) or upper_grid (for 3 grids)
         """
-        if self.num_grids == 3:
-            grid = np.zeros((8, 8 * 3, min(len(row) for row in input)))
+        if self.num_grids <= 3:
+            grid = np.zeros((8, 8 * self.num_grids, min(len(row) for row in input)))
             for row in range (input.shape[0]):
                 res_row,res_col,res_grid = self.get_channel_position_and_grid_number(row+1)
                 grid[res_row,res_col,:] = input[row]
@@ -96,6 +106,8 @@ class Grid_Arrangement:
                     lower_grid[res_row,res_col,:] = input[row]
             return upper_grid,lower_grid
 
+
+
     def concatenate_upper_and_lower_grid(self,upper_grid,lower_grid):
         """
         concatenates the upper and lower grid into one array
@@ -110,34 +122,50 @@ class Grid_Arrangement:
             raise ValueError("Number of grids not supported")
 
     def transfer_grid_arangement_into_320(self,input):
-        if self.num_grids == 3:
-            extracted_data = np.empty((192, input.shape[2]))
-            for channel in range(192):
+        if self.num_grids <= 3:
+            extracted_data = np.empty((64*self.num_grids, input.shape[2]))
+            for channel in range(64*self.num_grids):
                 res_row, res_col = self.get_channel_position_and_grid_number_backtrans(channel + 1)
                 extracted_data[channel] = input[res_row, res_col]
             return extracted_data
+
         elif self.num_grids == 5:
             extracted_data = np.empty((320, input.shape[2]))
             for channel in range(320):
                 res_row, res_col= self.get_channel_position_and_grid_number_backtrans(channel + 1)
                 extracted_data[channel] = input[res_row, res_col]
             return extracted_data
-
         else:
             raise ValueError("Number of grids not supported")
 
+    def split_grid_into_8x8_grids(self,grid):
+        """
+        Splits the grid into 8x8 grids.
+
+        :param grid: A numpy array representing the grid i.e with shape f.e.(16, 27)
+        :return: A list of 8x8 numpy arrays
+        """
+        # Initialize an empty list to store the 8x8 grids
+        grids = []
+
+        # Iterate over each row in the grid
+        for i in range(0, grid.shape[0], 8):
+            # Iterate over each column in the grid
+            for j in range(0, grid.shape[1], 8):
+                # Extract the 8x8 grid
+                grids.append(grid[i:i + 8, j:j + 8, :])
+
+        return grids
 
 
 
 
 
 
-#a = Grid_Arrangement([1,2,3,4,5])
+#a = Grid_Arrangement([2,1])
 #a.make_grid()
 #con = a.concatenate_upper_and_lower_grid(a.upper_grids,a.lower_grids)
-
-
-
-
+#data =a.transfer_grid_arangement_into_320(np.reshape(a.upper_grids,(8,16,1)) )
+#new = a.transfer_320_into_grid_arangement(data)
 #electrode_values = np.random.rand(320, 100)
 #grid, lower_grid= a.transfer_320_into_grid_arangement(electrode_values)

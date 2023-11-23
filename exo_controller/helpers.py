@@ -6,9 +6,11 @@ import pandas
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema
+from scipy import signal
 import torch
 from scipy.signal import find_peaks
-from scipy.signal import butter
+from scipy.signal import butter, lfilter
+from scipy.fft import fft, fftfreq
 #from ChannelExtraction import ChannelExtraction
 import sys
 import os
@@ -342,9 +344,9 @@ def find_max_min_values_for_each_movement_and_channel(emg_data,important_channel
     This is needed to normalize the data later on.
     :return: max and min values for each channel
     """
-    max_values = np.zeros(len(important_channels))
-    min_values = np.zeros(len(important_channels))
-    for movement in movements:
+    max_values = np.zeros(len(important_channels)) - 10000000
+    min_values = np.zeros(len(important_channels)) + 10000000
+    for movement in range(len(emg_data)):
         for channel in important_channels:
             if np.max(emg_data[movement][channel]) > max_values[channel]:
                 max_values[channel] = np.max(emg_data[movement][channel])
@@ -352,7 +354,76 @@ def find_max_min_values_for_each_movement_and_channel(emg_data,important_channel
                 min_values[channel] = np.min(emg_data[movement][channel])
 
     return max_values, min_values
+# def find_max_min_values_for_each_movement_and_channel(emg_data,important_channels,movements):
+#     """
+#     This function finds the max and min values for each channel in the emg data.
+#     It will return the max and min values for each channel over all movements.
+#     This is needed to normalize the data later on.
+#     :return: max and min values for each channel
+#     """
+#     max_values = np.zeros(len(important_channels)) - 10000000
+#     min_values = np.zeros(len(important_channels)) + 10000000
+#     for movement in movements:
+#         for channel in important_channels:
+#             if np.max(emg_data[movement][channel]) > max_values[channel]:
+#                 max_values[channel] = np.max(emg_data[movement][channel])
+#             if np.min(emg_data[movement][channel]) < min_values[channel]:
+#                 min_values[channel] = np.min(emg_data[movement][channel])
+#
+#     return max_values, min_values
 
+def find_max_min_values_for_each_movement_(emg_data,important_channels,movements):
+    """
+    This function finds the max and min values in the emg data but not channel wise but rather max min over all channels and movements.
+    It will return the max and min values for each channel over all movements.
+    This is needed to normalize the data later on.
+    :return: max and min values for each channel
+    """
+    max_values = -10000000
+    min_values = 10000000
+    #for movement in movements:
+    for movement in range(len(emg_data)):
+        for channel in important_channels:
+            if np.max(emg_data[movement][channel]) > max_values:
+                max_values = np.max(emg_data[movement][channel])
+            if np.min(emg_data[movement][channel]) < min_values:
+                min_values = np.min(emg_data[movement][channel])
+
+    return max_values, min_values
+
+def find_q_median_values_for_each_movement(emg_data,important_channels,movements):
+    """
+    This function finds the max and min values for each channel in the emg data.
+    It will return the max and min values for each channel over all movements.
+    This is needed to normalize the data later on.
+    :return: max and min values for each channel
+    """
+    # TODO wie will ich das hier machen ?? welche median und quantiles nehme ich ??  ich sollte eigentlich genau so machen (größtes 1 und 3 quantile) median keine ahnung :D
+    q1 = None
+    q2 = None
+    median = None
+
+    count = 0
+    #for movement in movements:
+    for movement in range(len(emg_data)):
+        for channel in important_channels:
+            if median is None:
+                median = np.median(emg_data[movement][channel])
+            else:
+                median += np.median(emg_data[movement][channel])
+            count +=1
+            if q1 is None:
+                q1 = np.quantile(emg_data[movement][channel],0.25)
+            if q2 is None:
+                q2 = np.quantile(emg_data[movement][channel],0.75)
+            if np.quantile(emg_data[movement][channel],0.25) < q1:
+                q1 = np.quantile(emg_data[movement][channel],0.25)
+            if np.quantile(emg_data[movement][channel],0.75) > q2:
+                q2 = np.quantile(emg_data[movement][channel],0.75)
+
+    for i in range(len(important_channels)):
+        median = median/count
+    return q1,q2,median
 
 def find_q_median_values_for_each_movement_and_channel(emg_data,important_channels,movements):
     """
@@ -362,11 +433,12 @@ def find_q_median_values_for_each_movement_and_channel(emg_data,important_channe
     :return: max and min values for each channel
     """
     # TODO wie will ich das hier machen ?? welche median und quantiles nehme ich ??  ich sollte eigentlich genau so machen (größtes 1 und 3 quantile) median keine ahnung :D 
-    q1 = np.zeros(len(important_channels))
-    q2 = np.zeros(len(important_channels))
+    q1 = np.zeros(len(important_channels)) - 10000000
+    q2 = np.zeros(len(important_channels)) + 10000000
     median = np.zeros(len(important_channels))
 
-    for movement in movements:
+    for movement in range(len(emg_data)):
+    #for movement in movements:
         for channel in important_channels:
             median[channel] += np.median(emg_data[movement][channel])
             if np.quantile(emg_data[movement][channel],0.25) < q1[channel]:
@@ -480,6 +552,80 @@ def butter_highpass(cutoff, fs, order=5):
     normal_cutoff = cutoff / nyquist
     b, a = butter(order, normal_cutoff, btype='high', analog=False)
     return b, a
+
+def bandpass_filter(data, lowcut, highcut, fs, order=5):
+    """
+    bandpass filter the data
+    :param data:
+    :param lowcut:
+    :param highcut:
+    :param fs:
+    :param order:
+    :return:
+    """
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b,a = butter(order, [low, high], btype='band')
+    y = lfilter(b, a, data)
+    return y
+
+def bandpass_filter_emg_data(emg_data,fs):
+    """
+    bandpass filter the emg data
+    :param emg_data:
+    :param fs:
+    :return:
+    """
+    data = np.copy(emg_data)
+    for channel in range(emg_data.shape[0]):
+        data[channel] = bandpass_filter(emg_data[channel], 10,500, fs, order=5)
+    return data
+
+def compute_spectrum(signal, fs):
+    """
+    computes the spectrum of a signal
+    :param signal:
+    :param fs:
+    :return:
+    """
+
+    fft_values = np.fft.fft(signal)
+    fft_freq = np.fft.fftfreq(len(fft_values), 1 / fs)
+
+    # Compute the two-sided power spectrum
+    power_spectrum = np.abs(fft_values) ** 2
+
+    # Consider only the positive half of the spectrum
+    half_spectrum = power_spectrum[:len(fft_values) // 2]
+    half_freq = fft_freq[:len(fft_values) // 2]
+    return half_freq, half_spectrum
+def plot_spectrum_before_after_filtering(signal,filtered_signal,fs):
+    """
+    plots the spectrum of a signal before and after filtering
+    :param signal:
+    :param filtered_signal:
+    :param fs:
+    :return:
+    """
+    xf, yf = compute_spectrum(signal,fs)
+    xf_filtered, yf_filtered = compute_spectrum(filtered_signal,fs)
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.title('Original Signal Spectrum')
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Amplitude')
+    plt.plot(xf, yf)
+
+    plt.subplot(1, 2, 2)
+    plt.title('Filtered Signal Spectrum')
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Amplitude')
+    plt.plot(xf_filtered, yf_filtered)
+
+    plt.tight_layout()
+    plt.show()
+
 def plot_predictions(ground_truth,prediction,tree_number= None,realtime = False):
     """
     Plots ground truth and predictions from two regression models for two movement regressions.
@@ -678,7 +824,7 @@ def is_near_extremum(frame,local_maxima, local_minima,time_window,sampling_frequ
     else:
         return False
 
-def plot_emg_channels(emg_data, shift=1400,save_path=None,movement=None):
+def plot_emg_channels(emg_data, shift=1200,save_path=None,movement=None):
     """
     Plots each EMG channel with a vertical shift.
 
@@ -688,9 +834,10 @@ def plot_emg_channels(emg_data, shift=1400,save_path=None,movement=None):
     :param movement: The movement name
     :return: None
     """
-    emg_data= emg_data[:,0:10*2048]
+    emg_data= emg_data
     n_channels, n_timepoints = emg_data.shape
     time = np.arange(n_timepoints) / 2048
+
 
     fig = plt.figure(figsize=(10, 25))
     fig.patch.set_visible(False)
@@ -705,7 +852,7 @@ def plot_emg_channels(emg_data, shift=1400,save_path=None,movement=None):
 
     plt.xlabel('Time in s')
     plt.ylabel('EMG signal + Shift')
-    plt.grid()
+    #plt.grid()
     plt.title('EMG Signals Over Time')
     plt.tight_layout()
     fig_name = os.path.join(save_path,  str(movement) + ".pdf")
@@ -754,7 +901,7 @@ def split_grid_into_8x8_grids(grid):
         # Iterate over each column in the grid
         for j in range(0, grid.shape[1], 8):
             # Extract the 8x8 grid
-            grids.append(grid[i:i + 8, j:j + 8])
+            grids.append(grid[i:i + 8, j:j + 8,:])
 
     return grids
 

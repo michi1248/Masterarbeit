@@ -439,7 +439,7 @@ if __name__ == "__main__":
 
 
     window_size = 150
-    for method in ["Robust_Scaling","no_scaling","Min_Max_Scaling_over_sample","Min_Max_Scaling_over_whole_data","Gauss_filter"]:
+    for method in ["no_scaling","Robust_Scaling","Min_Max_Scaling_over_sample","Min_Max_Scaling_over_whole_data","Gauss_filter"]:
 
         mean_flex_rest = None
         mean_ex_rest = None
