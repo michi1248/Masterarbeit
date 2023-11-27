@@ -381,13 +381,17 @@ def find_max_min_values_for_each_movement_(emg_data,important_channels,movements
     """
     max_values = -10000000
     min_values = 10000000
+    index_max = None
+    index_min = None
     #for movement in movements:
     for movement in range(len(emg_data)):
         for channel in important_channels:
             if np.max(emg_data[movement][channel]) > max_values:
                 max_values = np.max(emg_data[movement][channel])
+                index_max = [movement,channel]
             if np.min(emg_data[movement][channel]) < min_values:
                 min_values = np.min(emg_data[movement][channel])
+                index_min = [movement,channel]
 
     return max_values, min_values
 

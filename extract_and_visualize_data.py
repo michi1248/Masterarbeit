@@ -116,15 +116,15 @@ def plot_spiketrain(spike_array):
 if __name__ == "__main__":
     # sync force, emg and MUAP
     # g1, g2, g3, g4, g5 = grid 1 to 5
-    EmgDataOfOnePatient = r"D:\Lab\data\Data_Marius" #\Sub2\TaskMUData"
-    MU_data_of_patient = r"D:\Lab\data\Data_Marius" #\Sub2\TaskMUData"
-    attributes_to_open = ['MUPulses', 'SIG']
-    path_of_movement_ref = r"D:\Lab\data\Data_Marius\DATATABLES"
-    path_to_save = r"D:\Lab\data\extracted"
+    # EmgDataOfOnePatient = r"D:\Lab\data\Data_Marius" #\Sub2\TaskMUData"
+    # MU_data_of_patient = r"D:\Lab\data\Data_Marius" #\Sub2\TaskMUData"
+    # attributes_to_open = ['MUPulses', 'SIG']
+    # path_of_movement_ref = r"D:\Lab\data\Data_Marius\DATATABLES"
+    # path_to_save = r"D:\Lab\data\extracted"
 
     #extract_mat_to_pkl(path_to_save= path_to_save,emg_folder= EmgDataOfOnePatient , MU_folder=MU_data_of_patient , movement_ground_truth_folder= path_of_movement_ref,attributes_to_open=attributes_to_open)
 
-    emg_data,MU_data,ref_data = open_all_files_for_one_patient_and_movement(folder_path= r"D:\Lab\data\extracted\Sub2", movement_name= "index_slow")
+    emg_data,MU_data,ref_data = open_all_files_for_one_patient_and_movement(folder_path= r"D:\Lab\data\extracted\sub2_Charly", movement_name= "index_slow")
     visualize_data(emg_data,MU_data,ref_data)
 
 

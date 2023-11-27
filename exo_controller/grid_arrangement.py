@@ -82,6 +82,30 @@ class Grid_Arrangement:
 
 
 
+    def transfer_320_into_grid_arangement1(self,input):
+        """
+        transfers the 320 channels into the grid arrangement either 3 grids or 5 grids for 5 grids we return upper_grid and lower_grid otherwise only upper_grid
+        :param input:
+        :return: upper_grid,lower_grid (for 5 grids) or upper_grid (for 3 grids)
+        """
+        if self.num_grids <= 3:
+            grid = np.zeros((8, 8 * self.num_grids, min(len(row) for row in input)))
+            for row in range (input.shape[0]):
+                res_row,res_col,res_grid = self.get_channel_position_and_grid_number(row+1)
+                grid[res_row,res_col,:] = input[row]
+            return grid,None
+
+        elif self.num_grids == 5:
+            upper_grid = np.zeros((8, 8 * 3, min(len(row) for row in input)))
+            lower_grid = np.zeros((8, 8 * 2, min(len(row) for row in input)))
+            for row in range (64,256): # TODO CHANGE THIS BACK TO input.shape[0] !!!!
+                res_row,res_col,res_grid = self.get_channel_position_and_grid_number(row+1)
+                if res_grid < 4:
+                    upper_grid[res_row,res_col,:] = input[row-64] #TODO remove -64 !!!!
+                else:
+                    lower_grid[res_row,res_col,:] = input[row-64]  #TODO remove -64 !!!!
+            return upper_grid,lower_grid
+
     def transfer_320_into_grid_arangement(self,input):
         """
         transfers the 320 channels into the grid arrangement either 3 grids or 5 grids for 5 grids we return upper_grid and lower_grid otherwise only upper_grid
@@ -107,7 +131,6 @@ class Grid_Arrangement:
             return upper_grid,lower_grid
 
 
-
     def concatenate_upper_and_lower_grid(self,upper_grid,lower_grid):
         """
         concatenates the upper and lower grid into one array
@@ -130,10 +153,10 @@ class Grid_Arrangement:
             return extracted_data
 
         elif self.num_grids == 5:
-            extracted_data = np.empty((320, input.shape[2]))
-            for channel in range(320):
+            extracted_data = np.empty((192, input.shape[2]))    # TODO CHANGE THIS BACK TO 320 !!!!
+            for channel in range(64,256):                          # TODO CHANGE THIS BACK TO 320 !!!!
                 res_row, res_col= self.get_channel_position_and_grid_number_backtrans(channel + 1)
-                extracted_data[channel] = input[res_row, res_col]
+                extracted_data[channel-64] = input[res_row, res_col]   # TODO remove -64 !!!!
             return extracted_data
         else:
             raise ValueError("Number of grids not supported")

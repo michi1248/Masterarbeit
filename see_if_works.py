@@ -1,8 +1,9 @@
-import matplotlib.pyplot as plt
+import os
 
 from exo_controller.helpers import *
 from exo_controller import grid_arrangement
-from exo_controller import normalizations
+from scipy.signal import fftconvolve
+
 import seaborn as sns
 from PIL import Image
 from matplotlib.animation import FuncAnimation
@@ -11,7 +12,6 @@ import tkinter as tk
 from tkinter import ttk
 from exo_controller.helpers import *
 from scipy.signal import resample
-
 from exo_controller import *
 
 
@@ -19,7 +19,7 @@ from exo_controller import *
 
 
 class Heatmap:
-    def __init__(self, movement_name,path_to_subject_dat,sampling_frequency=2048,path_to_save_plots=r"D:\Lab\differences_train_test_heatmaps",frame_duration=150,additional_term = "",method = "roboust",mean_flex_rest=None,mean_ex_rest=None):
+    def __init__(self, movement_name,path_to_subject_dat,sampling_frequency=2048,path_to_save_plots=r"D:\Lab\differences_train_test_heatmaps",frame_duration=150,additional_term = "",method = "roboust",mean_flex_rest=None,mean_ex_rest=None,spatial_filtering=False,bandpass_filter=False):
         """
         NOTE !!!! at the moment if there are more than one ref dimension is given (2pinch,fist,etc,) for the plot the first one is taken!!!
         :param movement_name:
@@ -34,42 +34,109 @@ class Heatmap:
         self.global_counter = global_counter is the number of frames that have been plotted, important because for first time we need to plot colorbar and other times not
         """
         print("NOTE !!!! at the moment if there are more than one ref dimension is given (2pinch,fist,etc,) for the plot the first one is taken!!!",file=sys.stderr )
-
-        # self.normalizer = normalizations.Normalization()
-        # if (mean_flex_rest is not None) and (mean_ex_rest is not None):
-        #     self.normalizer.set_mean(mean=mean_ex_rest)
-        # self.normalizer.get_all_emg_data(path_to_data=os.path.join(path_to_subject_dat,"emg_data.pkl"),movements=["rest","2pinch","index","thumb"])
-        # self.normalizer.calculate_normalization_values(method=method)
-
+        self._DIFFERENTIAL_FILTERS = {
+            "identity": np.array([[1]]),  # identity case when no filtering is applied
+            "LSD": np.array([[-1], [1]]),  # longitudinal single differential
+            "LDD": np.array([[1], [-2], [1]]),  # longitudinal double differential
+            "TSD": np.array([[-1, 1]]),  # transverse single differential
+            "TDD": np.array([[1, -2, 1]]),  # transverse double differential
+            "NDD": np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]]),  # normal double differential or Laplacian filter
+            "IB2": np.array([[-1, -2, -1], [-2, 12, -2], [-1, -2, -1]]),  # inverse binomial filter of order 2
+            "IR": np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]]),  # inverse rectangle
+        }
         if method == "Gauss_filter":
             self.gauss_filter= create_gaussian_filter(size_filter=5)
-
         self.movement_name = movement_name
         self.mean_ex = mean_ex_rest
         self.mean_flex = mean_flex_rest
+        if bandpass_filter == True:
+            additional_term = additional_term + "_bandpass"
+        if spatial_filtering == True:
+            additional_term = additional_term + "_spatial"
+        if not os.path.exists(os.path.join(path_to_save_plots, str(frame_duration)+ "ms_rms_window",method, path_to_subject_dat.split("/")[1]+ "_" + additional_term)):
+            os.makedirs(os.path.join(path_to_save_plots, str(frame_duration)+ "ms_rms_window",method,  path_to_subject_dat.split("/")[1]+ "_" + additional_term))
 
-        if not os.path.exists(os.path.join(path_to_save_plots, str(frame_duration)+ "ms_rms_window",method, movement_name+ "_" + additional_term)):
-            os.makedirs(os.path.join(path_to_save_plots, str(frame_duration)+ "ms_rms_window",method, movement_name+ "_" + additional_term))
-        self.path_to_save_plots = os.path.join(path_to_save_plots, str(frame_duration)+ "ms_rms_window",method, movement_name+ "_" + additional_term)
+        grid_aranger = grid_arrangement.Grid_Arrangement([2, 3, 4, 1, 5])
+        grid_aranger.make_grid()
+        self.path_to_save_plots = os.path.join(path_to_save_plots, str(frame_duration)+ "ms_rms_window",method,  path_to_subject_dat.split("/")[1]+ "_" + additional_term)
         self.emg_data = load_pickle_file(os.path.join(path_to_subject_dat, "emg_data.pkl"))[movement_name].transpose(1,0,2).reshape(320,-1)
+        if (spatial_filtering == True):
+            grid = grid_aranger.transfer_320_into_grid_arangement(self.emg_data)
+            grid = grid_aranger.concatenate_upper_and_lower_grid(grid[0], grid[1])
+            filtered_grid = self.spatial_filtering(grid)
+            self.emg_data = grid_aranger.transfer_grid_arangement_into_320(filtered_grid)
+        if (bandpass_filter == True):
+            before = self.emg_data
+            after = bandpass_filter_emg_data(self.emg_data, fs=2048)
+            self.emg_data = after
 
         emg_data_for_max_min = load_pickle_file(os.path.join(path_to_subject_dat, "emg_data.pkl"))
-        grid_aranger = grid_arrangement.Grid_Arrangement([1, 2, 3, 4, 5])
-        grid_aranger.make_grid()
+        all_emg_data = []
 
-        for i in emg_data_for_max_min.keys():
-            emg_data_for_max_min[i] = np.array(emg_data_for_max_min[i].transpose(1,0,2).reshape(320,-1))
+        for movement in ['subject_rest', 'subject_2pinch_low_extension', 'subject_2pinch_low_flexion',
+                         'subject_2pinch_strong_extension', 'subject_2pinch_strong_flexion',
+                         'subject_index_low_extension', 'subject_index_low_flexion',
+                         'subject_Index_strong_extension', 'subject_Index_strong_flexion',
+                         'subject_thumb_strong_extension', 'subject_thumb_strong_flexion']:
+
+            path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\test_if_works/" + str(movement)  # trainingsdata recorded after training
+            a = load_pickle_file(os.path.join(path, "emg_data.pkl"))["rest"].transpose(1,0,2).reshape(320,-1)[64:256]
             if (self.mean_ex is not None) and (self.mean_flex is not None):
                 # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
+                a = a - grid_aranger.transfer_grid_arangement_into_320(np.reshape(self.mean_ex, (self.mean_ex.shape[0], self.mean_ex.shape[1], 1)))
+            all_emg_data.append(a)
+
+        for i in emg_data_for_max_min.keys():
+            emg_data_for_max_min[i] = np.array(emg_data_for_max_min[i].transpose(1,0,2).reshape(320,-1))[64:256]
+
+            if (self.mean_ex is not None) and (self.mean_flex is not None):
+                # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
+
                 emg_data_for_max_min[i] = emg_data_for_max_min[i] - grid_aranger.transfer_grid_arangement_into_320(np.reshape(self.mean_ex,(self.mean_ex.shape[0],self.mean_ex.shape[1],1)))
 
+            if (method == "Bandpass_filter") or (bandpass_filter == True):
+                before = emg_data_for_max_min[i]
+                after = bandpass_filter_emg_data(emg_data_for_max_min[i], fs=2048)
+                emg_data_for_max_min[i] = after
+
+            if (method == "Spatial_EMG_signals") or (spatial_filtering == True):
+                grid = grid_aranger.transfer_320_into_grid_arangement(emg_data_for_max_min[i])
+                grid = grid_aranger.concatenate_upper_and_lower_grid(grid[0],grid[1])
+                filtered_grid = self.spatial_filtering(grid)
+                emg_data_for_max_min[i] = grid_aranger.transfer_grid_arangement_into_320(filtered_grid)
+
+        if method == "RMS":
+
+            first_grid = np.sqrt(np.mean(np.square(self.emg_data[64:128]), axis=0))
+            second_grid = np.sqrt(np.mean(np.square(self.emg_data[128:192]), axis=0))
+            third_grid = np.sqrt(np.mean(np.square(self.emg_data[192:256]), axis=0))
+            fig,ax = plt.subplots(3,1, figsize=(15,10), sharey=True,sharex=True)
+
+            x = np.linspace(0, first_grid.shape[0] / 2048, first_grid.shape[0])
+            ax[0].plot(x,first_grid, label="first grid")
+            ax[0].set_title("Grid 1")
+
+
+            ax[1].plot(x,second_grid, label="second grid")
+            ax[1].set_title("Grid 2")
+
+            ax[2].plot(x,third_grid, label="third grid")
+            ax[2].set_title("Grid 3")
+
+            fig.suptitle("RMS of all 3 grids")
+            fig.supxlabel("Time (s)")#
+            fig.supylabel("Amplitude (mV)")
+            plt.title("Grid 3")
+            plt.savefig(os.path.join(self.path_to_save_plots, "rms.png"))
+
+
         if method == "EMG_signals" :
-            self.max_values, self.min_values = find_max_min_values_for_each_movement_and_channel(emg_data_for_max_min,
+            self.max_values, self.min_values = find_max_min_values_for_each_movement_and_channel(all_emg_data,
                                                                                                  range(320), list(
                     emg_data_for_max_min.keys()))
             self.max_values = self.max_values.reshape(320, 1)
             self.min_values = self.min_values.reshape(320, 1)
-            self.q1, self.q2, self.median = find_q_median_values_for_each_movement_and_channel(emg_data_for_max_min,
+            self.q1, self.q2, self.median = find_q_median_values_for_each_movement_and_channel(all_emg_data,
                                                                                                range(320), list(
                     emg_data_for_max_min.keys()))
             self.q1 = self.q1.reshape(320, 1)
@@ -77,43 +144,92 @@ class Heatmap:
             self.median = self.median.reshape(320, 1)
 
 
-            plot_emg_channels(emg_data_for_max_min[self.movement_name], save_path=self.path_to_save_plots,
+            plot_emg_channels(emg_data_for_max_min[self.movement_name][64:256], save_path=self.path_to_save_plots,
                               movement=self.movement_name + "_raw")
 
-            plot_emg_channels(robust_scaling(emg_data_for_max_min[self.movement_name], self.q1, self.q2, self.median),
+            plot_emg_channels(robust_scaling(emg_data_for_max_min[self.movement_name], self.q1, self.q2, self.median)[64:256],
                               save_path=self.path_to_save_plots, movement=self.movement_name + "_robust",shift=3)
             plot_emg_channels(
-                normalize_2D_array(emg_data_for_max_min[self.movement_name], max_value=self.max_values, min_value=self.min_values),
+                normalize_2D_array(emg_data_for_max_min[self.movement_name], max_value=self.max_values, min_value=self.min_values)[64:256],
                 save_path=self.path_to_save_plots, movement=self.movement_name + "_min_max",shift=1)
 
-        if method == "Min_Max_Scaling_all_channels":
-            self.max_values, self.min_values = find_max_min_values_for_each_movement_(emg_data_for_max_min, range(320),
-                                                                                      list(emg_data_for_max_min.keys()))
+        if  method == "Spatial_EMG_signals":
+            self.max_values, self.min_values = find_max_min_values_for_each_movement_and_channel(all_emg_data,
+                                                                                                 range(320), list(
+                    emg_data_for_max_min.keys()))
+            self.max_values = self.max_values.reshape(320, 1)
+            self.min_values = self.min_values.reshape(320, 1)
+            self.q1, self.q2, self.median = find_q_median_values_for_each_movement_and_channel(all_emg_data,
+                                                                                               range(320), list(
+                    emg_data_for_max_min.keys()))
+            self.q1 = self.q1.reshape(320, 1)
+            self.q2 = self.q2.reshape(320, 1)
+            self.median = self.median.reshape(320, 1)
+
+            plot_emg_channels(emg_data_for_max_min[self.movement_name][64:256], save_path=self.path_to_save_plots,
+                              movement=self.movement_name + "_raw")
+
+            plot_emg_channels(
+                robust_scaling(emg_data_for_max_min[self.movement_name], self.q1, self.q2, self.median)[64:256],
+                save_path=self.path_to_save_plots, movement=self.movement_name + "_robust", shift=3)
+            plot_emg_channels(
+                normalize_2D_array(emg_data_for_max_min[self.movement_name], max_value=self.max_values,
+                                   min_value=self.min_values)[64:256],
+                save_path=self.path_to_save_plots, movement=self.movement_name + "_min_max", shift=1)
+
+        if method == "Bandpass_filter":
+            self.max_values, self.min_values = find_max_min_values_for_each_movement_and_channel(all_emg_data,
+                                                                                                 range(320), list(
+                    emg_data_for_max_min.keys()))
+            self.max_values = self.max_values.reshape(320, 1)
+            self.min_values = self.min_values.reshape(320, 1)
+            self.q1, self.q2, self.median = find_q_median_values_for_each_movement_and_channel(all_emg_data,
+                                                                                               range(320), list(
+                    emg_data_for_max_min.keys()))
+            self.q1 = self.q1.reshape(320, 1)
+            self.q2 = self.q2.reshape(320, 1)
+            self.median = self.median.reshape(320, 1)
+
+            plot_emg_channels(emg_data_for_max_min[self.movement_name][64:256], save_path=self.path_to_save_plots,
+                              movement=self.movement_name + "_raw")
+
+            plot_emg_channels(
+                robust_scaling(emg_data_for_max_min[self.movement_name], self.q1, self.q2, self.median)[64:256],
+                save_path=self.path_to_save_plots, movement=self.movement_name + "_robust", shift=3)
+            plot_emg_channels(
+                normalize_2D_array(emg_data_for_max_min[self.movement_name], max_value=self.max_values,
+                                   min_value=self.min_values)[64:256],
+                save_path=self.path_to_save_plots, movement=self.movement_name + "_min_max", shift=1)
+
+        if method =="Min_Max_Scaling_all_channels":
+            self.max_values,self.min_values = find_max_min_values_for_each_movement_(all_emg_data,range(192),list(emg_data_for_max_min.keys()))
 
         if method == "Min_Max_Scaling_over_whole_data" :
-            self.max_values,self.min_values = find_max_min_values_for_each_movement_and_channel(emg_data_for_max_min,range(320),list(emg_data_for_max_min.keys()))
-            self.max_values = self.max_values.reshape(320,1)
-            self.min_values = self.min_values.reshape(320,1)
+            self.max_values,self.min_values = find_max_min_values_for_each_movement_and_channel(all_emg_data,range(192),list(emg_data_for_max_min.keys()))
+            self.max_values = self.max_values.reshape(192,1)
+            self.min_values = self.min_values.reshape(192,1)
 
         if (method == "Robust_Scaling") or (method == "Gauss_filter"):
-            self.q1,self.q2,self.median = find_q_median_values_for_each_movement_and_channel(emg_data_for_max_min,range(320),list(emg_data_for_max_min.keys()))
-            self.q1 = self.q1.reshape(320,1)
-            self.q2 = self.q2.reshape(320,1)
-            self.median = self.median.reshape(320,1)
+            self.q1,self.q2,self.median = find_q_median_values_for_each_movement_and_channel(all_emg_data,range(192),list(emg_data_for_max_min.keys()))
+            self.q1 = self.q1.reshape(192,1)
+            self.q2 = self.q2.reshape(192,1)
+            self.median = self.median.reshape(192,1)
 
         if method == "Robust_all_channels":
-            self.q1, self.q2, self.median = find_q_median_values_for_each_movement(emg_data_for_max_min, range(320), list(
-                emg_data_for_max_min.keys()))
+            self.q1,self.q2,self.median = find_q_median_values_for_each_movement(all_emg_data,range(192),list(emg_data_for_max_min.keys()))
 
         upper,lower = grid_aranger.transfer_320_into_grid_arangement(self.emg_data)
+
         if method == "Min_Max_Scaling_over_whole_data":
-            upper_max,lower_max = grid_aranger.transfer_320_into_grid_arangement(self.max_values)
-            upper_min,lower_min = grid_aranger.transfer_320_into_grid_arangement(self.min_values)
+            upper_max,lower_max = grid_aranger.transfer_320_into_grid_arangement1(self.max_values)
+            upper_min,lower_min = grid_aranger.transfer_320_into_grid_arangement1(self.min_values)
 
         if (method == "Robust_Scaling") or (method == "Gauss_filter"):
-            upper_q1,lower_q1 = grid_aranger.transfer_320_into_grid_arangement(self.q1)
-            upper_q2,lower_q2 = grid_aranger.transfer_320_into_grid_arangement(self.q2)
-            upper_median, lower_median = grid_aranger.transfer_320_into_grid_arangement(self.median)
+            upper_q1,lower_q1 = grid_aranger.transfer_320_into_grid_arangement1(self.q1)
+            upper_q2,lower_q2 = grid_aranger.transfer_320_into_grid_arangement1(self.q2)
+            upper_median, lower_median = grid_aranger.transfer_320_into_grid_arangement1(self.median)
+
+
 
 
         self.ref_data= load_pickle_file(os.path.join(path_to_subject_dat, "3d_data.pkl"))[movement_name]
@@ -125,29 +241,45 @@ class Heatmap:
         self.ref_data = resample(self.ref_data, num_samples_resampled_ref)
 
 
-        self.emg_data= grid_aranger.concatenate_upper_and_lower_grid(upper,lower)
+        self.emg_data= upper #grid_aranger.concatenate_upper_and_lower_grid(upper,lower)
         if method == "Min_Max_Scaling_over_whole_data":
-            self.max_values = grid_aranger.concatenate_upper_and_lower_grid(upper_max,lower_max)
-            self.min_values = grid_aranger.concatenate_upper_and_lower_grid(upper_min, lower_min)
+            self.max_values = upper_max#grid_aranger.concatenate_upper_and_lower_grid(upper_max,lower_max)
+            self.min_values = upper_min#grid_aranger.concatenate_upper_and_lower_grid(upper_min, lower_min)
+
         if (method == "Robust_Scaling") or (method == "Gauss_filter"):
-            self.median = grid_aranger.concatenate_upper_and_lower_grid(upper_median, lower_median)
-            self.q1 = grid_aranger.concatenate_upper_and_lower_grid(upper_q1, lower_q1)
-            self.q2 = grid_aranger.concatenate_upper_and_lower_grid(upper_q2, lower_q2)
+            self.median =upper_median #grid_aranger.concatenate_upper_and_lower_grid(upper_median, lower_median)
+            self.q1 = upper_q1#grid_aranger.concatenate_upper_and_lower_grid(upper_q1, lower_q1)
+            self.q2 = upper_q2 #grid_aranger.concatenate_upper_and_lower_grid(upper_q2, lower_q2)
+
+
         self.sampling_frequency = sampling_frequency
 
         self.sample_length = self.emg_data[1][1].shape[0]
         self.num_samples = int(self.sample_length/(self.sampling_frequency*(frame_duration/1000)))
         self.frame_duration = frame_duration
         self.number_observation_samples = int((self.frame_duration / 1000) * self.sampling_frequency)
-
-        self.fig, (self.ax_emg, self.ax_ref) = plt.subplots(2, 1, figsize=(8, 10))
-        self.ax_ref.set_title("Reference")
-        self.ax_ref.set(xlabel="Time (s)", ylabel="Amplitude (mV)",
-                        xlim=(0, self.sample_length / self.sampling_frequency), ylim=(0, 1))
+        #self.ax_ref.set_title("Reference")
+        #self.ax_ref.set(xlabel="Time (s)", ylabel="Amplitude (mV)",xlim=(0, self.sample_length / self.sampling_frequency), ylim=(0, 1))
+        self.fig, (self.ax_1, self.ax_2, self.ax_3) = plt.subplots(3, 1, figsize=(8, 15))
+        self.fig.suptitle('Heatmmap comparison of ' + movement_name, fontsize=14)
         self.x_for_ref = np.linspace(0, self.sample_length / self.sampling_frequency, self.ref_data.shape[0])
         self.global_counter=0
         self.last_frame = 0
 
+    def spatial_filtering(self, siganl_to_be_filtered, filter_name= "NDD"):
+        """This function applies the filters to the chunk."""
+
+        # Extend filter dimensions prior to performing a convolution
+        #flt_coeff = np.expand_dims(self._DIFFERENTIAL_FILTERS[filter_name], axis=(0, 1, -1))
+        grid = siganl_to_be_filtered
+        grids = split_grid_into_8x8_grids(grid)
+        for one_grid in range(len(grids)):
+            if one_grid < 3:  # if upper grids
+                grid[0:8, 0 + 8 * one_grid:8 + 8 * one_grid,:] = fftconvolve(grids[one_grid], self._DIFFERENTIAL_FILTERS[filter_name].reshape((self._DIFFERENTIAL_FILTERS[filter_name].shape[0],self._DIFFERENTIAL_FILTERS[filter_name].shape[1],1)), mode="same").astype(np.float32)
+            else:  # if lower grids
+                grid[8:16, 0 + 8 * (one_grid - 3):8 + 8 * (one_grid - 3),:] = fftconvolve(grids[one_grid], self._DIFFERENTIAL_FILTERS[filter_name].reshape((self._DIFFERENTIAL_FILTERS[filter_name].shape[0],self._DIFFERENTIAL_FILTERS[filter_name].shape[1],1)), mode="same").astype(np.float32)
+
+        return grid
 
     def get_max_min_values(self,emg_data,channels):
         """
@@ -201,15 +333,9 @@ class Heatmap:
         :return: heatmap of emg data
 
         """
+
         heatmap = self.calculate_heatmap(self.emg_data, frame, self.number_observation_samples)
-        # plt.figure()
-        # for i in range(self.emg_data.shape[0]):
-        #     for j in range(self.emg_data.shape[1]):
-        #         if (frame -  self.number_observation_samples < 0) or (len(self.emg_data[i][j]) < ( self.number_observation_samples)):
-        #             plt.plot(self.emg_data[i][j][:frame])
-        #         else:
-        #             plt.plot(self.emg_data[i][j][frame - self.number_observation_samples:frame])
-        # plt.savefig(os.path.join(self.path_to_save_plots, "_emg_plot_" + str(frame) + ".png"))
+
 
         if (self.mean_ex is not None) and (self.mean_flex is not None):
             heatmap = heatmap - self.mean_ex
@@ -224,11 +350,18 @@ class Heatmap:
 
         if method == "Min_Max_Scaling_over_whole_data":
             normalized_heatmap = normalize_2D_array(heatmap,max_value=self.max_values[:,:,0],min_value=self.min_values[:,:,0])
+
         if method == "Robust_Scaling":
             normalized_heatmap = robust_scaling(heatmap, q1=self.q1[:,:,0], q2=self.q2[:,:,0], median=self.median[:,:,0])
 
         if method == "Min_Max_Scaling_over_sample":
             normalized_heatmap = normalize_2D_array(heatmap)
+
+        if method == "Min_Max_Scaling_all_channels":
+            normalized_heatmap = normalize_2D_array(heatmap,max_value=self.max_values,min_value=self.min_values)
+
+        if method == "Robust_all_channels":
+            normalized_heatmap = robust_scaling(heatmap, q1=self.q1, q2=self.q2, median=self.median)
 
         if self.movement_name == "rest":
             self.heatmaps_flex = np.add(self.heatmaps_flex,heatmap)
@@ -260,10 +393,20 @@ class Heatmap:
                 plot_local_maxima_minima(self.ref_data[:, 0], self.local_maxima, self.local_minima,
                                         current_sample_position=frame, color="yellow")
 
+
         if self.global_counter == 0:
-            hmap = sns.heatmap(normalized_heatmap, ax=self.ax_emg, cmap='RdBu_r', cbar=True, xticklabels=True, yticklabels=True, cbar_kws={'label': 'norm. RMS'})#,cbar_ax=self.ax_emg,)
+
+            hmap = sns.heatmap(normalized_heatmap[:,:8], ax=self.ax_1, cmap='RdBu_r', cbar=True, xticklabels=True, yticklabels=True, cbar_kws={'label': 'RMS'})#,cbar_ax=self.ax_emg,)
+            hmap = sns.heatmap(normalized_heatmap[:,8:16], ax=self.ax_2, cmap='RdBu_r', cbar=True, xticklabels=True,
+                               yticklabels=True, cbar_kws={'label': 'RMS'})  # ,cbar_ax=self.ax_emg,)
+            hmap = sns.heatmap(normalized_heatmap[:,16:], ax=self.ax_3, cmap='RdBu_r', cbar=True, xticklabels=True,
+                               yticklabels=True, cbar_kws={'label': ' RMS'})  # ,cbar_ax=self.ax_emg,)
         else:
-            hmap = sns.heatmap(normalized_heatmap, ax=self.ax_emg, cmap='RdBu_r', cbar=True, xticklabels=True, yticklabels=True, cbar_kws={'label': 'norm. RMS'})#,cbar_ax=self.ax_emg,)
+            hmap = sns.heatmap(normalized_heatmap[:,:8], ax=self.ax_1, cmap='RdBu_r', cbar=True, xticklabels=True, yticklabels=True, cbar_kws={'label': 'RMS'})#,cbar_ax=self.ax_emg,)
+            hmap = sns.heatmap(normalized_heatmap[:,8:16], ax=self.ax_2, cmap='RdBu_r', cbar=True, xticklabels=True,
+                               yticklabels=True, cbar_kws={'label': ' RMS'})  # ,cbar_ax=self.ax_emg,)
+            hmap = sns.heatmap(normalized_heatmap[:,16:], ax=self.ax_3, cmap='RdBu_r', cbar=True, xticklabels=True,
+                               yticklabels=True, cbar_kws={'label': ' RMS'})  # ,cbar_ax=self.ax_emg,)
         self.global_counter += 1
         #self.emg_plot.set(normalized_heatmap, ax=self.ax_emg, cmap='hot', cbar=True, xticklabels=True, yticklabels=True, cbar_kws={'label': 'norm. RMS'},mask=mask_for_heatmap)
         #self.ax_emg.imshow(heatmap, cmap='hot', interpolation='nearest')
@@ -279,16 +422,13 @@ class Heatmap:
 
 
     def update(self, frame):
+
         plt.figure()
-        self.fig, (self.ax_emg, self.ax_ref) = plt.subplots(2, 1, figsize=(8, 10))
-        self.ax_ref.set_title("Reference")
-        self.ax_ref.set(xlabel="Time (s)", ylabel="Amplitude (mV)",
-                        xlim=(0, self.sample_length / self.sampling_frequency), ylim=(0, 1))
+        self.fig, (self.ax_1, self.ax_2, self.ax_3) = plt.subplots(3, 1, figsize=(8, 15))
         self.fig.suptitle('Heatmmap comparison of ' + self.movement_name + "at sample: " + str(frame) + " with window size " + str(self.frame_duration) + " ms", fontsize=12)
 
-
         self.make_heatmap_emg(frame)
-        self.make_Ref_trackings(frame)
+
         # Save the frame as an image
         frame_filename = os.path.join(self.path_to_save_plots, f'frame_{frame:03d}.png')
         self.fig.canvas.draw()
@@ -297,7 +437,7 @@ class Heatmap:
         pil_image.save(frame_filename)
         self.pbar.update(1)
 
-        return self.ax_emg,self.ax_ref
+        return self.ax_1, self.ax_2, self.ax_3
 
     def update_slider(self,event):
         print(self.slider.get())
@@ -366,7 +506,7 @@ class Heatmap:
             self.pbar = tqdm.tqdm(total=num_frames, position=0, leave=True)
             self.ani = FuncAnimation(self.fig, self.update, frames=self.samples[:],cache_frame_data=False )
             #self.ani.event_source.stop()
-        #plt.show()
+        plt.show()
 
     def channel_extraction(self,mark_choosen_channels=False):
 
@@ -389,8 +529,7 @@ class Heatmap:
                                                    min_value=self.min_values[:, :, 0])
             mean_ex_heatmap = normalize_2D_array(np.divide(self.heatmaps_ex, self.number_heatmaps_ex),
                                                  max_value=self.max_values[:, :, 0],
-                                                 min_value=self.min_values[:, :, 0]) - normalize_2D_array(
-                self.mean_ex, max_value=self.max_values[:, :, 0], min_value=self.min_values[:, :, 0])
+                                                 min_value=self.min_values[:, :, 0])
         if method == "Robust_Scaling":
             #mean_flex_heatmap = np.divide(self.heatmaps_flex, self.number_heatmaps_flex)
             #mean_ex_heatmap = np.divide(self.heatmaps_ex, self.number_heatmaps_ex)
@@ -404,6 +543,18 @@ class Heatmap:
         if method == "no_scaling":
             mean_flex_heatmap = np.divide(self.heatmaps_flex, self.number_heatmaps_flex)
             mean_ex_heatmap = np.divide(self.heatmaps_ex, self.number_heatmaps_ex)
+
+        if method == "Min_Max_Scaling_all_channels":
+            mean_flex_heatmap = normalize_2D_array(np.divide(self.heatmaps_flex, self.number_heatmaps_flex),
+                                                   max_value=self.max_values,
+                                                   min_value=self.min_values)
+            mean_ex_heatmap = normalize_2D_array(np.divide(self.heatmaps_ex, self.number_heatmaps_ex),
+                                                 max_value=self.max_values,
+                                                 min_value=self.min_values)
+        if method == "Robust_all_channels":
+            mean_flex_heatmap = robust_scaling(np.divide(self.heatmaps_flex, self.number_heatmaps_flex), q1=self.q1, q2=self.q2, median=self.median)
+            mean_ex_heatmap = robust_scaling(np.divide(self.heatmaps_ex, self.number_heatmaps_ex), q1=self.q1,
+                                               q2=self.q2, median=self.median)
 
         mean_ex_heatmap[np.isnan(mean_ex_heatmap)] = 0
         mean_flex_heatmap[np.isnan(mean_flex_heatmap)] = 0
@@ -429,23 +580,21 @@ class Heatmap:
             os.makedirs(path_to_difference_plot)
 
 
-        fig, axes = plt.subplots(3, 1, figsize=(6, 8))
+        fig, axes = plt.subplots(3, 1, figsize=(10, 15))
         # difference heatmap
-        axes[0].set_title("Difference Heatmap")
-        sns.heatmap(difference_heatmap, ax=axes[0], cmap='RdBu_r')
-        if (mark_choosen_channels):
-            axes[1].set_title("chosen flexion channels")
-            sns.heatmap(chosen_heatmap_flexion, ax=axes[1], cmap='RdBu_r')
-            axes[2].set_title("chosen extension channels")
-            sns.heatmap(chosen_heatmap_extension, ax=axes[2], cmap='RdBu_r')
-            plt.savefig(os.path.join(path_to_difference_plot, "difference_plot_chosen_" + str(movement) + ".png"))
-        else:
-            axes[1].set_title("Mean Flexion Heatmap")
-            sns.heatmap(mean_flex_heatmap, ax=axes[1], cmap='RdBu_r')
-            axes[2].set_title("Mean Extension Heatmap")
-            sns.heatmap(mean_ex_heatmap, ax=axes[2], cmap='RdBu_r')
-            plt.savefig(os.path.join(path_to_difference_plot, "difference_plot_" + str(movement) + ".png"))
-            return np.divide(self.heatmaps_flex, self.number_heatmaps_flex),np.divide(self.heatmaps_ex, self.number_heatmaps_ex)
+
+        global_min = np.min(mean_flex_heatmap)
+        global_max = np.max(mean_flex_heatmap)
+
+        axes[0].set_title("Grid 1 ")
+        sns.heatmap(mean_flex_heatmap[:,:8], ax=axes[0], cmap='RdBu_r',vmin=global_min,vmax=global_max,cbar=True)
+        axes[1].set_title("Grid 2 ")
+        sns.heatmap(mean_flex_heatmap[:,8:16], ax=axes[1], cmap='RdBu_r',vmin=global_min,vmax=global_max,cbar=True)
+        axes[2].set_title("Grid 3 ")
+        sns.heatmap(mean_flex_heatmap[:,16:], ax=axes[2], cmap='RdBu_r',vmin=global_min,vmax=global_max,cbar=True)
+
+        plt.savefig(os.path.join(path_to_difference_plot, "difference_plot_" + str(movement) + ".png"))
+        return np.divide(self.heatmaps_flex, self.number_heatmaps_flex),np.divide(self.heatmaps_ex, self.number_heatmaps_ex)
         # chosen channels flexion heatmap
         # sns.heatmap(chosen_heatmap_flexion,ax=axes[1])
         # plt.subplot(3, 1)
@@ -463,55 +612,58 @@ if __name__ == "__main__":
     # con = a.concatenate_upper_and_lower_grid(np.reshape(a.upper_grids,(a.upper_grids.shape[0],a.upper_grids.shape[1],1)),np.reshape(a.lower_grids,(a.lower_grids.shape[0],a.lower_grids.shape[1],1)))
     # gauss_kernel = create_gaussian_filter(sigma=0.45)
     # filtered = apply_gaussian_filter(con,gauss_kernel)
-
-    # "Min_Max_Scaling_over_whole_data" = min max scaling with max/min is choosen individually for every channel
-    # "Robust_all_channels" = robust scaling with q1,q2,median is choosen over all channels
-    # "Robust_Scaling"  = robust scaling with q1,q2,median is choosen individually for every channel
-    # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
-    # "EMG_signals" = plot emg signals
-    # "Gauss_filter" = use Gauss filter on raw data
-    # "Bandpass_filter" = use bandpass filter on raw data and plot the filtered all emg channels
     plot_emg = False
+    plot_spatial_emg = False
+    plot_bandpass_filter = False
+    rms = False
 
+    #"Min_Max_Scaling_over_whole_data" = min max scaling with max/min is choosen individually for every channel
+    #"Robust_all_channels" = robust scaling with q1,q2,median is choosen over all channels
+    #"Robust_Scaling"  = robust scaling with q1,q2,median is choosen individually for every channel
+    #"Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
+    #"EMG_signals" = plot emg signals
+    #"Gauss_filter" = use Gauss filter on raw data
+    #"Bandpass_filter" = use bandpass filter on raw data and plot the filtered all emg channels
 
     window_size = 150
-    for method in ["no_scaling","Robust_Scaling","Min_Max_Scaling_all_channels","Min_Max_Scaling_over_whole_data","Robust_all_channels"]:
+    for method in ["Robust_Scaling","Min_Max_Scaling_over_whole_data"]:
 
         mean_flex_rest = None
         mean_ex_rest = None
-        for movement in ["rest","thumb","index","2pinch"]:
-
-            for additional_term in ["before","after"]:
-                if additional_term == "before":
-                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Juergen_1" # trainingsdata recorded for training
-                else:
-                    path =  r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Juergen_2" # trainingsdata recorded after training
+        #for movement in ['subject_rest', 'subject_thumb_strong_extension', 'subject_thumb_strong_flexion']:
+        for movement in ['subject_rest','subject_2pinch_low_extension', 'subject_2pinch_low_flexion', 'subject_2pinch_strong_extension', 'subject_2pinch_strong_flexion', 'subject_index_low_extension', 'subject_index_low_flexion',  'subject_Index_strong_extension', 'subject_Index_strong_flexion', 'subject_thumb_strong_extension', 'subject_thumb_strong_flexion']:
+                path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\test_if_works/" + str(movement)  # trainingsdata recorded after training
 
                 print("method is: ", method)
                 print("movement is: ", movement)
-                print("additional term is: ",additional_term)
 
-                heatmap = Heatmap(movement,path,frame_duration=window_size,additional_term=additional_term,method=method)
+                heatmap = Heatmap("rest",path,frame_duration=window_size,method=method,bandpass_filter=False)
                 heatmap.animate(save=True)
-                fps = 10
+                fps = 2
                 heatmap.save_animation(r"D:\Lab\differences_train_test_heatmaps/" +str(window_size) + "ms_rms_window/"+ method + "/" +str(movement) +str(fps) +"fps_most_firings.gif", fps=2)
                 mean_flex, mean_ex = heatmap.channel_extraction()
                 heatmap.channel_extraction(mark_choosen_channels=True)
 
                 if plot_emg:
                     # Do the same again for method == EMG_signals to produce emg singals plot
-                    heatmap = Heatmap(movement,path,frame_duration=window_size,additional_term=additional_term,method="EMG_signals")
+                    heatmap = Heatmap("rest",path,frame_duration=window_size,method="EMG_signals")
+                if plot_spatial_emg:
+                    heatmap = Heatmap("rest", path, frame_duration=window_size, method="Spatial_EMG_signals")
+                if plot_bandpass_filter:
+                    heatmap = Heatmap("rest", path, frame_duration=window_size, method="Bandpass_filter")
+                if rms:
+                    heatmap = Heatmap("rest", path, frame_duration=window_size, method="RMS")
 
 
-                if movement == "rest":
+                if  "rest" in movement:
                     # if the movement is rest save the mean flex and ex for later subtraction from the other movements
                     mean_ex_rest = mean_ex
                     mean_flex_rest = mean_flex
 
                 else:
                     # if the movement is not rest subtract the mean flex and ex from the rest from the current movement therefore give the means of the rest to the functions
-                    heatmap = Heatmap(movement, path,frame_duration=window_size, additional_term=additional_term +  "_subtracted_mean_rest_from_emg",
-                                      method=method,mean_flex_rest=mean_flex_rest,mean_ex_rest=mean_ex_rest)
+                    heatmap = Heatmap("rest", path,frame_duration=window_size, additional_term=  "_subtracted_mean_rest_from_emg",
+                                      method=method,mean_flex_rest=mean_flex_rest,mean_ex_rest=mean_ex_rest,bandpass_filter=False)
                     heatmap.animate(save=True)
                     heatmap.save_animation(r"D:\Lab\differences_train_test_heatmaps/" + str(
                         window_size) + "ms_rms_window/" + method + "/" + str(movement) + str(
@@ -521,9 +673,24 @@ if __name__ == "__main__":
 
                     if plot_emg:
                         # Do the same again for method == EMG_signals to produce emg singals plot
-                        heatmap = Heatmap(movement, path, frame_duration=window_size,
-                                          additional_term=additional_term + "_subtracted_mean_rest_from_emg",
+                        heatmap = Heatmap("rest", path, frame_duration=window_size,
+                                          additional_term= "_subtracted_mean_rest_from_emg",
                                           method="EMG_signals", mean_flex_rest=mean_flex_rest, mean_ex_rest=mean_ex_rest)
+                    if plot_spatial_emg:
+                        heatmap = Heatmap("rest", path, frame_duration=window_size,
+                                          additional_term="_subtracted_mean_rest_from_emg",
+                                          method="Spatial_EMG_signals", mean_flex_rest=mean_flex_rest,
+                                          mean_ex_rest=mean_ex_rest)
+                    if plot_bandpass_filter:
+                        heatmap = Heatmap("rest", path, frame_duration=window_size,
+                                          additional_term="_subtracted_mean_rest_from_emg",
+                                          method="Bandpass_filter", mean_flex_rest=mean_flex_rest,
+                                          mean_ex_rest=mean_ex_rest)
+                    if rms:
+                        heatmap = Heatmap("rest", path, frame_duration=window_size,
+                                          additional_term="_subtracted_mean_rest_from_emg",
+                                          method="RMS", mean_flex_rest=mean_flex_rest,
+                                          mean_ex_rest=mean_ex_rest)
 
     # movement = "thumb"
     # heatmap = Heatmap(movement,r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_Test1",additional_term="before")
