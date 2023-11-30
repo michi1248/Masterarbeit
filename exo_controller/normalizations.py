@@ -1,11 +1,28 @@
 import numpy as np
 from exo_controller.helpers import load_pickle_file
+from exo_controller.grid_arrangement import Grid_Arrangement
 import os
 
 
 class Normalization:
-    def __inti__(self,movements,important_channels=None):
-        self.movements = movements
+    def __init__(
+        self,
+        method,
+        grid_order,
+        important_channels=None,
+        sampling_frequency=2048,
+        frame_duration=150,
+    ):
+        """
+        :param movements: list of movements that should be used for normalization
+        :param method: which method should be used for normalization -> "Min_Max_Scaling_all_channels","Min_Max_Scaling_over_whole_data","Robust_Scaling","Robust_all_channels"
+        :param grid_order: list of the grid order i.e [1,2,3,4,5] or [1,2,3,5,4]
+        :param important_channels: all channels that should be used as list -> [1,5,10] would only use these channels
+        :param sampling_frequency: sampling frequency of the emg data
+        :param frame_duration: duration of one frame in ms
+        :return:
+        """
+
         if important_channels is None:
             important_channels = range(320)
         self.important_channels = important_channels
@@ -16,143 +33,13 @@ class Normalization:
         self.median = None
         self.mean = None
         self.all_emg_data = None
+        self.method = method
+        self.grid_aranger = Grid_Arrangement(grid_order)
+        self.grid_aranger.make_grid()
+        self.sampling_frequency = sampling_frequency
+        self.frame_duration = frame_duration
 
-    def calculate_normalization_values(self,method):
-        """
-        calculates the normalization values
-        :param method: which method should be used to calculate the normalization values
-        :return:
-        """
-        # "Min_Max_Scaling_over_whole_data" = min max scaling with max/min is choosen individually for every channel
-        # "Robust_all_channels" = robust scaling with q1,q2,median is choosen over all channels
-        # "Robust_Scaling"  = robust scaling with q1,q2,median is choosen individually for every channel
-        # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
-
-
-        if method == "Min_Max_Scaling_over_whole_data":
-            return self.find_max_min_values_for_each_movement_and_channel(emg_data=self.all_emg_data, important_channels=self.important_channels)
-        elif method == "Robust_all_channels":
-            return self.find_q_median_values_for_each_movement(emg_data=self.all_emg_data, important_channels=self.important_channels)
-        elif method == "Robust_Scaling":
-            return self.find_q_median_values_for_each_movement_and_channel(emg_data=self.all_emg_data, important_channels=self.important_channels)
-        elif method == "Min_Max_Scaling_all_channels":
-            return self.find_max_min_values_over_all_movements(emg_data=self.all_emg_data, important_channels=self.important_channels)
-        elif method == "no_scaling":
-            return None
-        else:
-            raise ValueError("method not supported")
-
-    def find_max_min_values_for_each_movement_and_channel(self,emg_data, important_channels=None):
-        """
-        This function finds the max and min values for each channel individually in the emg data.
-        It will return the max and min values for each channel over all movements.
-        This is needed to normalize the data later on.
-        :param emg_data: the emg data in the form of a list of movements, each movement is a 2D array with the shape (num_channels,num_samples)
-        :return: max and min values for each channel in the form of two lists (max /min) with each having 320 entries (one for each channel)
-        """
-        if important_channels is None:
-            important_channels = self.important_channels
-
-        max_values = np.zeros(len(important_channels)) - 10000000
-        min_values = np.zeros(len(important_channels)) + 10000000
-        for movement in range(len(emg_data)):
-            for channel in important_channels:
-                if np.max(emg_data[movement][channel]) > max_values[channel]:
-                    max_values[channel] = np.max(emg_data[movement][channel])
-                if np.min(emg_data[movement][channel]) < min_values[channel]:
-                    min_values[channel] = np.min(emg_data[movement][channel])
-        self.max_values = np.array(max_values)
-        self.min_values = np.array(min_values)
-        return max_values, min_values
-
-
-
-    def find_max_min_values_over_all_movements(self,emg_data, important_channels, movements):
-        """
-        This function finds the max and min values in the emg data but not channel wise but rather max min over all channels and movements.
-        It will return the max and min values for each channel over all movements.
-        This is needed to normalize the data later on.
-        :return: max and min values in the form of one value for max and min that is the highest and lowest value over all channels and movements
-        """
-        max_values = -10000000
-        min_values = 10000000
-        # for movement in movements:
-        for movement in range(len(emg_data)):
-            for channel in important_channels:
-                if np.max(emg_data[movement][channel]) > max_values:
-                    max_values = np.max(emg_data[movement][channel])
-                if np.min(emg_data[movement][channel]) < min_values:
-                    min_values = np.min(emg_data[movement][channel])
-        self.max_values = np.array(max_values)
-        self.min_values = np.array(min_values)
-        return max_values, min_values
-
-    def find_q_median_values_for_each_movement(self,emg_data, important_channels):
-        """
-        This function finds the q1 and q2 values over all movements and channels in the emg data.
-        It will return the max and min values for each channel over all movements.
-        This is needed to normalize the data later on.
-        :return: q1,q2,median vlaues  -> 3 values which are over alll channels and movements
-        """
-        # TODO wie will ich das hier machen ?? welche median und quantiles nehme ich ??  ich sollte eigentlich genau so machen (größtes 1 und 3 quantile) median keine ahnung :D
-        q1 = None
-        q2 = None
-        median = None
-
-        count = 0
-        # for movement in movements:
-        for movement in range(len(emg_data)):
-            for channel in important_channels:
-                if median is None:
-                    median = np.median(emg_data[movement][channel])
-                else:
-                    median += np.median(emg_data[movement][channel])
-                count += 1
-                if q1 is None:
-                    q1 = np.quantile(emg_data[movement][channel], 0.25)
-                if q2 is None:
-                    q2 = np.quantile(emg_data[movement][channel], 0.75)
-                if np.quantile(emg_data[movement][channel], 0.25) < q1:
-                    q1 = np.quantile(emg_data[movement][channel], 0.25)
-                if np.quantile(emg_data[movement][channel], 0.75) > q2:
-                    q2 = np.quantile(emg_data[movement][channel], 0.75)
-
-        for i in range(len(important_channels)):
-            median = median / count
-        self.q1 = np.array(q1)
-        self.q2 = np.array(q2)
-        self.median = np.array(median)
-        return q1, q2, median
-
-    def find_q_median_values_for_each_movement_and_channel(self,emg_data, important_channels):
-        """
-        This function finds the q1,q2,median values for each channel individually in the emg data.
-        It will return the max and min values for each channel over all movements.
-        This is needed to normalize the data later on.
-        :return: q1,q2,median values for each channel
-        """
-        # TODO wie will ich das hier machen ?? welche median und quantiles nehme ich ??  ich sollte eigentlich genau so machen (größtes 1 und 3 quantile) median keine ahnung :D
-        q1 = np.zeros(len(important_channels)) - 10000000
-        q2 = np.zeros(len(important_channels)) + 10000000
-        median = np.zeros(len(important_channels))
-
-        for movement in range(len(emg_data)):
-            # for movement in movements:
-            for channel in important_channels:
-                median[channel] += np.median(emg_data[movement][channel])
-                if np.quantile(emg_data[movement][channel], 0.25) < q1[channel]:
-                    q1[channel] = np.quantile(emg_data[movement][channel], 0.25)
-                if np.quantile(emg_data[movement][channel], 0.75) > q2[channel]:
-                    q2[channel] = np.quantile(emg_data[movement][channel], 0.75)
-
-        for i in range(len(important_channels)):
-            median[i] = median[i] / len(emg_data)
-        self.q1 = np.array(q1)
-        self.q2 = np.array(q2)
-        self.median = np.array(median)
-        return q1, q2, median
-
-    def robust_scaling(self,data):
+    def robust_scaling(self, data):
         """
         scales the data with robust scaling
         :param data:
@@ -161,9 +48,17 @@ class Normalization:
         :param median:
         :return:
         """
-        return (np.array(data) - self.median) / (self.q2 - self.q1)
+        if self.method == "Robust_Scaling":
+            median = self.median[:, :, 0]
+            q1 = self.q1[:, :, 0]
+            q2 = self.q2[:, :, 0]
+            return (np.array(data) - median) / (q2 - q1)
+        elif self.method == "Robust_all_channels":
+            return (np.array(data) - self.median) / (self.q2 - self.q1)
+        else:
+            raise ValueError("Method not supported")
 
-    def normalize_2D_array(self,data, axis=None, negative=False):
+    def normalize_2D_array(self, data, axis=None, negative=False):
         """
         normalizes a 2D array
 
@@ -174,8 +69,13 @@ class Normalization:
         """
         data = np.array(data)
         if (self.max_values is not None) and (self.min_values is not None):
-            min_value = self.min_values
-            max_value = self.max_values
+            if self.method == "Min_Max_Scaling_all_channels":
+                min_value = self.min_values
+                max_value = self.max_values
+            else:
+                min_value = self.min_values[:, :, 0]
+                max_value = self.max_values[:, :, 0]
+
             norm = (data - min_value) / ((max_value - min_value))
 
         elif axis is None:
@@ -183,13 +83,15 @@ class Normalization:
             norm = (data - np.min(data)) / (np.max(data) - np.min(data))
         else:
             data = np.array(data)
-            norm = (data - np.min(data, axis=axis)) / (np.max(data, axis=axis) - np.min(data, axis=axis))
+            norm = (data - np.min(data, axis=axis)) / (
+                np.max(data, axis=axis) - np.min(data, axis=axis)
+            )
 
         if negative == True:
             norm = (norm * 2) - 1
         return norm
 
-    def set_mean(self,mean):
+    def set_mean(self, mean):
         """
         sets the mean value that should be subtracted from the data
         :param mean: shape should be 320,1
@@ -197,7 +99,7 @@ class Normalization:
         """
         self.mean = mean
 
-    def get_all_emg_data(self,path_to_data,movements):
+    def get_all_emg_data(self, path_to_data, movements):
         """
         returns all emg data in one array
         :param path_to_data: string with the path to the emg_data.pkl file where all the data is stored
@@ -210,17 +112,198 @@ class Normalization:
         for movement in movements:
             emg_data_one_movement = a[movement].transpose(1, 0, 2).reshape(320, -1)
 
-            if self.mean is not None:
+            if (self.mean is not None) and (self.mean is not None):
                 # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
-                emg_data_one_movement = emg_data_one_movement - self.mean
+                emg_data_one_movement = (
+                    self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+                        emg_data_one_movement
+                    )
+                    - np.reshape(self.mean, (self.mean.shape[0], self.mean.shape[1], 1))
+                )
+            else:
+                emg_data_one_movement = (
+                    self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+                        emg_data_one_movement
+                    )
+                )
             all_emg_data.append(emg_data_one_movement)
 
         self.all_emg_data = all_emg_data
 
+    def calculate_heatmap(self, emg_grid, position, interval_in_samples):
+        """
+        Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
+
+        Parameters:
+        - emg_grid (numpy.ndarray): The 3D EMG data grid where the first two dimensions represent rows and columns of channels,
+                                   and the third dimension represents the values within each channel.
+        - position (int): The position of the EMG grid in the time series.
+        -interval_in_samples (int): The number of samples to include in the RMS calculation.
+
+        Returns:
+        - numpy.ndarray: An array of RMS values for each channel.
+        """
+
+        num_rows, num_cols, _ = emg_grid.shape
+        rms_values = np.zeros((num_rows, num_cols))
+
+        for row_idx in range(num_rows):
+            for col_idx in range(num_cols):
+                if (position - interval_in_samples < 0) or (
+                    len(emg_grid[row_idx][col_idx]) < (interval_in_samples)
+                ):
+                    channel_data = emg_grid[row_idx][col_idx][: position + 1]
+                else:
+                    channel_data = emg_grid[row_idx][col_idx][
+                        position - interval_in_samples : position
+                    ]
+                # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
+                rms_values[row_idx, col_idx] = np.sqrt(
+                    np.mean(np.array(channel_data) ** 2)
+                )
+        return rms_values
+
+    def set_method(self, method):
+        """
+        sets the method that should be used to normalize the data
+        :param method: string with the method name
+        :return:
+        """
+        self.method = method
+
+    def calculate_normalization_values(self):
+        """
+        :param all_emg_data: list of all emg data for each movement -> each list entry is a array with shape (#rows,#cols,#samples)
+        calculates all heatmaps for each movement and each sample and calculates the normalization values for the normalization method
+        """
+
+        if self.method == "no_scaling":
+            return
+        if self.method == "Min_Max_Scaling_all_channels":
+            self.max_values = -10000000
+            self.min_values = 10000000
+
+        if self.method == "Robust_Scaling":
+            self.q1 = (
+                np.zeros((self.all_emg_data[0].shape[0], self.all_emg_data[0].shape[1]))
+                - 10000000
+            )
+            self.q2 = (
+                np.zeros((self.all_emg_data[0].shape[0], self.all_emg_data[0].shape[1]))
+                + 10000000
+            )
+            self.median = np.zeros(
+                (self.all_emg_data[0].shape[0], self.all_emg_data[0].shape[1])
+            )
+
+        if self.method == "Robust_all_channels":
+            self.q1 = -1000000000
+            self.q2 = 10000000000
+            self.median = 0
+
+        if self.method == "Min_Max_Scaling_over_whole_data":
+            self.max_values = (
+                np.zeros((self.all_emg_data[0].shape[0], self.all_emg_data[0].shape[1]))
+                - 10000000
+            )
+            self.min_values = (
+                np.zeros((self.all_emg_data[0].shape[0], self.all_emg_data[0].shape[1]))
+                + 10000000
+            )
+
+        all_heatmaps = []
+
+        for movement in range(len(self.all_emg_data)):
+            sample_length = self.all_emg_data[movement][1][1].shape[0]
+            num_samples = int(
+                sample_length / (self.sampling_frequency * (self.frame_duration / 1000))
+            )
+            number_observation_samples = int(
+                (self.frame_duration / 1000) * self.sampling_frequency
+            )
+
+            self.samples = np.linspace(
+                number_observation_samples,
+                self.all_emg_data[movement][1][1].shape[0],
+                num_samples,
+                endpoint=False,
+                dtype=int,
+            )
+
+            for frame in self.samples:
+                heatmap = self.calculate_heatmap(
+                    self.all_emg_data[movement], frame, number_observation_samples
+                )
+                if (self.mean is not None) and (self.mean is not None):
+                    heatmap = heatmap - self.mean
+
+                if self.method == "Min_Max_Scaling_all_channels":
+                    if np.max(heatmap) > self.max_values:
+                        self.max_values = np.max(heatmap)
+                    if np.min(heatmap) < self.min_values:
+                        self.min_values = np.min(heatmap)
+
+                if self.method == "Min_Max_Scaling_over_whole_data":
+                    for row in range(heatmap.shape[0]):
+                        for col in range(heatmap.shape[1]):
+                            if heatmap[row, col] > self.max_values[row, col]:
+                                self.max_values[row, col] = heatmap[row, col]
+                            if heatmap[row, col] < self.min_values[row, col]:
+                                self.min_values[row, col] = heatmap[row, col]
+
+                if "Robust" in self.method:
+                    all_heatmaps.append(heatmap)
+
+        if self.method == "Min_Max_Scaling_over_whole_data":
+            self.max_values = np.reshape(
+                self.max_values, (self.max_values.shape[0], self.max_values.shape[1], 1)
+            )
+            self.min_values = np.reshape(
+                self.min_values, (self.min_values.shape[0], self.min_values.shape[1], 1)
+            )
+
+        if self.method == "Robust_Scaling":
+            all_heatmaps = np.stack(np.array(all_heatmaps), axis=-1)
+            self.q1 = np.quantile(all_heatmaps, 0.25, axis=-1)
+            self.q2 = np.quantile(all_heatmaps, 0.75, axis=-1)
+            self.median = np.median(all_heatmaps, axis=-1)
+
+            self.q1 = np.reshape(self.q1, (self.q1.shape[0], self.q1.shape[1], 1))
+            self.q2 = np.reshape(self.q2, (self.q2.shape[0], self.q2.shape[1], 1))
+            self.median = np.reshape(
+                self.median, (self.median.shape[0], self.median.shape[1], 1)
+            )
+
+        if self.method == "Robust_all_channels":
+            all_heatmaps = np.stack(np.array(all_heatmaps), axis=-1)
+            self.q1 = np.min(np.quantile(all_heatmaps, 0.25, axis=-1))
+            self.q2 = np.max(np.quantile(all_heatmaps, 0.75, axis=-1))
+            self.median = np.mean(np.median(all_heatmaps, axis=-1))
+
+    def normalize_chunk(self, chunk):
+        """
+        normalizes a chunk of data
+        :param chunk: chunk of data that should be normalized
+        :return:
+        """
+
+        if self.method == "Min_Max_Scaling_all_channels":
+            return self.normalize_2D_array(chunk)
+        elif self.method == "Min_Max_Scaling_over_whole_data":
+            return self.normalize_2D_array(chunk)
+        elif self.method == "Robust_Scaling":
+            return self.robust_scaling(chunk)
+        elif self.method == "Robust_all_channels":
+            return self.robust_scaling(chunk)
+        elif self.method == "no_scaling":
+            return chunk
+        else:
+            raise ValueError("Method not supported")
+
 
 if __name__ == "__main__":
     pass
-    #workflow
+    # workflow
     # normalizer = Normalization()
     # normalizer.get_all_emg_data(path_to_data="C:/Users/Philipp/Desktop/BA/exo_controller/data/emg_data.pkl",movements=["flexion","extension","pronation","supination","hand_close","hand_open"])
     # normalizer.find_max_min_values_for_each_movement_and_channel(emg_data=normalizer.all_emg_data)
@@ -230,4 +313,3 @@ if __name__ == "__main__":
     # heatmap = get heatmap
     # heatmap = heatmap - normalizer.mean
     # heatmap = normalizer.normalize_2D_array(emg_data)
-

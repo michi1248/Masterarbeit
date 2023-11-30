@@ -13,6 +13,8 @@ from tkinter.font import Font
 import numpy as np
 import pandas as pd
 import vlc
+
+
 class PyPlayer(tk.Frame):
     def __init__(self, outer_instance, container, container_instance, title=None):
         tk.Frame.__init__(self, container_instance)
@@ -36,7 +38,9 @@ class PyPlayer(tk.Frame):
         self.canvas = tk.Canvas(self.video_panel, background="black")
         self.canvas.pack(fill=tk.BOTH, expand=1)
         self.video_panel.pack(fill=tk.BOTH, expand=1)
-        self.media_list = [r"trainings_data/videos/" + x for x in os.listdir("trainings_data/videos")]
+        self.media_list = [
+            r"trainings_data/videos/" + x for x in os.listdir("trainings_data/videos")
+        ]
         self.media_list_copy = self.media_list.copy()
         # controls
         self.create_control_panel()
@@ -48,8 +52,12 @@ class PyPlayer(tk.Frame):
         """Add control panel."""
         control_panel = ttk.Frame(self.container_instance)
 
-        button = ttk.Button(control_panel, text="start capturing", command=self.start_capturing)
-        repeat_this_movement = ttk.Button(control_panel, text="repeat movement", command=self.repeat)
+        button = ttk.Button(
+            control_panel, text="start capturing", command=self.start_capturing
+        )
+        repeat_this_movement = ttk.Button(
+            control_panel, text="repeat movement", command=self.repeat
+        )
         ttk.Button(control_panel, text="Play", command=self.play)
 
         # play.pack(side=tk.LEFT)
@@ -60,9 +68,9 @@ class PyPlayer(tk.Frame):
 
     def repeat(self):
         if self.curent:
-            last_film = self.media_list_copy.index(self.curent)-1
+            last_film = self.media_list_copy.index(self.curent) - 1
             this_film = self.media_list_copy.index(self.curent)
-        #delete the data that was recorded for this movement
+        # delete the data that was recorded for this movement
         del self.outer_Instance.movement_name[-1]
         del self.outer_Instance.movement_name[-1]
 
@@ -70,7 +78,6 @@ class PyPlayer(tk.Frame):
         del self.outer_Instance.values_movie_start_emg[last_key]
         last_key = list(self.times.keys())[-1]
         del self.times[last_key]
-
 
         self.media_list.insert(0, self.media_list_copy[this_film])
         self.media_list.insert(0, self.media_list_copy[last_film])
@@ -105,7 +112,7 @@ class PyPlayer(tk.Frame):
         self.vlc_media_player_instance.pause()
 
     def start_capturing(self):
-        #self.time is the time when the video started
+        # self.time is the time when the video started
         # itme_now is the time in the video when the recodring started
 
         time_now = time.time() - self.time
@@ -114,8 +121,9 @@ class PyPlayer(tk.Frame):
         self.times.update({self.name: time_now})
         self.timer = time.time()
 
-        print("start of capturing for movement: " + self.name +" video time: ", time_now)
-
+        print(
+            "start of capturing for movement: " + self.name + " video time: ", time_now
+        )
 
         time.sleep(self.outer_Instance.recording_time)
         self.vlc_media_player_instance.stop()
@@ -152,7 +160,6 @@ class PyPlayer(tk.Frame):
         self.media_list.pop(0)
         self.time = time.time()
         self.play()
-
 
 
 class BaseTkContainer:

@@ -1,9 +1,20 @@
 import numpy as np
 import cupy as cp
 
-class MichaelFilter:
-    def __init__(self,output_smoothing = True, additinal_filter = True, only_additional_filter = False, weight_prediction_impact_on_regression = 0.75, weight_additional_filter = 3, degree_regressions = 1, buffer_length = 5, skip_predictions = 1, num_fingers = 2):
 
+class MichaelFilter:
+    def __init__(
+        self,
+        output_smoothing=True,
+        additinal_filter=True,
+        only_additional_filter=False,
+        weight_prediction_impact_on_regression=0.75,
+        weight_additional_filter=3,
+        degree_regressions=1,
+        buffer_length=5,
+        skip_predictions=1,
+        num_fingers=2,
+    ):
         self.last_val = []
         self.last_avg = []
         self.output_smoothing = output_smoothing
@@ -11,8 +22,10 @@ class MichaelFilter:
         self.only_additional_filter = only_additional_filter
         # a new prediciton is genereated, which is between the regresion prediction and the ai prediction. This
         # weight regulats the influence of the ai prediction on the new prediciton.
-        self.weight_prediction_impact_on_regression = weight_prediction_impact_on_regression
-        #the distance ( how much changes from last to this point) gets divided by this and then normalized
+        self.weight_prediction_impact_on_regression = (
+            weight_prediction_impact_on_regression
+        )
+        # the distance ( how much changes from last to this point) gets divided by this and then normalized
         # how much of the change willl be taken -> the hiher the weight the less change will be taken
         self.weight_additional_filter = weight_additional_filter
         # which degree of polynomial regression shuld be used.
@@ -25,32 +38,33 @@ class MichaelFilter:
         # num fingers is how many fingers we want to predict i.e how many values one prediction has
         self.num_fingers = num_fingers
 
-    def normalize(self,matrix):
+    def normalize(self, matrix):
         return matrix / np.linalg.norm(matrix)
-
 
     def filter(self, prediction):
         self.last_avg.append(prediction)
         self.last_val.append(prediction)
 
-        if ((len(self.last_avg) == 0) or len(self.last_avg) == 1):
+        if (len(self.last_avg) == 0) or len(self.last_avg) == 1:
             return prediction
 
-        if (self.only_additional_filter):
-            new = self.last_avg[-2] + (self.normalize(
-                np.sqrt(np.square(prediction - self.last_avg[-2]))) / self.weight_additional_filter
-                                  ) * (prediction - self.last_avg[-2])
+        if self.only_additional_filter:
+            new = self.last_avg[-2] + (
+                self.normalize(np.sqrt(np.square(prediction - self.last_avg[-2])))
+                / self.weight_additional_filter
+            ) * (prediction - self.last_avg[-2])
             self.last_avg[-1] = new
             prediction = new
-            if (len(self.last_avg) > self.buffer_length):
+            if len(self.last_avg) > self.buffer_length:
                 self.last_avg.pop(0)
 
             return prediction
 
         if 1 < len(self.last_avg) < self.buffer_length:
-            new = self.last_avg[-2] + (self.normalize(
-                np.sqrt(np.square(prediction - self.last_avg[-2]))) / self.weight_additional_filter
-                                       ) * (prediction - self.last_avg[-2])
+            new = self.last_avg[-2] + (
+                self.normalize(np.sqrt(np.square(prediction - self.last_avg[-2])))
+                / self.weight_additional_filter
+            ) * (prediction - self.last_avg[-2])
             self.last_avg[-1] = new
             prediction = new
             return prediction
@@ -63,19 +77,33 @@ class MichaelFilter:
                 last_joint_avgs.append(self.last_avg[l][i])
 
             mymodel3 = np.poly1d(
-                np.polyfit(np.linspace(1, self.buffer_length - 1, self.buffer_length - 1), last_joint_preds,
-                           self.degree_regressions))
+                np.polyfit(
+                    np.linspace(1, self.buffer_length - 1, self.buffer_length - 1),
+                    last_joint_preds,
+                    self.degree_regressions,
+                )
+            )
             res = []
             for u in range(self.buffer_length):
                 res.append(mymodel3(u))
             # plt.scatter(np.linspace(1,buffer_length,buffer_length), p, color='red')
             # plt.plot(np.linspace(1,buffer_length,buffer_length), res, color='green')
-            pred_reg = (mymodel3(self.buffer_length + self.skip_predictions) + prediction[i] * self.weight_prediction_impact_on_regression) / (self.weight_prediction_impact_on_regression + 1)
+            pred_reg = (
+                mymodel3(self.buffer_length + self.skip_predictions)
+                + prediction[i] * self.weight_prediction_impact_on_regression
+            ) / (self.weight_prediction_impact_on_regression + 1)
 
             mymodel = np.poly1d(
-                np.polyfit(np.linspace(1, self.buffer_length - 1, self.buffer_length - 1), last_joint_avgs,
-                           self.degree_regressions))
-            avg_reg = (mymodel(self.buffer_length + self.skip_predictions) + prediction[i] * self.weight_prediction_impact_on_regression) / (self.weight_prediction_impact_on_regression + 1)
+                np.polyfit(
+                    np.linspace(1, self.buffer_length - 1, self.buffer_length - 1),
+                    last_joint_avgs,
+                    self.degree_regressions,
+                )
+            )
+            avg_reg = (
+                mymodel(self.buffer_length + self.skip_predictions)
+                + prediction[i] * self.weight_prediction_impact_on_regression
+            ) / (self.weight_prediction_impact_on_regression + 1)
             res2 = []
             for u in range(self.buffer_length):
                 res2.append(mymodel(u))
@@ -84,7 +112,7 @@ class MichaelFilter:
             # plt.show()
 
             crozzcoeff = np.abs(np.corrcoef(res2, res)[0, 1])
-            if (np.isnan(crozzcoeff)):
+            if np.isnan(crozzcoeff):
                 crozzcoeff = 1
 
             ges_pred = (avg_reg * crozzcoeff + pred_reg) / (crozzcoeff + 1)
@@ -92,10 +120,13 @@ class MichaelFilter:
 
             self.last_avg[-1][i] = ges_pred
 
-        if (self.additinal_filter == True):
-            new = self.last_avg[-2] + (self.normalize(
-                np.sqrt(np.square(self.last_avg[-1] - self.last_avg[-2]))) / self.weight_additional_filter
-                                  ) * (self.last_avg[-1] - self.last_avg[-2])
+        if self.additinal_filter == True:
+            new = self.last_avg[-2] + (
+                self.normalize(
+                    np.sqrt(np.square(self.last_avg[-1] - self.last_avg[-2]))
+                )
+                / self.weight_additional_filter
+            ) * (self.last_avg[-1] - self.last_avg[-2])
             self.last_avg[-1] = new
             self.last_val.pop(0)
             self.last_avg.pop(0)
@@ -108,18 +139,27 @@ class MichaelFilter:
         return prediction
 
 
-
 class MichaelFilterCupy:
-    def __init__(self, output_smoothing=True, additinal_filter=True, only_additional_filter=False,
-                 weight_prediction_impact_on_regression=0.75, weight_additional_filter=3,
-                 degree_regressions=1, buffer_length=5, skip_predictions=1, num_fingers=2):
-
+    def __init__(
+        self,
+        output_smoothing=True,
+        additinal_filter=True,
+        only_additional_filter=False,
+        weight_prediction_impact_on_regression=0.75,
+        weight_additional_filter=3,
+        degree_regressions=1,
+        buffer_length=5,
+        skip_predictions=1,
+        num_fingers=2,
+    ):
         self.last_val = cp.array([])
         self.last_avg = cp.array([])
         self.output_smoothing = output_smoothing
         self.additinal_filter = additinal_filter
         self.only_additional_filter = only_additional_filter
-        self.weight_prediction_impact_on_regression = weight_prediction_impact_on_regression
+        self.weight_prediction_impact_on_regression = (
+            weight_prediction_impact_on_regression
+        )
         self.weight_additional_filter = weight_additional_filter
         self.degree_regressions = degree_regressions
         self.buffer_length = buffer_length
@@ -138,21 +178,27 @@ class MichaelFilterCupy:
             return cp.asnumpy(prediction)
 
         if self.only_additional_filter:
-            new = self.last_avg[-2] + (self.normalize(cp.sqrt(cp.square(prediction - self.last_avg[-2]))) / self.weight_additional_filter) * (prediction - self.last_avg[-2])
+            new = self.last_avg[-2] + (
+                self.normalize(cp.sqrt(cp.square(prediction - self.last_avg[-2])))
+                / self.weight_additional_filter
+            ) * (prediction - self.last_avg[-2])
             self.last_avg[-1] = new
             if len(self.last_avg) > self.buffer_length:
                 self.last_avg = self.last_avg[1:]
             return cp.asnumpy(new)
 
         if 1 < len(self.last_avg) < self.buffer_length:
-            new = self.last_avg[-2] + (self.normalize(cp.sqrt(cp.square(prediction - self.last_avg[-2]))) / self.weight_additional_filter) * (prediction - self.last_avg[-2])
+            new = self.last_avg[-2] + (
+                self.normalize(cp.sqrt(cp.square(prediction - self.last_avg[-2])))
+                / self.weight_additional_filter
+            ) * (prediction - self.last_avg[-2])
             self.last_avg[-1] = new
             return cp.asnumpy(new)
 
         x = cp.linspace(1, self.buffer_length - 1, self.buffer_length - 1)
         for i in range(self.num_fingers):
-            last_joint_preds = self.last_val[:self.buffer_length-1, i]
-            last_joint_avgs = self.last_avg[:self.buffer_length-1, i]
+            last_joint_preds = self.last_val[: self.buffer_length - 1, i]
+            last_joint_avgs = self.last_avg[: self.buffer_length - 1, i]
 
             coef_preds = cp.polyfit(x, last_joint_preds, self.degree_regressions)
             coef_avgs = cp.polyfit(x, last_joint_avgs, self.degree_regressions)
@@ -160,8 +206,14 @@ class MichaelFilterCupy:
             mymodel_preds = cp.poly1d(coef_preds)
             mymodel_avgs = cp.poly1d(coef_avgs)
 
-            pred_reg = (mymodel_preds(self.buffer_length + self.skip_predictions) + prediction[i] * self.weight_prediction_impact_on_regression) / (self.weight_prediction_impact_on_regression + 1)
-            avg_reg = (mymodel_avgs(self.buffer_length + self.skip_predictions) + prediction[i] * self.weight_prediction_impact_on_regression) / (self.weight_prediction_impact_on_regression + 1)
+            pred_reg = (
+                mymodel_preds(self.buffer_length + self.skip_predictions)
+                + prediction[i] * self.weight_prediction_impact_on_regression
+            ) / (self.weight_prediction_impact_on_regression + 1)
+            avg_reg = (
+                mymodel_avgs(self.buffer_length + self.skip_predictions)
+                + prediction[i] * self.weight_prediction_impact_on_regression
+            ) / (self.weight_prediction_impact_on_regression + 1)
 
             crozzcoeff = abs(cp.corrcoef(mymodel_avgs(x), mymodel_preds(x))[0, 1])
             crozzcoeff = 1 if cp.isnan(crozzcoeff) else crozzcoeff
@@ -170,7 +222,12 @@ class MichaelFilterCupy:
             self.last_avg[-1, i] = ges_pred
 
         if self.additinal_filter:
-            new = self.last_avg[-2] + (self.normalize(cp.sqrt(cp.square(self.last_avg[-1] - self.last_avg[-2]))) / self.weight_additional_filter) * (self.last_avg[-1] - self.last_avg[-2])
+            new = self.last_avg[-2] + (
+                self.normalize(
+                    cp.sqrt(cp.square(self.last_avg[-1] - self.last_avg[-2]))
+                )
+                / self.weight_additional_filter
+            ) * (self.last_avg[-1] - self.last_avg[-2])
             self.last_avg[-1] = new
             self.last_val = self.last_val[1:]
             self.last_avg = self.last_avg[1:]
@@ -179,4 +236,3 @@ class MichaelFilterCupy:
         self.last_val = self.last_val[1:]
         self.last_avg = self.last_avg[1:]
         return cp.asnumpy(self.last_avg[-1])
-

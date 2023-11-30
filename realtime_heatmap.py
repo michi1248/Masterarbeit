@@ -62,24 +62,24 @@ class RealTimeInterface:
         emg_chunk = np.frombuffer(
             self.emgSocket.recv(self.BufferSize), dtype=np.int16
         ).reshape((408, -1), order="F")[self.emg_indices]
-        
+
         # Append the new chunk to the queue
         self.queue_emg.append(emg_chunk[None, ...])
-        
+
         # Concatenate the queue to a single array
         emg_input = np.concatenate(self.queue_emg, axis=-1).astype(np.float32)
-        
+
         # Compute the RMS of the emg input and reshape it to (8, 8)
         emg_image = np.sqrt(
             np.mean(emg_input[0, 0:64].reshape((8, 8, -1)) ** 2, axis=-1)
         )
         # Normalize the image
         emg_image /= np.max(emg_image)
-        
+
         # Update the image
         self.image.set_data(emg_image.astype(np.float32))
         self.image.update()
-        
+
         # Remove the oldest chunk from the queue
         self.queue_emg.pop(0)
 

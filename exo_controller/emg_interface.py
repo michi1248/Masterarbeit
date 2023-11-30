@@ -1,4 +1,3 @@
-
 import socket
 import time
 import pickle
@@ -12,17 +11,14 @@ from vispy import app, scene
 import ast
 
 
-
-
 class EMG_Interface:
     def __init__(self):
         ###########################################################################
         # Define process for reading data
         self.read_process = None
         self.queue_emg = [np.zeros((1, 320, 64))] * 2
-        #self.initialize_all()
+        # self.initialize_all()
         self.process_counter = 0
-
 
     def initialize_emg_socket(self):
         """
@@ -58,8 +54,9 @@ class EMG_Interface:
             self.write_data("startTX")
 
             # Print responds from emg server
-            print(self.emgSocket.recv(8).decode("utf-8") + " has accepted the connection!")
-
+            print(
+                self.emgSocket.recv(8).decode("utf-8") + " has accepted the connection!"
+            )
 
     def initialize_all(self):
         """
@@ -81,20 +78,16 @@ class EMG_Interface:
         self.filter_sos = butter(4, 20, "lowpass", output="sos", fs=2048)
         self.notch_filter = iirnotch(w0=50, Q=75, fs=2044)
 
-
-
     def get_EMG_chunk(self):
         "this method receives one emg chunk from the EMG device and returns it"
         try:
-            emg_chunk = \
-            np.frombuffer(self.emgSocket.recv(self.BufferSize), dtype=np.int16).reshape((408, -1), order="F")[
-                self.emg_indices
-            ]
+            emg_chunk = np.frombuffer(
+                self.emgSocket.recv(self.BufferSize), dtype=np.int16
+            ).reshape((408, -1), order="F")[self.emg_indices]
 
             return emg_chunk.astype(np.float32)
 
         except Exception as e:
-
             print("error while receiving emg chunkg")
             return np.empty()
 
@@ -112,7 +105,7 @@ class EMG_Interface:
         self.emgSocket.close()
 
     def write_data(self, msg):
-        """ this method sends data to the emg device"""
+        """this method sends data to the emg device"""
         self.emgSocket.send(msg.encode("utf-8"))
 
     def process(self):
@@ -132,7 +125,6 @@ class EMG_Interface:
                 print(e)
                 self.close_connection()
                 print("Connection closed")
-
 
 
 if __name__ == "__main__":

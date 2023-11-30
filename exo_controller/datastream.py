@@ -17,7 +17,13 @@ from exo_controller.Videoplayer import PyPlayer, BaseTkContainer
 
 
 class Realtime_Datagenerator:
-    def __init__(self, patient_id: str, recording_time: int, sampling_frequency_emg: int = 2048,debug = False):
+    def __init__(
+        self,
+        patient_id: str,
+        recording_time: int,
+        sampling_frequency_emg: int = 2048,
+        debug=False,
+    ):
         self.debug = debug
         self.patient_id = patient_id
         # dim = N x 1 x 320 x 192
@@ -65,11 +71,8 @@ class Realtime_Datagenerator:
             # self.emg_client_address = None
             self.emg_client_address = None
 
-
     def createInner(self):
         return PyPlayer(self)
-
-
 
     def get_movies_and_process(self):
         root = BaseTkContainer()
@@ -98,17 +101,21 @@ class Realtime_Datagenerator:
         t2.join()
 
         # get 3d points
-        print("movie start values:",self.values_movie_start_emg)
+        print("movie start values:", self.values_movie_start_emg)
         print("Step 1: \t Getting Kinematics Data from Files")
 
         kinematics_data = {}
         for i in self.movement_name:
-            data = pd.read_csv(r"trainings_data/movement_numbers_for_videos/" +str(i) +".csv")
+            data = pd.read_csv(
+                r"trainings_data/movement_numbers_for_videos/" + str(i) + ".csv"
+            )
             data = data.to_numpy()
             # from seconds to samples like this
             start = int((self.values_movie_start_emg[i] * 120))
             # print(start, int((start + (5 * 120))))
-            stop = int((start + (self.recording_time * 120))) # TODO change 120 to variable to also support other fps in the video
+            stop = int(
+                (start + (self.recording_time * 120))
+            )  # TODO change 120 to variable to also support other fps in the video
             data = data[start:stop]
 
             # hoch much one incoming emg chunk is in samples in the video
@@ -129,9 +136,20 @@ class Realtime_Datagenerator:
             kinematics_data[i] = np.array(data)
         print("Step 2: \t Saving Kinematics Data")
         if not self.debug:
-            resulting_file = r"trainings_data/resulting_trainings_data/subject_" + str(self.patient_id) + "/3d_data"  + ".pkl"
-            if not os.path.exists("trainings_data/resulting_trainings_data/subject_" + str(self.patient_id)):
-                os.makedirs("trainings_data/resulting_trainings_data/subject_" + str(self.patient_id))
+            resulting_file = (
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_id)
+                + "/3d_data"
+                + ".pkl"
+            )
+            if not os.path.exists(
+                "trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_id)
+            ):
+                os.makedirs(
+                    "trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_id)
+                )
 
             with open(resulting_file, "wb") as f:
                 pickle.dump(kinematics_data, f)
@@ -141,22 +159,33 @@ class Realtime_Datagenerator:
         emg_data = {}
         for k, v in self.emg_list.items():
             # from seconds to samples like this
-            #32 because 2048/64 = 32
+            # 32 because 2048/64 = 32
             # because one output of the emg is 64 samples and we want ot know how much samples we have to skip in the emg
-            #32 outputs of 64 samples chunk in one second
+            # 32 outputs of 64 samples chunk in one second
             start = int((self.values_movie_start_emg[k] - self.time_diffs[k]) * 32)
             # times 10 because of 10 seconds movement we want to have
             stop = int(start + (self.recording_time * 32))
 
-            #emg_data[self.movement_name[0]] = np.array([step[None, ...] for step in v[start:stop]])
+            # emg_data[self.movement_name[0]] = np.array([step[None, ...] for step in v[start:stop]])
             emg_data[self.movement_name[0]] = np.array(v[start:stop])
             self.movement_name.pop(0)
 
         print("Step 4: \t Saving EMG Data")
         if not self.debug:
-            resulting_file = r"trainings_data/resulting_trainings_data/subject_" + str(self.patient_id) + "/emg_data" + ".pkl"
-            if not os.path.exists("trainings_data/resulting_trainings_data/subject_" + str(self.patient_id)):
-                os.makedirs("trainings_data/resulting_trainings_data/subject_" + str(self.patient_id))
+            resulting_file = (
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_id)
+                + "/emg_data"
+                + ".pkl"
+            )
+            if not os.path.exists(
+                "trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_id)
+            ):
+                os.makedirs(
+                    "trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_id)
+                )
 
             with open(resulting_file, "wb") as f:
                 pickle.dump(emg_data, f)
@@ -173,7 +202,6 @@ class Realtime_Datagenerator:
             self.emg_time = time.time()
             time_diff = self.emg_time - self.video_time
             while True:
-
                 # exit loop and close emg
                 # print(self.stop_emg_stream)
                 if self.stop_emg_stream:
@@ -183,7 +211,11 @@ class Realtime_Datagenerator:
                 # get emg data
 
                 try:
-                    save_buffer.append(np.frombuffer(self.emgSocket.recv(self.BufferSize), dtype=np.int16).reshape((408, -1), order="F")[self.emg_indices])
+                    save_buffer.append(
+                        np.frombuffer(
+                            self.emgSocket.recv(self.BufferSize), dtype=np.int16
+                        ).reshape((408, -1), order="F")[self.emg_indices]
+                    )
                 except Exception:
                     continue
             self.time_diffs.update({self.movement_name[self.movement_count]: time_diff})
@@ -194,7 +226,11 @@ class Realtime_Datagenerator:
 
 
 if __name__ == "__main__":
-    Folder_For_All_Datasets = Path(r"D:\Old Data\Projects\videos_for_data_acquisition\new_hold")
+    Folder_For_All_Datasets = Path(
+        r"D:\Old Data\Projects\videos_for_data_acquisition\new_hold"
+    )
 
-    patient = Realtime_Datagenerator(debug=True,patient_id="sub1", sampling_frequency_emg=2048, recording_time=5)
+    patient = Realtime_Datagenerator(
+        debug=True, patient_id="sub1", sampling_frequency_emg=2048, recording_time=5
+    )
     patient.run_parallel()

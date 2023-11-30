@@ -10,8 +10,12 @@ _DIFFERENTIAL_FILTERS = {
     "LDD": np.array([[1], [-2], [1]]),  # longitudinal double differential
     "TSD": np.array([[-1, 1]]),  # transverse single differential
     "TDD": np.array([[1, -2, 1]]),  # transverse double differential
-    "NDD": np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]]),  # normal double differential or Laplacian filter
-    "IB2": np.array([[-1, -2, -1], [-2, 12, -2], [-1, -2, -1]]),  # inverse binomial filter of order 2
+    "NDD": np.array(
+        [[0, -1, 0], [-1, 4, -1], [0, -1, 0]]
+    ),  # normal double differential or Laplacian filter
+    "IB2": np.array(
+        [[-1, -2, -1], [-2, 12, -2], [-1, -2, -1]]
+    ),  # inverse binomial filter of order 2
     "IR": np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]]),  # inverse rectangle
 }
 
@@ -132,9 +136,11 @@ class GridReshaping:
         """Reshape input chunk to grid shape. Use this function before any spatial filtering to avoid reshaping errors."""
         nr_filter_representations = self.chunk.shape[0]
         if self.grid_type == "GR10MM0808":
-            self.chunk = self.chunk.reshape((nr_filter_representations, self.nr_grids, 64, -1)).reshape(
-                (nr_filter_representations, self.nr_grids, 8, 8, -1), order="F"
-            )[:, :, ::-1]
+            self.chunk = self.chunk.reshape(
+                (nr_filter_representations, self.nr_grids, 64, -1)
+            ).reshape((nr_filter_representations, self.nr_grids, 8, 8, -1), order="F")[
+                :, :, ::-1
+            ]
 
             return self.chunk
         elif self.grid_type == "GR08MM1305":
@@ -157,13 +163,18 @@ class GridReshaping:
         nr_filter_representations = self.chunk.shape[0]
         if self.grid_type == "GR10MM0808":
             chunk = self.chunk[:, :, ::-1]
-            orig_chunk = chunk[:, 0].reshape((nr_filter_representations, self.nr_rows * self.nr_col, -1), order="F")
+            orig_chunk = chunk[:, 0].reshape(
+                (nr_filter_representations, self.nr_rows * self.nr_col, -1), order="F"
+            )
 
             for i in range(1, chunk.shape[1]):
                 orig_chunk = np.concatenate(
                     (
                         orig_chunk,
-                        chunk[:, i].reshape((nr_filter_representations, self.nr_rows * self.nr_col, -1), order="F"),
+                        chunk[:, i].reshape(
+                            (nr_filter_representations, self.nr_rows * self.nr_col, -1),
+                            order="F",
+                        ),
                     ),
                     axis=1,
                 )
@@ -177,13 +188,18 @@ class GridReshaping:
             if 5 - self.nr_col < 2:
                 chunk[:, :, :, 3] = np.flip(chunk[:, :, :, 3], axis=2)
 
-            orig_chunk = chunk[:, 0].reshape((nr_filter_representations, self.nr_rows * self.nr_col, -1), order="F")
+            orig_chunk = chunk[:, 0].reshape(
+                (nr_filter_representations, self.nr_rows * self.nr_col, -1), order="F"
+            )
 
             for i in range(1, chunk.shape[1]):
                 orig_chunk = np.concatenate(
                     (
                         orig_chunk,
-                        chunk[:, i].reshape((nr_filter_representations, self.nr_rows * self.nr_col, -1), order="F"),
+                        chunk[:, i].reshape(
+                            (nr_filter_representations, self.nr_rows * self.nr_col, -1),
+                            order="F",
+                        ),
                     ),
                     axis=1,
                 )
@@ -201,7 +217,9 @@ class GridReshaping:
         concatenated_grid = self.chunk[:, 0]
 
         for i in range(1, self.chunk.shape[1]):
-            concatenated_grid = np.concatenate((concatenated_grid, self.chunk[:, i]), axis=-2)
+            concatenated_grid = np.concatenate(
+                (concatenated_grid, self.chunk[:, i]), axis=-2
+            )
 
         self.chunk = concatenated_grid
         return np.expand_dims(self.chunk, axis=1)
@@ -222,12 +240,14 @@ class DifferentialSpatialFilter:
         self.chunk = chunk
         self.filter_name = filter_name
 
-    def spatial_filtering(self,siganl_to_be_filtered,filter_name):
+    def spatial_filtering(self, siganl_to_be_filtered, filter_name):
         """This function applies the filters to the chunk."""
 
         # Extend filter dimensions prior to performing a convolution
         flt_coeff = np.expand_dims(_DIFFERENTIAL_FILTERS[filter_name], axis=(0, 1, -1))
-        filtered_chunk = fftconvolve(siganl_to_be_filtered, flt_coeff, mode="valid").astype(np.float32)
+        filtered_chunk = fftconvolve(
+            siganl_to_be_filtered, flt_coeff, mode="valid"
+        ).astype(np.float32)
 
         self.chunk = filtered_chunk
         return self.chunk
@@ -255,17 +275,25 @@ class AveragingSpatialFilter:
 
         if self.filter_direction == "longitudinal":
             flt_coeff = np.expand_dims(
-                1 / self.order * np.ones(self.order, dtype=int).reshape((self.order, -1)), axis=(0, 1, -1)
+                1
+                / self.order
+                * np.ones(self.order, dtype=int).reshape((self.order, -1)),
+                axis=(0, 1, -1),
             )
         elif self.filter_direction == "transverse":
             flt_coeff = np.expand_dims(
-                1 / self.order * np.ones(self.order, dtype=int).reshape((-1, self.order)), axis=(0, 1, -1)
+                1
+                / self.order
+                * np.ones(self.order, dtype=int).reshape((-1, self.order)),
+                axis=(0, 1, -1),
             )
         else:
             raise ValueError("Averaging direction name not correct.")
 
         # Extend filter dimensions prior to performing a convolution
-        filtered_chunk = fftconvolve(self.chunk, flt_coeff, mode="valid").astype(np.float32)
+        filtered_chunk = fftconvolve(self.chunk, flt_coeff, mode="valid").astype(
+            np.float32
+        )
 
         self.chunk = filtered_chunk
         return self.chunk
@@ -313,7 +341,10 @@ if __name__ == "__main__":
     # emg_setup = "Thalmic-Myoarmband"
     emg_setup = "Quattrocento-forearm"
 
-    print("EMG dataset shape prior to any spatial filtering and reshaping:", emg_data.shape)
+    print(
+        "EMG dataset shape prior to any spatial filtering and reshaping:",
+        emg_data.shape,
+    )
 
     emg_data = emg_data[:, ELECTRODE_SETUP[emg_setup]["grid"][-1]]
     grid_reshaper = GridReshaping(
@@ -325,7 +356,10 @@ if __name__ == "__main__":
     )
     emg_data = grid_reshaper.channels_to_grid()
 
-    print("EMG dataset shape after reshaping from 1D channels array to grid shape", emg_data.shape)
+    print(
+        "EMG dataset shape after reshaping from 1D channels array to grid shape",
+        emg_data.shape,
+    )
 
     if ELECTRODE_SETUP[emg_setup]["concatenate"]:
         emg_data = grid_reshaper.grid_concatenation()
@@ -354,4 +388,7 @@ if __name__ == "__main__":
     else:
         emg_data = grid_reshaper.grid_to_channels()
 
-    print("EMG dataset shape after selecting the needed channels and returning to 1D array shape", emg_data.shape)
+    print(
+        "EMG dataset shape after selecting the needed channels and returning to 1D array shape",
+        emg_data.shape,
+    )
