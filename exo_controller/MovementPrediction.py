@@ -19,7 +19,7 @@ class MultiDimensionalDecisionTree:
         ref,
         patient_number,
         windom_size=150,
-        num_trees=50,
+        num_trees=30,
         sample_difference_overlap=64,
         max_depth=250,
         min_samples_split=10,

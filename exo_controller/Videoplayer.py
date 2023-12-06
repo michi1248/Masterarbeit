@@ -52,30 +52,40 @@ class PyPlayer(tk.Frame):
         """Add control panel."""
         control_panel = ttk.Frame(self.container_instance)
 
-        button = ttk.Button(
+        self.button = tk.Button(
             control_panel, text="start capturing", command=self.start_capturing
         )
-        repeat_this_movement = ttk.Button(
-            control_panel, text="repeat movement", command=self.repeat
+        self.repeat_this_movement = tk.Button(
+            control_panel, text="repeat movement", command=self.repeat,bg="white", fg="black"
         )
         ttk.Button(control_panel, text="Play", command=self.play)
 
         # play.pack(side=tk.LEFT)
-        button.pack(side=tk.LEFT)
-        repeat_this_movement.pack(side=tk.LEFT)
+        self.button.pack(side=tk.LEFT)
+        self.repeat_this_movement.pack(side=tk.LEFT)
         control_panel.pack(side=tk.BOTTOM)
         self.open()
 
     def repeat(self):
+
+        self.button.configure(text="start capturing", bg="white", fg="black")
+        self.update()
+
         if self.curent:
             last_film = self.media_list_copy.index(self.curent) - 1
             this_film = self.media_list_copy.index(self.curent)
         # delete the data that was recorded for this movement
+
+
         del self.outer_Instance.movement_name[-1]
         del self.outer_Instance.movement_name[-1]
 
+        self.outer_Instance.movement_count -= 1
+
+
         last_key = list(self.outer_Instance.values_movie_start_emg.keys())[-1]
         del self.outer_Instance.values_movie_start_emg[last_key]
+
         last_key = list(self.times.keys())[-1]
         del self.times[last_key]
 
@@ -115,6 +125,9 @@ class PyPlayer(tk.Frame):
         # self.time is the time when the video started
         # itme_now is the time in the video when the recodring started
 
+        self.button.configure(text="start capturing", bg="green", fg="white")
+        self.update()
+
         time_now = time.time() - self.time
 
         self.outer_Instance.values_movie_start_emg.update({self.name: time_now})
@@ -126,11 +139,16 @@ class PyPlayer(tk.Frame):
         )
 
         time.sleep(self.outer_Instance.recording_time)
+
+        self.button.configure(text="start capturing", bg="white", fg="black")
+        self.update()
+
         self.vlc_media_player_instance.stop()
         if len(self.media_list) == 0:
             self.close()
             self.outer_Instance.escape_loop = True
         self.outer_Instance.stop_emg_stream = True
+
         self.open()
 
     def open(self):

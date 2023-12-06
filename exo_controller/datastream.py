@@ -158,6 +158,7 @@ class Realtime_Datagenerator:
 
         emg_data = {}
         for k, v in self.emg_list.items():
+            print("emg list key:", k)
             # from seconds to samples like this
             # 32 because 2048/64 = 32
             # because one output of the emg is 64 samples and we want ot know how much samples we have to skip in the emg
