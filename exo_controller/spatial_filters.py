@@ -23,7 +23,7 @@ class Filters:
             ),  # inverse rectangle
         }
 
-    def spatial_filtering(self, siganl_to_be_filtered, filter_name="NDD", mode="valid"):
+    def spatial_filtering(self, siganl_to_be_filtered, filter_name="NDD", mode="same"):
         """
 
         :param siganl_to_be_filtered: in shape (rows,cols,length emg signal) = grid

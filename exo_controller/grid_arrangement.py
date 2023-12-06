@@ -224,15 +224,15 @@ class Grid_Arrangement:
 
         elif self.num_grids == 5:
             extracted_data = np.empty(
-                (192, input.shape[2])
-            )  # TODO CHANGE THIS BACK TO 320 !!!!
-            for channel in range(64, 256):  # TODO CHANGE THIS BACK TO 320 !!!!
+                (320, input.shape[2])
+            )
+            for channel in range(320):
                 res_row, res_col = self.get_channel_position_and_grid_number_backtrans(
                     channel + 1
                 )
-                extracted_data[channel - 64] = input[
+                extracted_data[channel ] = input[
                     res_row, res_col
-                ]  # TODO remove -64 !!!!
+                ]
             return extracted_data
         else:
             raise ValueError("Number of grids not supported")
@@ -255,6 +255,19 @@ class Grid_Arrangement:
                 grids.append(grid[i : i + 8, j : j + 8, :])
 
         return grids
+
+    def from_grid_position_to_row_position(self, row_position, column_position):
+        """
+        Converts the grid position to row position.
+
+        :param grid_position: The grid position (row,column)
+        :return: The row position (0 - 320)
+        """
+        if self.num_grids <= 3:
+            return self.upper_grids[row_position, column_position]
+        else:
+            return self.concatenate_upper_and_lower_grid(self.upper_grids, self.lower_grids)[row_position, column_position]
+
 
 
 # a = Grid_Arrangement([2,1])

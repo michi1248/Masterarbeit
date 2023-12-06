@@ -1,5 +1,5 @@
 import numpy as np
-from exo_controller.helpers import load_pickle_file
+from exo_controller import helpers
 from exo_controller.grid_arrangement import Grid_Arrangement
 import os
 
@@ -107,7 +107,7 @@ class Normalization:
         :return:
         """
         all_emg_data = []
-        a = load_pickle_file(path_to_data)
+        a = helpers.load_pickle_file(path_to_data)
 
         for movement in movements:
             emg_data_one_movement = a[movement].transpose(1, 0, 2).reshape(320, -1)

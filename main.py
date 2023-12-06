@@ -8,6 +8,8 @@ from exo_controller.emg_interface import EMG_Interface
 from exo_controller.exo_controller import Exo_Control
 from exo_controller.filter import MichaelFilter
 from exo_controller.grid_arrangement import Grid_Arrangement
+from exo_controller.ExtractImportantChannels import ChannelExtraction
+from exo_controller import normalizations
 from scipy.signal import resample
 import keyboard
 import torch
@@ -42,10 +44,20 @@ if __name__ == "__main__":
     use_mean_subtraction = True  # wheather to use mean subtraction or not (take mean heatmap of the rest movement and subtract it from every emg heatmap)
     grid_order = [1, 2, 3, 4, 5]
     use_recorded_data = False  # r"trainings_data/resulting_trainings_data/subject_Michi_Test2/" # wheather to use recorded data for prediction in realtime or use recorded data (None if want to use realtime data)
+    window_size = 150  # window size in ms
 
+    # "Min_Max_Scaling" = min max scaling with max/min is choosen individually for every channel
+    # "Robust_all_channels" = robust scaling with q1,q2,median is choosen over all channels
+    # "Robust_Scaling"  = robust scaling with q1,q2,median is choosen individually for every channel
+    # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
+    scaling_method = "no_scaling"
+
+    # "Gauss_filter" = create and use a gauss filter on heatmaps
+    # "Bandpass_filter" = use bandpass filter on raw data and plot the filtered all emg channels
+    improvement_methods = ["Gauss_filter", "Bandpass_filter"]
     patient_id = "rest2"
-
     movements = ["thumb", "index", "2pinch", "rest"]
+
     if not load_trained_model:
         if not use_recorded_data:
             patient = Realtime_Datagenerator(
@@ -68,6 +80,32 @@ if __name__ == "__main__":
             + str(patient_id)
             + "/3d_data.pkl"
         )
+        if use_important_channels:
+            # extract the important channels of the grid based on the recorded emg channels with the movement
+            important_channels = extract_important_channels_realtime(
+                movements, emg_data, ref_data
+            )
+            print(
+                "there were following number of important channels found: ",
+                len(important_channels),
+            )
+            channels = []
+            for important_channel in important_channels:
+                channels.append(from_grid_position_to_row_position(important_channel))
+            print(
+                "there were following number of important channels found: ",
+                len(channels),
+            )
+        else:
+            channels = range(320)
+
+        normalizer = normalizations.Normalization(
+            method=scaling_method,
+            grid_order=grid_order,
+            important_channels=channels,
+            frame_duration=window_size,
+        )
+
         # following lines to resample the ref data to the same length as the emg data since they have different sampling frequencies this is necessary
 
         for i in emg_data.keys():
@@ -93,26 +131,18 @@ if __name__ == "__main__":
         ref_data = remove_nan_values(ref_data)
         emg_data = remove_nan_values(emg_data)
 
-    # here : emg data shape = #samples,1,320,64 mit einem dict für jede movement
-    # ref data shape = #samples,2  dict für jede movement
+        # calculate the mean heatmap of the rest movement
+        if use_mean_subtraction:
+            channel_extractor = ChannelExtraction("rest", emg_data, ref_data)
+            mean_rest, _, _ = channel_extractor.get_heatmaps()
+            normalizer.set_mean(mean=mean_rest)
 
-    if use_important_channels:
-        # extract the important channels of the grid based on the recorded emg channels with the movement
-        important_channels = extract_important_channels_realtime(
-            movements, emg_data, ref_data
+        # calculate the normalization values
+        normalizer.get_all_emg_data(
+            path_to_data=resulting_file,
+            movements=["rest", "2pinch", "index", "thumb"],
         )
-        print(
-            "there were following number of important channels found: ",
-            len(important_channels),
-        )
-        channels = []
-        for important_channel in important_channels:
-            channels.append(from_grid_position_to_row_position(important_channel))
-        print(
-            "there were following number of important channels found: ", len(channels)
-        )
-    else:
-        channels = range(320)
+        normalizer.calculate_normalization_values()
 
     # initialise the decision/prediction model, build the trainingsdata and train the model
 
@@ -123,6 +153,8 @@ if __name__ == "__main__":
             emg=emg_data,
             ref=ref_data,
             patient_number=patient_id,
+            mean_rest=mean_rest,
+            normalizer=normalizer,
         )
         model.build_training_data(model.movements)
         # model.load_trainings_data()
@@ -152,13 +184,70 @@ if __name__ == "__main__":
             + str(patient_id)
             + "/emg_data.pkl"
         )
+        ref_data = load_pickle_file(
+            r"trainings_data/resulting_trainings_data/subject_"
+            + str(patient_id)
+            + "/3d_data.pkl"
+        )
         for i in emg_data.keys():
             emg_data[i] = np.array(emg_data[i].transpose(1, 0, 2).reshape(320, -1))
         emg_data = remove_nan_values(emg_data)
-        # max_emg_value, min_emg_value = find_max_min_values_for_each_movement_and_channel(emg_data, channels, movements)
-        q1, q2, median = find_q_median_values_for_each_movement_and_channel(
-            emg_data, channels, movements
+
+        if use_important_channels:
+            # extract the important channels of the grid based on the recorded emg channels with the movement
+            important_channels = extract_important_channels_realtime(
+                movements, emg_data, ref_data
+            )
+            print(
+                "there were following number of important channels found: ",
+                len(important_channels),
+            )
+            channels = []
+            for important_channel in important_channels:
+                channels.append(from_grid_position_to_row_position(important_channel))
+            print(
+                "there were following number of important channels found: ",
+                len(channels),
+            )
+        else:
+            channels = range(320)
+
+        normalizer = normalizations.Normalization(
+            method=scaling_method,
+            grid_order=grid_order,
+            important_channels=channels,
+            frame_duration=window_size,
         )
+
+        # following lines to resample the ref data to the same length as the emg data since they have different sampling frequencies this is necessary
+
+        for i in emg_data.keys():
+            emg_data[i] = np.array(
+                emg_data[i].transpose(1, 0, 2).reshape(320, -1)
+            )  # reshape emg data such as it has the shape 320 x #samples for each movement
+        print("emg data shape: ", emg_data["thumb"].shape)
+
+        ref_data = resample_reference_data(ref_data, emg_data)
+        print("ref data shape: ", ref_data["thumb"].shape)
+
+        # remove nan values !! and convert to float instead of int !!
+        ref_data = remove_nan_values(ref_data)
+        emg_data = remove_nan_values(emg_data)
+
+        # calculate the mean heatmap of the rest movement
+        if use_mean_subtraction:
+            channel_extractor = ChannelExtraction("rest", emg_data, ref_data)
+            mean_rest, _, _ = channel_extractor.get_heatmaps()
+            normalizer.set_mean(mean=mean_rest)
+
+        # calculate the normalization values
+        normalizer.get_all_emg_data(
+            path_to_data=r"trainings_data/resulting_trainings_data/subject_"
+            + str(patient_id)
+            + "/emg_data.pkl",
+            movements=["rest", "2pinch", "index", "thumb"],
+        )
+        normalizer.calculate_normalization_values()
 
     filter_local = MichaelFilter()
     filter_time = MichaelFilter()
@@ -198,6 +287,7 @@ if __name__ == "__main__":
                 heatmap_local = calculate_emg_rms_row(
                     data, data[0].shape[0], model.window_size_in_samples
                 )
+                # TODO reshape heatmap into grid shape and subtract mean and normalize
 
                 if use_spatial_filter:
                     heatmap_local = heatmap_local.reshape(320, 1)

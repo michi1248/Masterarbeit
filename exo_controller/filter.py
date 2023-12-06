@@ -1,5 +1,6 @@
 import numpy as np
 import cupy as cp
+import sys
 
 
 class MichaelFilter:
@@ -39,9 +40,10 @@ class MichaelFilter:
         self.num_fingers = num_fingers
 
     def normalize(self, matrix):
-        return matrix / np.linalg.norm(matrix)
+        return matrix / (np.linalg.norm(matrix) + 1e-8)
 
     def filter(self, prediction):
+
         self.last_avg.append(prediction)
         self.last_val.append(prediction)
 

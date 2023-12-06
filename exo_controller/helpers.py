@@ -130,6 +130,14 @@ def open_csv_file(file_path):
     data = pandas.read_csv(file_path)
     return data
 
+def save_as_csv(data, where_to_save):
+    """
+    saves data as csv file
+    :param data:
+    :param where_to_save: this has to be the full path including the filename
+    :return:
+    """
+    data.to_csv(where_to_save, index=False)
 
 def plot_spike_train(spike_train, title=None):
     """
@@ -237,7 +245,106 @@ def calculate_emg_rms_one_channel(emg_data):
     rms = np.sqrt(np.mean(np.square(emg_data)))
     return rms
 
+def calculate_heatmap( emg_grid, position, interval_in_samples):
+    """
+    Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
 
+    Parameters:
+    - emg_grid (numpy.ndarray): The 3D EMG data grid where the first two dimensions represent rows and columns of channels,
+                               and the third dimension represents the values within each channel.
+    - position (int): The position of the EMG grid in the time series.
+    -interval_in_samples (int): The number of samples to include in the RMS calculation.
+
+    Returns:
+    - numpy.ndarray: An array of RMS values for each channel.
+    """
+
+    num_rows, num_cols, _ = emg_grid.shape
+    rms_values = np.zeros((num_rows, num_cols))
+
+    for row_idx in range(num_rows):
+        for col_idx in range(num_cols):
+            if (position - interval_in_samples < 0) or (
+                len(emg_grid[row_idx][col_idx]) < (interval_in_samples)
+            ):
+                channel_data = emg_grid[row_idx][col_idx][: position+1]
+
+            else:
+                channel_data = emg_grid[row_idx][col_idx][
+                    position - interval_in_samples : position
+                ]
+            # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
+            rms_values[row_idx, col_idx] = np.sqrt(
+                np.mean(np.array(channel_data) ** 2)
+            )
+    return rms_values
+
+
+def calculate_difference_heatmap_realtime( emg_grid, position, interval_in_samples):
+    """
+    Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
+
+    Parameters:
+    - emg_grid (numpy.ndarray): The 3D EMG data grid where the first two dimensions represent rows and columns of channels,
+                               and the third dimension represents the values within each channel.
+    - position (int): The position of the EMG grid in the time series.
+    -interval_in_samples (int): The number of samples to include in the RMS calculation.
+
+    Returns:
+    - numpy.ndarray: An array of RMS values for each channel.
+    """
+
+    num_rows, num_cols, _ = emg_grid.shape
+    rms_values = np.zeros((num_rows, num_cols))
+
+    for row_idx in range(num_rows):
+        for col_idx in range(num_cols):
+            if position < 0:
+                channel_data = emg_grid[row_idx][col_idx][:]
+
+            elif (position - interval_in_samples < 0) or (
+                len(emg_grid[row_idx][col_idx]) < (interval_in_samples)
+            ):
+                channel_data = emg_grid[row_idx][col_idx][: position]
+
+            else:
+                channel_data = emg_grid[row_idx][col_idx][
+                    position - interval_in_samples : position
+                ]
+            # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
+            rms_values[row_idx, col_idx] = np.sqrt(
+                np.mean(np.array(channel_data) ** 2)
+            )
+    return rms_values
+def calculate_local_heatmap_realtime( emg_grid , interval_in_samples):
+    """
+    Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
+
+    Parameters:
+    - emg_grid (numpy.ndarray): The 3D EMG data grid where the first two dimensions represent rows and columns of channels,
+                               and the third dimension represents the values within each channel.
+    -interval_in_samples (int): The number of samples to include in the RMS calculation.
+
+    Returns:
+    - numpy.ndarray: An array of RMS values for each channel.
+    """
+
+    num_rows, num_cols,signal_length = emg_grid.shape
+    rms_values = np.zeros((num_rows, num_cols))
+
+    for row_idx in range(num_rows):
+        for col_idx in range(num_cols):
+            if ((signal_length - interval_in_samples) < 0 ):
+                channel_data = emg_grid[row_idx][col_idx][:]
+            else:
+                channel_data = emg_grid[row_idx][col_idx][
+                               (signal_length-1) - interval_in_samples: -1
+                ]
+            # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
+            rms_values[row_idx, col_idx] = np.sqrt(
+                np.mean(np.array(channel_data) ** 2)
+            )
+    return rms_values
 def calculate_emg_rms_row(emg_grid, position, interval_in_samples):
     """
     Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
@@ -1098,7 +1205,10 @@ def split_grid_into_8x8_grids(grid):
         # Iterate over each column in the grid
         for j in range(0, grid.shape[1], 8):
             # Extract the 8x8 grid
-            grids.append(grid[i : i + 8, j : j + 8, :])
+            if np.ndim(grid) == 2:
+                grids.append(grid[i : i + 8, j : j + 8])
+            else:
+                grids.append(grid[i : i + 8, j : j + 8, :])
 
     return grids
 

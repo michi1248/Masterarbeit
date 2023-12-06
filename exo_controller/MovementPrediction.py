@@ -19,23 +19,35 @@ class MultiDimensionalDecisionTree:
         ref,
         patient_number,
         windom_size=150,
-        num_trees=3,
+        num_trees=50,
         sample_difference_overlap=64,
-        max_depth=50,
-        min_samples_split=20,
+        max_depth=250,
+        min_samples_split=10,
         num_previous_samples=None,
         grid_order=None,
+        mean_rest=None,
+        normalizer=None,
+        use_gauss_filter=False,
+        use_bandpass_filter=False,
+        use_spatial_filter=False,
+        filter_ = None,
+        use_difference_heatmap=False,
+
     ):
+        self.normalizer = normalizer
+        self.mean_rest = mean_rest
         self.emg_data = emg
-        if grid_order is None:
-            self.grid_order = []
-            self.use_spatial_filter = False
-            self.gauss_filter = create_gaussian_filter(size_filter=3)
-            self.grid_aranger = Grid_Arrangement(grid_order)
-            self.grid_aranger.make_grid()
-        else:
-            self.grid_order = grid_order
-            self.use_spatial_filter = True
+        self.use_gauss_filter = use_gauss_filter
+        self.use_bandpass_filter = use_bandpass_filter
+        self.use_spatial_filter = use_spatial_filter
+        self.filter = filter_
+        self.grid_order = grid_order
+        self.grid_aranger = Grid_Arrangement(self.grid_order)
+        self.grid_aranger.make_grid()
+        self.use_difference_heatmap = use_difference_heatmap
+
+        if self.use_gauss_filter == True:
+            self.gauss_filter = self.filter.create_gaussian_filter(size_filter=3)
 
         self.patient_number = patient_number
         self.ref_data = ref
@@ -95,14 +107,27 @@ class MultiDimensionalDecisionTree:
 
         self.trees = []
         # for _ in range(self.num_trees * self.num_movements * len(self.num_previous_samples)):
-        for _ in range(len(self.num_previous_samples)):
-            # self.trees.append(DecisionTreeRegressor(max_depth=self.max_depth, min_samples_split=self.min_samples_split))
-            # self.trees.append(MultiOutputRegressor(DecisionTreeRegressor( min_samples_split=self.min_samples_split)))
-            # decrease C to reduce overfitting
-            # increase C to better fit the dat
-            # epsilo = margin of tolerance where no penalty is assigned to errors
-            # low epsilon = more overfitting
-            # self.trees.append(MultiOutputRegressor(SVR(kernel="linear",C=0.5,epsilon=0.2)))
+        if self.use_difference_heatmap:
+            for _ in range(len(self.num_previous_samples)):
+                # self.trees.append(DecisionTreeRegressor(max_depth=self.max_depth, min_samples_split=self.min_samples_split))
+                # self.trees.append(MultiOutputRegressor(DecisionTreeRegressor( min_samples_split=self.min_samples_split)))
+                # decrease C to reduce overfitting
+                # increase C to better fit the dat
+                # epsilo = margin of tolerance where no penalty is assigned to errors
+                # low epsilon = more overfitting
+                # self.trees.append(MultiOutputRegressor(SVR(kernel="linear",C=0.5,epsilon=0.2)))
+                self.trees.append(
+                    MultiOutputRegressor(
+                        RandomForestRegressor(
+                            n_estimators=self.num_trees,
+                            min_samples_split=self.min_samples_split,
+                            max_depth=self.max_depth,
+                            warm_start=True,
+                            n_jobs=-1,
+                        )
+                    )
+                )
+        else:
             self.trees.append(
                 MultiOutputRegressor(
                     RandomForestRegressor(
@@ -115,22 +140,6 @@ class MultiDimensionalDecisionTree:
                 )
             )
 
-    def find_max_min_values_for_each_movement_and_channel(self):
-        """
-        This function finds the max and min values for each channel in the emg data.
-        It will return the max and min values for each channel over all movements.
-        This is needed to normalize the data later on.
-        :return: max and min values for each channel
-        """
-        max_values = np.zeros((self.num_channels))
-        min_values = np.zeros((self.num_channels))
-        for movement in self.movements:
-            for channel in self.important_channels:
-                if np.max(self.emg_data[movement][channel]) > max_values[channel]:
-                    max_values[channel] = np.max(self.emg_data[movement][channel])
-                if np.min(self.emg_data[movement][channel]) < min_values[channel]:
-                    min_values[channel] = np.min(self.emg_data[movement][channel])
-        return max_values, min_values
 
     def select_default_num_previous(self):
         """
@@ -203,6 +212,39 @@ class MultiDimensionalDecisionTree:
 
         return averaged_predictions
 
+    def calculate_heatmap(self, emg_grid, position, interval_in_samples):
+        """
+        Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
+
+        Parameters:
+        - emg_grid (numpy.ndarray): The 3D EMG data grid where the first two dimensions represent rows and columns of channels,
+                                   and the third dimension represents the values within each channel.
+        - position (int): The position of the EMG grid in the time series.
+        -interval_in_samples (int): The number of samples to include in the RMS calculation.
+
+        Returns:
+        - numpy.ndarray: An array of RMS values for each channel.
+        """
+
+        num_rows, num_cols, _ = emg_grid.shape
+        rms_values = np.zeros((num_rows, num_cols))
+
+        for row_idx in range(num_rows):
+            for col_idx in range(num_cols):
+                if (position - interval_in_samples < 0) or (
+                    len(emg_grid[row_idx][col_idx]) < (interval_in_samples)
+                ):
+                    channel_data = emg_grid[row_idx][col_idx][: position + 1]
+                else:
+                    channel_data = emg_grid[row_idx][col_idx][
+                        position - interval_in_samples : position
+                    ]
+                # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
+                rms_values[row_idx, col_idx] = np.sqrt(
+                    np.mean(np.array(channel_data) ** 2)
+                )
+        return rms_values
+
     def build_training_data(self, movement_names, split_ratio=0.9):
         """
         This function builds the training data for the random forest
@@ -219,10 +261,6 @@ class MultiDimensionalDecisionTree:
         labels = []
 
         window_size = self.window_size_in_samples
-        (
-            self.max_value,
-            self.min_value,
-        ) = self.find_max_min_values_for_each_movement_and_channel()
 
         for movement in tqdm.tqdm(
             movement_names, desc="Building training data for local differences"
@@ -236,7 +274,8 @@ class MultiDimensionalDecisionTree:
             if movement != "rest":
                 ref_data = normalize_2D_array(self.ref_data[movement], axis=0)
             else:
-                ref_data = self.ref_data[movement]
+                ref_data = self.ref_data[movement] * 0
+
 
             if (movement != "2pinch") and (movement != "rest"):
                 ref_erweitert[self.movment_dict[movement], :] = ref_data[
@@ -248,19 +287,35 @@ class MultiDimensionalDecisionTree:
                     ref_erweitert[k, :] = ref_data[:, k]
                 ref_erweitert[0, :] = np.multiply(ref_erweitert[0, :], 0.45)
                 ref_erweitert[1, :] = np.multiply(ref_erweitert[1, :], 0.6)
-            emg_data = self.emg_data[movement][self.important_channels, :]
+
+
+            emg_data = self.emg_data[movement]
+            if self.use_bandpass_filter:
+                emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
+            if self.use_spatial_filter:
+                emg_data = self.filter.spatial_filtering(emg_data, "NDD")
+
             for i in range(
-                0, len(emg_data[0]) - window_size + 1, self.sample_difference_overlap
+                0, emg_data.shape[2] - window_size + 1, self.sample_difference_overlap
             ):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
                 if i <= ref_data.shape[0]:
-                    segment = calculate_emg_rms_row(
+                    # segment = calculate_emg_rms_row(
+                    #     emg_data, i, self.window_size_in_samples
+                    # )
+                    segment = self.calculate_heatmap(
                         emg_data, i, self.window_size_in_samples
                     )
-                    segment = normalize_2D_array(
-                        segment, max_value=self.max_value, min_value=self.min_value
-                    )
+                    if self.mean_rest is not None:
+                        segment = np.subtract(segment, self.mean_rest)
+                    segment = self.normalizer.normalize_chunk(segment)
                     # feature = calculate_rms(segment)
-                    # segments.append(feature)
+                    # segments.append
+                    if self.use_gauss_filter:
+                        segment = self.filter.apply_gaussian_filter(
+                            segment, self.gauss_filter
+                        )
+                    # segment = np.squeeze(segment)
+                    segment = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(np.reshape(segment,(segment.shape[0],segment.shape[1],1))))
                     label = ref_erweitert[:, i]
 
                     # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
@@ -288,89 +343,113 @@ class MultiDimensionalDecisionTree:
         )
 
         ############# For the time traind data #############
-        results = []
+        if self.use_difference_heatmap:
+            results = []
 
-        for idx in tqdm.tqdm(
-            self.num_previous_samples,
-            desc="Building training data for time differences",
-        ):
-            combined_diffs = []
-            combined_ys = []
+            for idx in tqdm.tqdm(
+                self.num_previous_samples,
+                desc="Building training data for time differences",
+            ):
+                combined_diffs = []
+                combined_ys = []
 
-            for movement in movement_names:
-                ref_erweitert = np.zeros(
-                    (self.num_movements, len(self.ref_data[movement]))
-                )  # [num_movements x num_samples]
-                if movement != "2pinch":
-                    ref_erweitert[ref_erweitert == 0.0] = 0.0
-                if movement != "rest":
-                    ref_data = normalize_2D_array(self.ref_data[movement], axis=0)
-                else:
-                    ref_data = self.ref_data[movement]
+                for movement in movement_names:
+                    ref_erweitert = np.zeros(
+                        (self.num_movements, len(self.ref_data[movement]))
+                    )  # [num_movements x num_samples]
+                    if movement != "2pinch":
+                        ref_erweitert[ref_erweitert == 0.0] = 0.0
+                    if movement != "rest":
+                        ref_data = normalize_2D_array(self.ref_data[movement], axis=0)
+                    else:
+                        ref_data = self.ref_data[movement]
 
-                if (movement != "2pinch") and (movement != "rest"):
-                    ref_erweitert[self.movment_dict[movement], :] = ref_data[
-                        :, 0
-                    ]  # jetzt werte für die bewegung an passenden index eintragen für anderen finger einträge auf 0.5 setzen
-                else:
-                    for k in range(2):
-                        ref_erweitert[k, :] = ref_data[
-                            :, k
-                        ]  # TODO maybe change back to k if do not want both values to be the same
-                emg_data = self.emg_data[movement][self.important_channels, :]
-                for i in range(
-                    0,
-                    len(emg_data[0]) - window_size + 1,
-                    self.sample_difference_overlap,
-                ):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
-                    if (i <= ref_data.shape[0]) and (i - idx >= 0):
-                        heatmap = calculate_emg_rms_row(
-                            emg_data, i, self.window_size_in_samples
-                        )
-                        heatmap = normalize_2D_array(
-                            heatmap, max_value=self.max_value, min_value=self.min_value
-                        )
-                        previous_heatmap = calculate_emg_rms_row(
-                            emg_data, i - idx, self.window_size_in_samples
-                        )
-                        previous_heatmap = normalize_2D_array(
-                            previous_heatmap,
-                            max_value=self.max_value,
-                            min_value=self.min_value,
-                        )
-                        # difference_heatmap = normalize_2D_array(np.subtract(heatmap, previous_heatmap))  # TODO this needded ????
-                        difference_heatmap = np.subtract(heatmap, previous_heatmap)
-                        label = ref_erweitert[:, i]
+                    if (movement != "2pinch") and (movement != "rest"):
+                        ref_erweitert[self.movment_dict[movement], :] = ref_data[
+                            :, 0
+                        ]  # jetzt werte für die bewegung an passenden index eintragen für anderen finger einträge auf 0.5 setzen
+                    else:
+                        for k in range(2):
+                            ref_erweitert[k, :] = ref_data[
+                                :, k
+                            ]  # TODO maybe change back to k if do not want both values to be the same
+                    emg_data = self.emg_data[movement]
+                    if self.use_bandpass_filter:
+                        emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
+                    if self.use_spatial_filter:
+                        emg_data = self.filter.spatial_filtering(emg_data, "NDD")
 
-                        # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
-                        # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
-                        if (i + self.neuromuscular_delay_in_samples) < ref_erweitert[
-                            0
-                        ].shape[0]:
-                            for skip in range(
-                                64, self.neuromuscular_delay_in_samples, 64
-                            ):
-                                ref_in_the_future = ref_erweitert[:, i + skip]
-                                combined_diffs.append(difference_heatmap)
-                                combined_ys.append(ref_in_the_future)
+                    for i in range(
+                        0,
+                        emg_data.shape[2] - window_size + 1,
+                        self.sample_difference_overlap,
+                    ):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
+                        if (i <= ref_data.shape[0]) and (i - idx >= 0):
+                            # heatmap = calculate_emg_rms_row(
+                            #     emg_data, i, self.window_size_in_samples
+                            # )
+                            heatmap = self.calculate_heatmap(
+                                emg_data, i, self.window_size_in_samples
+                            )
+                            if self.mean_rest is not None:
+                                heatmap = np.subtract(heatmap, self.mean_rest)
+                            heatmap = self.normalizer.normalize_chunk(heatmap)
 
-                        combined_diffs.append(difference_heatmap)
-                        combined_ys.append(label)
+                            previous_heatmap = self.calculate_heatmap(
+                                emg_data, i - idx, self.window_size_in_samples
+                            )
 
-            # Convert combined differences and y values to numpy arrays
-            combined_diffs = np.array(combined_diffs)
-            combined_ys = np.array(combined_ys)
+                            if self.mean_rest is not None:
+                                previous_heatmap = np.subtract(
+                                    previous_heatmap, self.mean_rest
+                                )
+                            previous_heatmap = self.normalizer.normalize_chunk(
+                                previous_heatmap
+                            )
+                            # difference_heatmap = normalize_2D_array(np.subtract(heatmap, previous_heatmap))  # TODO this needded ????
+                            if self.use_gauss_filter:
+                                heatmap = self.filter.apply_gaussian_filter(
+                                    heatmap, self.gauss_filter
+                                )
+                                previous_heatmap = self.filter.apply_gaussian_filter(
+                                    previous_heatmap, self.gauss_filter
+                                )
+                            difference_heatmap = np.subtract(heatmap, previous_heatmap)
+                            #difference_heatmap = np.squeeze(difference_heatmap)
 
-            # Shuffle and split the combined data for the current index
-            combined_diffs, combined_ys = shuffle(
-                combined_diffs, combined_ys, random_state=42
-            )
-            split_index = int(len(combined_diffs) * split_ratio)
-            X_train, X_test = combined_diffs[:split_index], combined_diffs[split_index:]
-            y_train, y_test = combined_ys[:split_index], combined_ys[split_index:]
+                            difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
+                                np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
+                            label = ref_erweitert[:, i]
 
-            results.append((X_train, X_test, y_train, y_test))
-        self.training_data_time = results
+                            # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
+                            # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
+                            if (i + self.neuromuscular_delay_in_samples) < ref_erweitert[
+                                0
+                            ].shape[0]:
+                                for skip in range(
+                                    64, self.neuromuscular_delay_in_samples, 64
+                                ):
+                                    ref_in_the_future = ref_erweitert[:, i + skip]
+                                    combined_diffs.append(difference_heatmap)
+                                    combined_ys.append(ref_in_the_future)
+
+                            combined_diffs.append(difference_heatmap)
+                            combined_ys.append(label)
+
+                # Convert combined differences and y values to numpy arrays
+                combined_diffs = np.array(combined_diffs)
+                combined_ys = np.array(combined_ys)
+
+                # Shuffle and split the combined data for the current index
+                combined_diffs, combined_ys = shuffle(
+                    combined_diffs, combined_ys, random_state=42
+                )
+                split_index = int(len(combined_diffs) * split_ratio)
+                X_train, X_test = combined_diffs[:split_index], combined_diffs[split_index:]
+                y_train, y_test = combined_ys[:split_index], combined_ys[split_index:]
+
+                results.append((X_train, X_test, y_train, y_test))
+            self.training_data_time = results
 
     def compare_predictions(self, predictions, truth, tree_number=None, realtime=False):
         plot_predictions(truth, predictions, tree_number=tree_number, realtime=realtime)
@@ -404,11 +483,12 @@ class MultiDimensionalDecisionTree:
                 + "/y_train_local.pkl"
             )
         )
-        self.training_data_time = load_pickle_file(
-            r"trainings_data/resulting_trainings_data/subject_"
-            + str(self.patient_number)
-            + "/training_data_time.pkl"
-        )
+        if self.use_difference_heatmap:
+            self.training_data_time = load_pickle_file(
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_number)
+                + "/training_data_time.pkl"
+            )
 
     def add_data_for_local_detection(self, x_train, y_train, x_test, y_test):
         self.X_train_local = x_train
@@ -495,12 +575,13 @@ class MultiDimensionalDecisionTree:
             + str(self.patient_number)
             + "/y_train_local.pkl",
         )
-        save_as_pickle(
-            self.training_data_time,
-            r"trainings_data/resulting_trainings_data/subject_"
-            + str(self.patient_number)
-            + "/training_data_time.pkl",
-        )
+        if self.use_difference_heatmap:
+            save_as_pickle(
+                self.training_data_time,
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_number)
+                + "/training_data_time.pkl",
+            )
 
     def simulate_realtime_prediction(self):
         for i in tqdm.tqdm(range(len(self.trees)), desc="Evaluating trees"):
