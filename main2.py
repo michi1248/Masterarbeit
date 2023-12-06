@@ -37,6 +37,7 @@ class EMGProcessor:
         use_recorded_data,
         window_size,
         scaling_method,
+        only_record_data,
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -56,6 +57,7 @@ class EMGProcessor:
         self.use_bandpass_filter = use_bandpass_filter
         self.use_spatial_filter = use_spatial_filter
         self.use_difference_heatmap = use_difference_heatmap
+        self.only_record_data = only_record_data
 
         self.mean_rest = None
         self.model = None
@@ -375,6 +377,9 @@ class EMGProcessor:
         # Main loop for predictions
 
         emg_data, ref_data = self.load_data()
+        if self.only_record_data:
+            return
+
         self.process_data(emg_data, ref_data)
         model = self.train_model(emg_data, ref_data)
         if self.use_recorded_data:
@@ -413,6 +418,7 @@ if __name__ == "__main__":
         use_recorded_data=False, #r"trainings_data/resulting_trainings_data/subject_Michi_Test1/",  # False
         window_size=150,
         scaling_method="Robust_all_channels",
+        only_record_data=True,
     )
     emg_processor.run()
 
