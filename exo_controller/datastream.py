@@ -23,6 +23,7 @@ class Realtime_Datagenerator:
         recording_time: int,
         sampling_frequency_emg: int = 2048,
         debug=False,
+        movements=None,
     ):
         self.debug = debug
         self.patient_id = patient_id
@@ -63,6 +64,8 @@ class Realtime_Datagenerator:
         self.serverIP = "127.0.0.1"  # mit welcher IP verbinden
         self.serverPort = 1234  # mit welchem Port verbinden
         self.emgSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        self.movement_names_videos = movements
 
         if not debug:
             self.emgSocket.connect(("127.0.0.1", 31000))

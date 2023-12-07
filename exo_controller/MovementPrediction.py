@@ -97,7 +97,6 @@ class MultiDimensionalDecisionTree:
             for key in self.movment_dict.keys():
                 if part in key:
                     matches.append(key)
-
             if len(matches) > 0:
                 self.movment_dict[self.movements[i]] = self.movment_dict[matches[0]]
             else:
@@ -280,7 +279,7 @@ class MultiDimensionalDecisionTree:
             if (movement != "2pinch") and (movement != "rest"):
                 ref_erweitert[self.movment_dict[movement], :] = ref_data[
                     :, 0
-                ]  # jetzt werte für die bewegung an passenden index eintragen für anderen finger einträge auf 0.5 setzen
+                ]
             else:  # in 2 pinch case
                 # thumb has to be 0.45 and index 0.6
                 for k in range(2):

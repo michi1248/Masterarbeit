@@ -38,6 +38,7 @@ class EMGProcessor:
         window_size,
         scaling_method,
         only_record_data,
+        use_control_stream,
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -58,6 +59,7 @@ class EMGProcessor:
         self.use_spatial_filter = use_spatial_filter
         self.use_difference_heatmap = use_difference_heatmap
         self.only_record_data = only_record_data
+        self.use_control_stream = use_control_stream
 
         self.mean_rest = None
         self.model = None
@@ -88,6 +90,7 @@ class EMGProcessor:
             patient_id=self.patient_id,
             sampling_frequency_emg=2048,
             recording_time=self.time_for_each_movement_recording,
+            movements = self.movements,
         )
         patient.run_parallel()
 
@@ -193,7 +196,6 @@ class EMGProcessor:
 
         #shape should be 320 x #samples
         ref_data = resample_reference_data(ref_data, emg_data)
-
         ref_data = self.remove_nan_values(ref_data)
         emg_data = self.remove_nan_values(emg_data)
         print("length of emg data: ", len(emg_data["rest"][0]))
@@ -218,24 +220,48 @@ class EMGProcessor:
         self.normalizer.calculate_normalization_values()
 
 
-    def format_for_exo(self, results):
+    def format_for_exo(self, results,control_results=None):
         # Format the results in a way that is compatible with the exoskeleton
         # This is a placeholder - you'll need to replace it with actual logic
         # Example: [round(result, 3) for result in results]
-        res = [
-            round(results[0], 3),
-            0,
-            round(results[1], 3),
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        ]
-        return res
+        if self.use_control_stream:
+            res = [
+                round(results[0], 3),
+                0,
+                round(results[1], 3),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                round(control_results[0], 3),
+                0,
+                round(control_results[1], 3),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ]
+            return res
+        else:
+            res = [
+                round(results[0], 3),
+                0,
+                round(results[1], 3),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ]
+            return res
 
-    def output_results(self, results):
+
+    def output_results(self, results,control_results=None):
 
         for i in range(2):
             if results[i] > 1:
@@ -248,7 +274,7 @@ class EMGProcessor:
             # Logic to send commands to the exoskeleton
             # Assuming 'results' is in the format expected by the exoskeleton
             # You might need to format 'results' accordingly
-            formatted_results = self.format_for_exo(results)
+            formatted_results = self.format_for_exo(results,control_results)
             self.exo_controller.move_exo(formatted_results)
         else:
             # Print the prediction results to the console
@@ -271,6 +297,8 @@ class EMGProcessor:
         ref_data = self.remove_nan_values(ref_data)
         ref_data = resample_reference_data(ref_data, emg_data)
 
+
+
         for i in emg_data.keys():
             emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
                 emg_data[i]
@@ -288,6 +316,23 @@ class EMGProcessor:
 
 
         for movement in ref_data.keys():
+
+            if movement != "rest":
+                ref_data_for_this_movement = normalize_2D_array(ref_data[movement], axis=0)
+            else:
+                ref_data_for_this_movement = ref_data[movement] * 0
+
+            if movement == "2pinch":
+
+                ref_data_for_this_movement[:, 0] = np.multiply(ref_data_for_this_movement[:, 0], 0.45)
+                ref_data_for_this_movement[:, 1] = np.multiply(ref_data_for_this_movement[:, 1], 0.6)
+
+            if movement == "thumb":
+                ref_data_for_this_movement = np.hstack((ref_data_for_this_movement, np.zeros((ref_data[movement].shape[0], 1))))
+
+            if movement == "index":
+                ref_data_for_this_movement = np.hstack((np.zeros((ref_data[movement].shape[0], 1)), ref_data_for_this_movement))
+
             emg_buffer = []
             # ref_data[movement] = normalize_2D_array(ref_data[movement], axis=0)
             print("movement: ", movement, file=sys.stderr)
@@ -361,9 +406,16 @@ class EMGProcessor:
                             res_time = np.array(res_time[0])
 
                 if self.use_local:
-                    self.output_results(res_local)
+                    if self.use_control_stream:
+                        self.output_results(res_local,ref_data_for_this_movement[sample])
+                    else:
+                        self.output_results(res_local)
                 else:
-                    self.output_results(res_time)
+                    if self.use_control_stream:
+                        self.output_results(res_time,ref_data_for_this_movement[sample])
+                    else:
+                        self.output_results(res_time)
+
 
     def run_prediction_loop(self, model):
 
@@ -372,6 +424,24 @@ class EMGProcessor:
             max(model.num_previous_samples) / 64
         )  # calculate number of how many chunks we have to store till we delete old
         emg_buffer = []
+
+        while True:
+            # try:
+            chunk = self.emg_interface.get_EMG_chunk()
+            emg_buffer.append(chunk)
+            if (
+                    len(emg_buffer) > max_chunk_number
+            ):  # check if now too many sampels are in the buffer and i can delete old one
+                emg_buffer.pop(0)
+            data = np.concatenate(emg_buffer, axis=-1)
+
+            if self.use_bandpass_filter:
+                for i in data.shape[0]:
+                    data[i] = self.filter.bandpass_filter_emg_data(data[i], fs=2048)
+
+            if self.use_spatial_filter:
+                for i in data.shape[0]:
+                    data[i] = self.filter.spatial_filtering(data[i], "NDD")
 
     def run(self):
         # Main loop for predictions
@@ -395,7 +465,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Test",
+        patient_id="Michi_Test1",
         movements=[
             "rest",
             "thumb",
@@ -409,16 +479,17 @@ if __name__ == "__main__":
         output_on_exo=True,
         filter_output=True,
         time_for_each_movement_recording=2,
-        load_trained_model=False,
+        load_trained_model=True,
         save_trained_model=False,
         use_spatial_filter=True,
         use_mean_subtraction=True,
         use_bandpass_filter=True,
         use_gauss_filter=True,
-        use_recorded_data=False, #r"trainings_data/resulting_trainings_data/subject_Michi_Test1/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_Test1/",  # False
         window_size=150,
         scaling_method="Robust_all_channels",
-        only_record_data=True,
+        only_record_data=False,
+        use_control_stream=True,
     )
     emg_processor.run()
 
