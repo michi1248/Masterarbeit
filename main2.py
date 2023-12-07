@@ -418,7 +418,6 @@ class EMGProcessor:
 
 
     def run_prediction_loop(self, model):
-
         self.emg_interface.initialize_all()
         max_chunk_number = np.ceil(
             max(model.num_previous_samples) / 64
@@ -435,13 +434,79 @@ class EMGProcessor:
                 emg_buffer.pop(0)
             data = np.concatenate(emg_buffer, axis=-1)
 
+
+            data = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(data)
+
             if self.use_bandpass_filter:
-                for i in data.shape[0]:
-                    data[i] = self.filter.bandpass_filter_emg_data(data[i], fs=2048)
+                data = self.filter.bandpass_filter_emg_data(data, fs=2048)
 
             if self.use_spatial_filter:
-                for i in data.shape[0]:
-                    data[i] = self.filter.spatial_filtering(data[i], "NDD")
+                data = self.filter.spatial_filtering(data, "IB2")
+
+            heatmap_local = calculate_local_heatmap_realtime(
+                data, model.window_size_in_samples
+            )
+            if self.use_difference_heatmap:
+                previous_heatmap = calculate_difference_heatmap_realtime(
+                    data,
+                    data.shape[2]
+                    - model.num_previous_samples[self.best_time_tree - 1],
+                    model.window_size_in_samples,
+                )
+
+            if self.use_mean_subtraction:
+                heatmap_local = np.subtract(heatmap_local, self.mean_rest)
+                if self.use_difference_heatmap:
+                    previous_heatmap = np.subtract(heatmap_local, self.mean_rest)
+
+            heatmap_local = self.normalizer.normalize_chunk(heatmap_local)
+            if self.use_difference_heatmap:
+                previous_heatmap = self.normalizer.normalize_chunk(previous_heatmap)
+
+            if self.use_gauss_filter:
+                heatmap_local = self.filter.apply_gaussian_filter(
+                    heatmap_local, self.gauss_filter
+                )
+                if self.use_difference_heatmap:
+                    previous_heatmap = self.filter.apply_gaussian_filter(
+                        previous_heatmap, self.gauss_filter
+                    )
+            if self.use_difference_heatmap:
+                difference_heatmap = np.subtract(heatmap_local, previous_heatmap)
+                difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
+                    np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
+            heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
+                np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
+            res_local = model.trees[0].predict(
+                [heatmap_local]
+            )  # result has shape 1,2
+
+            if self.filter_output:
+                res_local = self.filter_local.filter(
+                    np.array(res_local[0])
+                )  # filter the predcition with my filter from my Bachelor thesis
+
+            else:
+                res_local = np.array(res_local[0])
+
+            if self.use_difference_heatmap:
+                if np.isnan(difference_heatmap).any():
+                    res_time = np.array([-1, -1])
+                else:
+                    res_time = model.trees[self.best_time_tree].predict(
+                        [difference_heatmap]
+                    )
+                    if self.filter_output:
+                        res_time = self.filter_time.filter(
+                            np.array(res_time[0])
+                        )  # fileter the predcition with my filter from my Bachelor thesis
+                    else:
+                        res_time = np.array(res_time[0])
+
+            if self.use_local:
+                self.output_results(res_local)
+            else:
+                self.output_results(res_time)
 
     def run(self):
         # Main loop for predictions
@@ -465,7 +530,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_Test1",
+        patient_id="Test",
         movements=[
             "rest",
             "thumb",
@@ -479,17 +544,17 @@ if __name__ == "__main__":
         output_on_exo=True,
         filter_output=True,
         time_for_each_movement_recording=2,
-        load_trained_model=True,
+        load_trained_model=False,
         save_trained_model=False,
         use_spatial_filter=True,
         use_mean_subtraction=True,
         use_bandpass_filter=True,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_Test1/",  # False
+        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Michi_Test1/",  # False
         window_size=150,
         scaling_method="Robust_all_channels",
         only_record_data=False,
-        use_control_stream=True,
+        use_control_stream=False,
     )
     emg_processor.run()
 
