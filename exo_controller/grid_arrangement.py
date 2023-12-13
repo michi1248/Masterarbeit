@@ -169,6 +169,13 @@ class Grid_Arrangement:
             return upper_grid, lower_grid
 
     #
+
+    def transfer_and_concatenate_320_into_grid_arangement_all_samples(self, input):
+        reverse_input = input.transpose()
+        reverse_input = self.transfer_and_concatenate_320_into_grid_arangement(reverse_input)
+        return reverse_input
+
+
     def transfer_and_concatenate_320_into_grid_arangement(self, input):
         """
         transfers the 320 channels into the grid arrangement either 3 grids or 5 grids for 5 grids we return upper_grid and lower_grid otherwise only upper_grid

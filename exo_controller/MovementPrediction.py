@@ -32,6 +32,8 @@ class MultiDimensionalDecisionTree:
         use_spatial_filter=False,
         filter_ = None,
         use_difference_heatmap=False,
+        neuronmuscular_delay=30,
+        delay_to_movement=30,
 
     ):
         self.normalizer = normalizer
@@ -81,11 +83,14 @@ class MultiDimensionalDecisionTree:
         if num_previous_samples is None:
             num_previous_samples = self.select_default_num_previous()
         self.num_previous_samples = num_previous_samples
-        self.neuromuscular_delay = 50  # neuromuscucular delay in miliseconds
+        self.neuromuscular_delay = neuronmuscular_delay
+        self.delay_to_movement = delay_to_movement
         self.neuromuscular_delay_in_samples = int(
             (self.neuromuscular_delay / 1000) * 2048
         )  # neuromuscucular delay in samples
-
+        self.delay_to_movement_in_samples = int(
+            (self.delay_to_movement / 1000) * 2048
+        )
         count = 0
         for i in range(
             len(self.movements)
@@ -297,7 +302,7 @@ class MultiDimensionalDecisionTree:
             for i in range(
                 0, emg_data.shape[2] - window_size + 1, self.sample_difference_overlap
             ):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
-                if i <= ref_data.shape[0]:
+                if (i <= ref_data.shape[0])and (i - max(self.num_previous_samples) >= 0):
                     # segment = calculate_emg_rms_row(
                     #     emg_data, i, self.window_size_in_samples
                     # )
@@ -327,6 +332,11 @@ class MultiDimensionalDecisionTree:
                             segments.append(segment)
                             labels.append(ref_in_the_future)
 
+                    if (i - self.delay_to_movement_in_samples) >= 0:
+                        for skip in range(64, self.delay_to_movement_in_samples, 64):
+                            ref_in_the_past = ref_erweitert[:, i - skip]
+                            segments.append(segment)
+                            labels.append(ref_in_the_past)
                     segments.append(segment)
                     labels.append(label)
 
@@ -383,7 +393,7 @@ class MultiDimensionalDecisionTree:
                         emg_data.shape[2] - window_size + 1,
                         self.sample_difference_overlap,
                     ):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
-                        if (i <= ref_data.shape[0]) and (i - idx >= 0):
+                        if (i <= ref_data.shape[0])and (i - max(self.num_previous_samples) >= 0):
                             # heatmap = calculate_emg_rms_row(
                             #     emg_data, i, self.window_size_in_samples
                             # )
@@ -431,6 +441,12 @@ class MultiDimensionalDecisionTree:
                                     ref_in_the_future = ref_erweitert[:, i + skip]
                                     combined_diffs.append(difference_heatmap)
                                     combined_ys.append(ref_in_the_future)
+
+                            if (i - self.delay_to_movement_in_samples) >= 0:
+                                for skip in range(64, self.delay_to_movement_in_samples, 64):
+                                    ref_in_the_past = ref_erweitert[:, i - skip]
+                                    combined_diffs.append(difference_heatmap)
+                                    combined_ys.append(ref_in_the_past)
 
                             combined_diffs.append(difference_heatmap)
                             combined_ys.append(label)

@@ -149,15 +149,19 @@ class EMGProcessor:
             self.num_previous_samples = model.num_previous_samples
             self.window_size_in_samples = model.window_size_in_samples
 
+            self.best_time_tree = 3
+
             if self.use_shallow_conv:
-                shallow_model = ShallowConvNetWithAttention()
+                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger)
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=7)
+                shallow_model.train_model(train_loader, epochs=100) # 7
                 shallow_model.evaluate(test_loader)
+
             else:
                 model.train()
                 self.best_time_tree = model.evaluate(give_best_time_tree=True)
+
 
             if self.save_trained_model:
                 if self.use_shallow_conv:
@@ -177,7 +181,8 @@ class EMGProcessor:
                 model = ShallowConvNetWithAttention()
                 model.load_model(path=self.patient_id + "_shallow.pt")
                 print("Shallow model loaded")
-            # Loading an existing model
+                self.best_time_tree = 3
+                # Loading an existing model
             else:
                 model = MultiDimensionalDecisionTree(
                     important_channels=self.channels,
@@ -412,27 +417,35 @@ class EMGProcessor:
                     np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
 
                 if self.use_shallow_conv:
-                    res_local = model.predict(heatmap_local)
+                    if not self.use_difference_heatmap:
+                        res_local = model.predict(heatmap_local)
+                        if self.filter_output:
+                            res_local = self.filter_local.filter(
+                                np.array(res_local[0])
+                            )  # filter the predcition with my filter from my Bachelor thesis
+
+                        else:
+                            res_local = np.array(res_local[0])
 
                 else:
                     res_local = model.trees[0].predict(
                         [heatmap_local]
                     )  # result has shape 1,2
 
-                if self.filter_output:
-                    res_local = self.filter_local.filter(
-                        np.array(res_local[0])
-                    )  # filter the predcition with my filter from my Bachelor thesis
+                    if self.filter_output:
+                        res_local = self.filter_local.filter(
+                            np.array(res_local[0])
+                        )  # filter the predcition with my filter from my Bachelor thesis
 
-                else:
-                    res_local = np.array(res_local[0])
+                    else:
+                        res_local = np.array(res_local[0])
 
                 if self.use_difference_heatmap:
                     if np.isnan(difference_heatmap).any():
                         res_time = np.array([-1, -1])
                     else:
                         if self.use_shallow_conv:
-                            res_time = model.predict(difference_heatmap)
+                            res_time = model.predict(heatmap_local,difference_heatmap)
                         else:
                             res_time = model.trees[self.best_time_tree].predict(
                                 [difference_heatmap]
@@ -543,7 +556,7 @@ class EMGProcessor:
                     res_time = np.array([-1, -1])
                 else:
                     if self.use_shallow_conv:
-                        res_time = model.predict(difference_heatmap)
+                        res_time = model.predict(heatmap_local,difference_heatmap)
 
                     else:
                         res_time = model.trees[self.best_time_tree].predict(
@@ -592,9 +605,9 @@ if __name__ == "__main__":
             "2pinch",
         ],
         grid_order=[1,2,3],
-        use_difference_heatmap=False,
+        use_difference_heatmap=True,
         use_important_channels=False,
-        use_local=True,
+        use_local=False,
         output_on_exo=True,
         filter_output=True,
         time_for_each_movement_recording=15,
@@ -603,10 +616,10 @@ if __name__ == "__main__":
         use_spatial_filter=False,
         use_mean_subtraction=False,
         use_bandpass_filter=False,
-        use_gauss_filter=False,
+        use_gauss_filter=True,
         use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_07_12_remapped2_control/",  # False
         window_size=150,
-        scaling_method="Min_Max_Scaling_over_whole_data",
+        scaling_method="Robust_Scaling",
         only_record_data=False,
         use_control_stream=True,
         use_shallow_conv=True,
