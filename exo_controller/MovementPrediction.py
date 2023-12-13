@@ -9,7 +9,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import joblib
 
 
-# TODO min_samples 5 besser als 30
+
 class MultiDimensionalDecisionTree:
     def __init__(
         self,
@@ -19,9 +19,9 @@ class MultiDimensionalDecisionTree:
         ref,
         patient_number,
         windom_size=150,
-        num_trees=15,
+        num_trees=5,
         sample_difference_overlap=64,
-        max_depth=100,
+        max_depth=50,
         min_samples_split=10,
         num_previous_samples=None,
         grid_order=None,
@@ -244,7 +244,7 @@ class MultiDimensionalDecisionTree:
                 )
         return rms_values
 
-    def build_training_data(self, movement_names, split_ratio=0.9):
+    def build_training_data(self, movement_names, split_ratio=0.99):
         """
         This function builds the training data for the random forest
         the format for one input value should be [[movement1, movement2, ....][value1, value2, ....]] for ref labels

@@ -12,20 +12,27 @@ import ast
 
 
 class EMG_Interface:
-    def __init__(self):
+    def __init__(self,grid_order=None):
         ###########################################################################
         # Define process for reading data
         self.read_process = None
         self.queue_emg = [np.zeros((1, 320, 64))] * 2
         # self.initialize_all()
         self.process_counter = 0
+        if grid_order is None:
+            grid_order = [1,2,3,4,5]
+        self.grid_order = grid_order
 
     def initialize_emg_socket(self):
         """
         initializes class variables needed to connect to EMG and then sets up the connection to the EMG and starts the data transfers
         """
         self.chunk_size = 64
-        self.emg_indices = np.concatenate([np.r_[:64], np.r_[128:384]])
+        if len(self.grid_order) == 5:
+            self.emg_indices = np.concatenate([np.r_[:64], np.r_[128:384]])
+        else:
+            self.emg_indices = np.r_[128 : (128 + len(self.grid_order) * 64)]
+
         self.buffer_size = 3
         self.EMG_HEADER = 8
         # Run Biolab Light and select refresh rate = 64

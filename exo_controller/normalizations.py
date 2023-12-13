@@ -26,6 +26,7 @@ class Normalization:
         if important_channels is None:
             important_channels = range(320)
         self.important_channels = important_channels
+        self.grid_order = grid_order
         self.max_values = None
         self.min_values = None
         self.q1 = None
@@ -110,7 +111,7 @@ class Normalization:
         a = helpers.load_pickle_file(path_to_data)
 
         for movement in movements:
-            emg_data_one_movement = a[movement].transpose(1, 0, 2).reshape(320, -1)
+            emg_data_one_movement = a[movement].transpose(1, 0, 2).reshape(64*len(self.grid_order), -1)
 
             if (self.mean is not None) and (self.mean is not None):
                 # have to transfer self.mean_ex from grid arrangement to 320 channels arangement

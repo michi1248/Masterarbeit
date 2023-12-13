@@ -49,8 +49,8 @@ class Heatmap:
 
         self.normalizer = normalizations.Normalization(
             method=method,
-            grid_order=[1, 2, 3, 4, 5],
-            important_channels=range(320),
+            grid_order=[1, 2, 3],
+            important_channels=range(64*3),
             frame_duration=frame_duration,
         )
 
@@ -96,10 +96,10 @@ class Heatmap:
                 movement_name
             ]
             .transpose(1, 0, 2)
-            .reshape(320, -1)
+            .reshape(64*3, -1)
         )
 
-        grid_aranger = grid_arrangement.Grid_Arrangement([1, 2, 3, 4, 5])
+        grid_aranger = grid_arrangement.Grid_Arrangement([1, 2, 3])
         grid_aranger.make_grid()
 
         # emg_data_for_max_min = load_pickle_file(os.path.join(path_to_subject_dat, "emg_data.pkl"))
@@ -109,28 +109,10 @@ class Heatmap:
         #         # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
         #         emg_data_for_max_min[i] = emg_data_for_max_min[i] - grid_aranger.transfer_grid_arangement_into_320(np.reshape(self.mean_ex,(self.mean_ex.shape[0],self.mean_ex.shape[1],1)))
 
-        # if method == "EMG_signals" :
-        #     self.max_values, self.min_values = find_max_min_values_for_each_movement_and_channel(emg_data_for_max_min,
-        #                                                                                          range(320), list(
-        #             emg_data_for_max_min.keys()))
-        #     self.max_values = self.max_values.reshape(320, 1)
-        #     self.min_values = self.min_values.reshape(320, 1)
-        #     self.q1, self.q2, self.median = find_q_median_values_for_each_movement_and_channel(emg_data_for_max_min,
-        #                                                                                        range(320), list(
-        #             emg_data_for_max_min.keys()))
-        #     self.q1 = self.q1.reshape(320, 1)
-        #     self.q2 = self.q2.reshape(320, 1)
-        #     self.median = self.median.reshape(320, 1)
-        #
-        #
-        #     plot_emg_channels(emg_data_for_max_min[self.movement_name], save_path=self.path_to_save_plots,
-        #                       movement=self.movement_name + "_raw")
-        #
-        #     plot_emg_channels(robust_scaling(emg_data_for_max_min[self.movement_name], self.q1, self.q2, self.median),
-        #                       save_path=self.path_to_save_plots, movement=self.movement_name + "_robust",shift=3)
-        #     plot_emg_channels(
-        #         normalize_2D_array(emg_data_for_max_min[self.movement_name], max_value=self.max_values, min_value=self.min_values),
-        #         save_path=self.path_to_save_plots, movement=self.movement_name + "_min_max",shift=1)
+        if method == "EMG_signals" :
+            plot_emg_channels(self.emg_data, save_path=self.path_to_save_plots,
+                              movement=self.movement_name + "_raw")
+
         #
         # if method == "Min_Max_Scaling_all_channels":
         #     self.max_values, self.min_values = find_max_min_values_for_each_movement_(emg_data_for_max_min, range(320),
@@ -171,7 +153,7 @@ class Heatmap:
 
         self.ref_data = resample(self.ref_data, num_samples_resampled_ref)
 
-        self.emg_data = grid_aranger.concatenate_upper_and_lower_grid(upper, lower)
+        self.emg_data = upper
 
         # if method == "Min_Max_Scaling_over_whole_data":
         #     self.max_values = grid_aranger.concatenate_upper_and_lower_grid(upper_max,lower_max)
@@ -606,11 +588,12 @@ if __name__ == "__main__":
 
     window_size = 150
     for method in [
-        "Min_Max_Scaling_over_whole_data",
-        "Robust_Scaling",
-        "Min_Max_Scaling_all_channels",
-        "no_scaling",
-        "Robust_all_channels",
+        # "Min_Max_Scaling_over_whole_data",
+        # "Robust_Scaling",
+        # "Min_Max_Scaling_all_channels",
+        # "no_scaling",
+        # "Robust_all_channels",
+        "EMG_signals",
     ]:
         mean_flex_rest = None
         mean_ex_rest = None
@@ -618,9 +601,9 @@ if __name__ == "__main__":
         for additional_term in ["before", "after"]:
             for movement in ["rest", "thumb", "index", "2pinch"]:
                 if additional_term == "before":
-                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Juergen_1"  # trainingsdata recorded for training
+                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_07_12_normal1"  # trainingsdata recorded for training
                 else:
-                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Juergen_2"  # trainingsdata recorded after training
+                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_07_12_remapped1"  # trainingsdata recorded after training
 
                 print("method is: ", method)
                 print("movement is: ", movement)
@@ -633,6 +616,8 @@ if __name__ == "__main__":
                     additional_term=additional_term,
                     method=method,
                 )
+                if method == "EMG_signals":
+                    continue
                 heatmap.animate(save=True)
                 fps = 10
                 heatmap.save_animation(

@@ -24,7 +24,11 @@ class Realtime_Datagenerator:
         sampling_frequency_emg: int = 2048,
         debug=False,
         movements=None,
+        grid_order=None,
     ):
+        if grid_order is None:
+            grid_order = [1,2,3,4,5]
+        self.grid_order = grid_order
         self.debug = debug
         self.patient_id = patient_id
         # dim = N x 1 x 320 x 192
@@ -55,7 +59,11 @@ class Realtime_Datagenerator:
         self.BufferSize = 408 * 64 * 2  # ch, samples, int16 -> 2 bytes
         # size of one chunk in sample
         self.chunk_size = 64
-        self.emg_indices = np.concatenate([np.r_[:64], np.r_[128:384]])
+
+        if len(self.grid_order) ==5:
+            self.emg_indices = np.concatenate([np.r_[:64], np.r_[128:384]])
+        else:
+            self.emg_indices =  np.r_[128:(128+len(self.grid_order)*64)]
         ##################################### Stuff for Sockets / Streaming ##########################################
         self.buffer_size = 3
         self.EMG_HEADER = 8
