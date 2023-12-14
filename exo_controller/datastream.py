@@ -87,7 +87,7 @@ class Realtime_Datagenerator:
 
     def get_movies_and_process(self):
         root = BaseTkContainer()
-        PyPlayer(self, root, root.tk_instance, title="pyplayer")
+        PyPlayer(self, root, root.tk_instance, title="pyplayer",movements=self.movement_names_videos)
         root.tk_instance.mainloop()
         # root.delete_window()
 

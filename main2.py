@@ -155,7 +155,7 @@ class EMGProcessor:
                 shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger)
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=100) # 7
+                shallow_model.train_model(train_loader, epochs=1500) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -351,74 +351,88 @@ class EMGProcessor:
 
 
         for movement in ref_data.keys():
+            if movement in self.movements:
 
-            if movement != "rest":
-                ref_data_for_this_movement = normalize_2D_array(ref_data[movement], axis=0)
-            else:
-                ref_data_for_this_movement = ref_data[movement] * 0
+                if movement != "rest":
+                    ref_data_for_this_movement = normalize_2D_array(ref_data[movement], axis=0)
+                else:
+                    ref_data_for_this_movement = ref_data[movement] * 0
 
-            if movement == "2pinch":
+                if movement == "2pinch":
 
-                ref_data_for_this_movement[:, 0] = np.multiply(ref_data_for_this_movement[:, 0], 0.45)
-                ref_data_for_this_movement[:, 1] = np.multiply(ref_data_for_this_movement[:, 1], 0.6)
+                    ref_data_for_this_movement[:, 0] = np.multiply(ref_data_for_this_movement[:, 0], 0.45)
+                    ref_data_for_this_movement[:, 1] = np.multiply(ref_data_for_this_movement[:, 1], 0.6)
 
-            if movement == "thumb":
-                ref_data_for_this_movement = np.hstack((ref_data_for_this_movement, np.zeros((ref_data[movement].shape[0], 1))))
+                if movement == "thumb":
+                    ref_data_for_this_movement = np.hstack((ref_data_for_this_movement, np.zeros((ref_data[movement].shape[0], 1))))
 
-            if movement == "index":
-                ref_data_for_this_movement = np.hstack((np.zeros((ref_data[movement].shape[0], 1)), ref_data_for_this_movement))
+                if movement == "index":
+                    ref_data_for_this_movement = np.hstack((np.zeros((ref_data[movement].shape[0], 1)), ref_data_for_this_movement))
 
-            emg_buffer = []
-            # ref_data[movement] = normalize_2D_array(ref_data[movement], axis=0)
-            print("movement: ", movement, file=sys.stderr)
-            for sample in tqdm.tqdm(range(0,emg_data[movement].shape[2], 64)):
-                time_start = time.time()
-                chunk = emg_data[movement][:, :, sample : sample + 64]
-                emg_buffer.append(chunk)
-                if (
-                    len(emg_buffer) > max_chunk_number
-                ):  # check if now too many sampels are in the buffer and i can delete old one
-                    emg_buffer.pop(0)
-                data = np.concatenate(emg_buffer, axis=-1)
-                heatmap_local = calculate_local_heatmap_realtime(
-                    data, self.window_size_in_samples
-                )
-                if self.use_difference_heatmap:
-                    previous_heatmap = calculate_difference_heatmap_realtime(
-                        data,
-                        data.shape[2]
-                        - self.num_previous_samples[self.best_time_tree - 1],
-                        self.window_size_in_samples,
-                    )
-
-                if self.use_mean_subtraction:
-                    heatmap_local = np.subtract(heatmap_local, self.mean_rest)
-                    if self.use_difference_heatmap:
-                        previous_heatmap = np.subtract(heatmap_local, self.mean_rest)
-
-                heatmap_local = self.normalizer.normalize_chunk(heatmap_local)
-                if self.use_difference_heatmap:
-                    previous_heatmap = self.normalizer.normalize_chunk(previous_heatmap)
-
-
-                if self.use_gauss_filter:
-                    heatmap_local = self.filter.apply_gaussian_filter(
-                        heatmap_local, self.gauss_filter
+                emg_buffer = []
+                # ref_data[movement] = normalize_2D_array(ref_data[movement], axis=0)
+                print("movement: ", movement, file=sys.stderr)
+                for sample in tqdm.tqdm(range(0,emg_data[movement].shape[2], 64)):
+                    time_start = time.time()
+                    chunk = emg_data[movement][:, :, sample : sample + 64]
+                    emg_buffer.append(chunk)
+                    if (
+                        len(emg_buffer) > max_chunk_number
+                    ):  # check if now too many sampels are in the buffer and i can delete old one
+                        emg_buffer.pop(0)
+                    data = np.concatenate(emg_buffer, axis=-1)
+                    heatmap_local = calculate_local_heatmap_realtime(
+                        data, self.window_size_in_samples
                     )
                     if self.use_difference_heatmap:
-                        previous_heatmap = self.filter.apply_gaussian_filter(
-                            previous_heatmap, self.gauss_filter
+                        previous_heatmap = calculate_difference_heatmap_realtime(
+                            data,
+                            data.shape[2]
+                            - self.num_previous_samples[self.best_time_tree - 1],
+                            self.window_size_in_samples,
                         )
-                if self.use_difference_heatmap:
-                    difference_heatmap = np.subtract(heatmap_local, previous_heatmap)
-                    difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                        np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
-                heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                    np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
 
-                if self.use_shallow_conv:
-                    if not self.use_difference_heatmap:
-                        res_local = model.predict(heatmap_local)
+                    if self.use_mean_subtraction:
+                        heatmap_local = np.subtract(heatmap_local, self.mean_rest)
+                        if self.use_difference_heatmap:
+                            previous_heatmap = np.subtract(heatmap_local, self.mean_rest)
+
+                    heatmap_local = self.normalizer.normalize_chunk(heatmap_local)
+                    if self.use_difference_heatmap:
+                        previous_heatmap = self.normalizer.normalize_chunk(previous_heatmap)
+
+
+                    if self.use_gauss_filter:
+                        heatmap_local = self.filter.apply_gaussian_filter(
+                            heatmap_local, self.gauss_filter
+                        )
+                        if self.use_difference_heatmap:
+                            previous_heatmap = self.filter.apply_gaussian_filter(
+                                previous_heatmap, self.gauss_filter
+                            )
+                    if self.use_difference_heatmap:
+                        difference_heatmap = np.subtract(heatmap_local, previous_heatmap)
+                        difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
+                            np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
+                    heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
+                        np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
+
+                    if self.use_shallow_conv:
+                        if not self.use_difference_heatmap:
+                            res_local = model.predict(heatmap_local)
+                            if self.filter_output:
+                                res_local = self.filter_local.filter(
+                                    np.array(res_local[0])
+                                )  # filter the predcition with my filter from my Bachelor thesis
+
+                            else:
+                                res_local = np.array(res_local[0])
+
+                    else:
+                        res_local = model.trees[0].predict(
+                            [heatmap_local]
+                        )  # result has shape 1,2
+
                         if self.filter_output:
                             res_local = self.filter_local.filter(
                                 np.array(res_local[0])
@@ -427,50 +441,37 @@ class EMGProcessor:
                         else:
                             res_local = np.array(res_local[0])
 
-                else:
-                    res_local = model.trees[0].predict(
-                        [heatmap_local]
-                    )  # result has shape 1,2
-
-                    if self.filter_output:
-                        res_local = self.filter_local.filter(
-                            np.array(res_local[0])
-                        )  # filter the predcition with my filter from my Bachelor thesis
-
-                    else:
-                        res_local = np.array(res_local[0])
-
-                if self.use_difference_heatmap:
-                    if np.isnan(difference_heatmap).any():
-                        res_time = np.array([-1, -1])
-                    else:
-                        if self.use_shallow_conv:
-                            res_time = model.predict(heatmap_local,difference_heatmap)
+                    if self.use_difference_heatmap:
+                        if np.isnan(difference_heatmap).any():
+                            res_time = np.array([-1, -1])
                         else:
-                            res_time = model.trees[self.best_time_tree].predict(
-                                [difference_heatmap]
-                            )
+                            if self.use_shallow_conv:
+                                res_time = model.predict(heatmap_local,difference_heatmap)
+                            else:
+                                res_time = model.trees[self.best_time_tree].predict(
+                                    [difference_heatmap]
+                                )
 
-                        if self.filter_output:
-                            res_time = self.filter_time.filter(
-                                np.array(res_time[0])
-                            )  # fileter the predcition with my filter from my Bachelor thesis
+                            if self.filter_output:
+                                res_time = self.filter_time.filter(
+                                    np.array(res_time[0])
+                                )  # fileter the predcition with my filter from my Bachelor thesis
+                            else:
+                                res_time = np.array(res_time[0])
+
+                    if self.use_local:
+                        if self.use_control_stream:
+                            self.output_results(res_local,ref_data_for_this_movement[sample])
                         else:
-                            res_time = np.array(res_time[0])
-
-                if self.use_local:
-                    if self.use_control_stream:
-                        self.output_results(res_local,ref_data_for_this_movement[sample])
+                            self.output_results(res_local)
                     else:
-                        self.output_results(res_local)
-                else:
-                    if self.use_control_stream:
-                        self.output_results(res_time,ref_data_for_this_movement[sample])
-                    else:
-                        self.output_results(res_time)
-                time_end = time.time()
-                if time_end - time_start < (64/2048):
-                    time.sleep((64/2048) - (time_end - time_start))
+                        if self.use_control_stream:
+                            self.output_results(res_time,ref_data_for_this_movement[sample])
+                        else:
+                            self.output_results(res_time)
+                    time_end = time.time()
+                    if time_end - time_start < (64/2048):
+                        time.sleep((64/2048) - (time_end - time_start))
 
 
     def run_prediction_loop(self, model):
@@ -602,7 +603,7 @@ if __name__ == "__main__":
             "rest",
             "thumb",
             "index",
-            "2pinch",
+            #"2pinch",
         ],
         grid_order=[1,2,3],
         use_difference_heatmap=True,
@@ -619,7 +620,7 @@ if __name__ == "__main__":
         use_gauss_filter=True,
         use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_07_12_remapped2_control/",  # False
         window_size=150,
-        scaling_method="Robust_Scaling",
+        scaling_method="Robust_all_channels",
         only_record_data=False,
         use_control_stream=True,
         use_shallow_conv=True,

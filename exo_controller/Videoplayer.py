@@ -16,7 +16,7 @@ import vlc
 
 
 class PyPlayer(tk.Frame):
-    def __init__(self, outer_instance, container, container_instance, title=None):
+    def __init__(self, outer_instance, container, container_instance, title=None,movements=None):
         tk.Frame.__init__(self, container_instance)
         self.container = container
         self.container_instance = container_instance
@@ -39,7 +39,7 @@ class PyPlayer(tk.Frame):
         self.canvas.pack(fill=tk.BOTH, expand=1)
         self.video_panel.pack(fill=tk.BOTH, expand=1)
         self.media_list = [
-            r"trainings_data/videos/" + x for x in os.listdir("trainings_data/videos")
+            r"trainings_data/videos/" + x for x in os.listdir("trainings_data/videos") if any(s in x for s in movements )
         ]
         self.media_list_copy = self.media_list.copy()
         # controls
