@@ -109,6 +109,7 @@ class Normalization:
         """
         all_emg_data = []
         a = helpers.load_pickle_file(path_to_data)
+        print("movements", movements)
 
         for movement in movements:
             emg_data_one_movement = a[movement].transpose(1, 0, 2).reshape(64*len(self.grid_order), -1)
@@ -130,6 +131,33 @@ class Normalization:
             all_emg_data.append(emg_data_one_movement)
 
         self.all_emg_data = all_emg_data
+
+    def calculate_norm_values_heatmap(self):
+        """
+        calculates the max min values to display all heatmaps in the same color range
+        :return:
+        """
+        max_values = -10000000
+        min_values = 10000000
+        for movement in range(len(self.all_emg_data)):
+            sample_length = self.all_emg_data[movement].shape[2]
+
+            num_samples = int(
+                sample_length / (self.sampling_frequency * (self.frame_duration / 1000))
+            )
+            number_observation_samples = int(
+                (self.frame_duration / 1000) * self.sampling_frequency
+            )
+
+            for frame in range(0, sample_length, number_observation_samples):
+                heatmap = self.calculate_heatmap(
+                    self.all_emg_data[movement], frame, number_observation_samples
+                )
+                if np.max(heatmap) > max_values:
+                    max_values = np.max(heatmap)
+                if np.min(heatmap) < min_values:
+                    min_values = np.min(heatmap)
+        return max_values, min_values
 
     def calculate_heatmap(self, emg_grid, position, interval_in_samples):
         """
@@ -223,13 +251,7 @@ class Normalization:
                 (self.frame_duration / 1000) * self.sampling_frequency
             )
 
-            self.samples = np.linspace(
-                number_observation_samples,
-                self.all_emg_data[movement][1][1].shape[0],
-                num_samples,
-                endpoint=False,
-                dtype=int,
-            )
+            self.samples =[i for i in range(0, sample_length, 64)]
 
             for frame in self.samples:
                 heatmap = self.calculate_heatmap(
@@ -301,9 +323,9 @@ class Normalization:
         else:
             raise ValueError("Method not supported")
 
-
-if __name__ == "__main__":
-    pass
+#
+# if __name__ == "__main__":
+#     pass
     # workflow
     # normalizer = Normalization()
     # normalizer.get_all_emg_data(path_to_data="C:/Users/Philipp/Desktop/BA/exo_controller/data/emg_data.pkl",movements=["flexion","extension","pronation","supination","hand_close","hand_open"])

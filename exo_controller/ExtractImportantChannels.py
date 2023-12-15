@@ -108,9 +108,7 @@ class ChannelExtraction:
         :return:
         """
         # samples = all sample values when using all samples with self.frame_duration in between
-        self.samples = np.linspace(
-            0, self.sample_length, self.num_samples, endpoint=False, dtype=int
-        )
+        self.samples =[i for i in range(0, self.sample_length, 64)]
         self.samples = [
             element for element in self.samples if element <= len(self.ref_data)
         ]
@@ -147,9 +145,7 @@ class ChannelExtraction:
 
     def get_channels(self):
         # samples = all sample values when using all samples with self.frame_duration in between
-        self.samples = np.linspace(
-            0, self.sample_length, self.num_samples, endpoint=False, dtype=int
-        )
+        self.samples =[i for i in range(0, self.sample_length, 64)]
         self.samples = [
             element for element in self.samples if element <= len(self.ref_data)
         ]

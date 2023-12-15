@@ -41,6 +41,7 @@ class EMGProcessor:
         only_record_data,
         use_control_stream,
         use_shallow_conv,
+        use_virtual_hand_interface_for_coord_generation
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -63,10 +64,11 @@ class EMGProcessor:
         self.only_record_data = only_record_data
         self.use_control_stream = use_control_stream
         self.use_shallow_conv = use_shallow_conv
+        self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
 
         self.mean_rest = None
         self.model = None
-        self.exo_controller = Exo_Control()
+        self.exo_controller = None
         self.emg_interface = EMG_Interface(grid_order=self.grid_order)
         self.filter_local = MichaelFilter()
         self.filter_time = MichaelFilter()
@@ -78,8 +80,7 @@ class EMGProcessor:
         self.initialize()
 
     def initialize(self):
-        # Initialize and configure components
-        self.exo_controller.initialize_all()
+
         self.grid_aranger = Grid_Arrangement(self.grid_order)
         self.grid_aranger.make_grid()
 
@@ -93,8 +94,9 @@ class EMGProcessor:
             patient_id=self.patient_id,
             sampling_frequency_emg=2048,
             recording_time=self.time_for_each_movement_recording,
-            movements = self.movements,
+            movements = self.movements.copy(),
             grid_order = self.grid_order,
+            use_virtual_hand_interface_for_coord_generation = self.use_virtual_hand_interface_for_coord_generation
         )
         patient.run_parallel()
 
@@ -132,7 +134,7 @@ class EMGProcessor:
             # Training a new model
             model = MultiDimensionalDecisionTree(
                 important_channels=self.channels,
-                movements=self.movements,
+                movements=self.movements.copy(),
                 emg=emg_data,
                 ref=ref_data,
                 patient_number=self.patient_id,
@@ -149,13 +151,13 @@ class EMGProcessor:
             self.num_previous_samples = model.num_previous_samples
             self.window_size_in_samples = model.window_size_in_samples
 
-            self.best_time_tree = 3
+            self.best_time_tree = 2
 
             if self.use_shallow_conv:
                 shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger)
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=1500) # 7
+                shallow_model.train_model(train_loader, epochs=20) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -186,7 +188,7 @@ class EMGProcessor:
             else:
                 model = MultiDimensionalDecisionTree(
                     important_channels=self.channels,
-                    movements=self.movements,
+                    movements=self.movements.copy(),
                     emg=None,
                     ref=None,
                     patient_number=self.patient_id,
@@ -214,7 +216,7 @@ class EMGProcessor:
 
         if self.use_important_channels:
             important_channels = extract_important_channels_realtime(
-                self.movements, emg_data, ref_data
+                self.movements.copy(), emg_data, ref_data
             )
             self.channels = [
                 self.grid_aranger.from_grid_position_to_row_position(ch) for ch in important_channels
@@ -250,7 +252,7 @@ class EMGProcessor:
         # Calculate normalization values
         self.normalizer.get_all_emg_data(
             path_to_data=f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl",
-            movements=self.movements,
+            movements=self.movements.copy(),
         )
         self.normalizer.calculate_normalization_values()
 
@@ -316,6 +318,8 @@ class EMGProcessor:
             print("Prediction: ", results)
 
     def run_prediction_loop_recorded_data(self, model):
+        self.exo_controller = Exo_Control()
+        self.exo_controller.initialize_all()
         # Main prediction loop
         max_chunk_number = np.ceil(
             max(self.num_previous_samples) / 64
@@ -412,10 +416,12 @@ class EMGProcessor:
                             )
                     if self.use_difference_heatmap:
                         difference_heatmap = np.subtract(heatmap_local, previous_heatmap)
-                        difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                            np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
-                    heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                        np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
+                        if not self.use_shallow_conv:
+                            difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
+                                np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
+                    if not self.use_shallow_conv:
+                        heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
+                            np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
 
                     if self.use_shallow_conv:
                         if not self.use_difference_heatmap:
@@ -475,6 +481,7 @@ class EMGProcessor:
 
 
     def run_prediction_loop(self, model):
+
         self.emg_interface.initialize_all()
         max_chunk_number = np.ceil(
             max(self.num_previous_samples) / 64
@@ -501,14 +508,14 @@ class EMGProcessor:
                 data = self.filter.spatial_filtering(data, "IB2")
 
             heatmap_local = calculate_local_heatmap_realtime(
-                data, model.window_size_in_samples
+                data, self.window_size_in_samples
             )
             if self.use_difference_heatmap:
                 previous_heatmap = calculate_difference_heatmap_realtime(
                     data,
                     data.shape[2]
                     - self.num_previous_samples[self.best_time_tree - 1],
-                    model.window_size_in_samples,
+                    self.window_size_in_samples,
                 )
 
             if self.use_mean_subtraction:
@@ -530,10 +537,14 @@ class EMGProcessor:
                     )
             if self.use_difference_heatmap:
                 difference_heatmap = np.subtract(heatmap_local, previous_heatmap)
-                difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                    np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
-            heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
+                if not self.use_shallow_conv:
+                    difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
+                        np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
+            # TODO hier muss noch die heatmap in die richtige form gebracht werden
+            #TODO hier müsste eigentlich grid shape dann gemacht werden
+            if not self.use_shallow_conv:
+                heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
+                    np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
 
             if self.use_shallow_conv:
                 res_local = model.predict(heatmap_local)
@@ -598,12 +609,12 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_07_12_remapped2",
+        patient_id="Michi_07_12_remapped1",
         movements=[
             "rest",
             "thumb",
             "index",
-            #"2pinch",
+            "2pinch",
         ],
         grid_order=[1,2,3],
         use_difference_heatmap=True,
@@ -611,19 +622,20 @@ if __name__ == "__main__":
         use_local=False,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=15,
+        time_for_each_movement_recording=3,
         load_trained_model=False,
         save_trained_model=True,
-        use_spatial_filter=False,
-        use_mean_subtraction=False,
+        use_spatial_filter=True,
+        use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_07_12_remapped2_control/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_07_12_remapped1_control/",  # False
         window_size=150,
-        scaling_method="Robust_all_channels",
+        scaling_method="Min_Max_Scaling_all_channels",
         only_record_data=False,
         use_control_stream=True,
         use_shallow_conv=True,
+        use_virtual_hand_interface_for_coord_generation = True
     )
     emg_processor.run()
 

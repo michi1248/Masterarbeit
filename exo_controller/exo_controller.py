@@ -1,15 +1,6 @@
 import socket
-import time
-import pickle
 import numpy as np
-import keyboard
-import pandas as pd
-import torch
-from scipy.signal import resample, butter, sosfiltfilt, iirnotch
-from scipy.spatial.transform import Rotation
-from vispy import app, scene
 import ast
-
 
 class Exo_Control:
     def __init__(self):
@@ -27,8 +18,8 @@ class Exo_Control:
         """
         # self.clients = [1212, 1236]
         self.exoIP = "127.0.0.1"  # mit welcher IP verbinden
-        self.exoPort = 1236  # Port von diesem Pc Server
-        self.port_from_exo = 1333  # Port von exo client
+        self.exoPort = 1236  # Port of exo interface
+        self.port_from_exo = 1333  # port from this pc
         # self.connected_to_exo = False
         # while not self.connected_to_exo:
         self.exoSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -44,7 +35,7 @@ class Exo_Control:
                 self.exoPort += 1
                 print("defining new port: ", self.exoPort)
                 pass
-        self.exoSocket.setblocking(False)
+        self.exoSocket.setblocking(True)
         print("Connection opened to exo skeleton")
         # self.exoSocket.listen()
 
@@ -79,11 +70,20 @@ class Exo_Control:
         except Exception as e:
             pass
 
-    def get_force_from_exo(self):
-        data, addr = self.exoSocket.recvfrom(1024)
-        data = data.decode("utf-8")
-        return data
+    def get_coords_exo(self):
+        try:
+            data = self.exoSocket.recv(1024)
+            data = data.decode("utf-8")
+            data = ast.literal_eval(data)
+            return data
+
+        except Exception as e:
+            print(e)
+            pass
 
 
 if __name__ == "__main__":
-    pass
+    interface = Exo_Control()
+    interface.initialize_all()
+    while True:
+        print(interface.get_coords_exo())

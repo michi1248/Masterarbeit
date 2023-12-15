@@ -61,6 +61,9 @@ class Heatmap:
             movements=["rest", "2pinch", "index", "thumb"],
         )
         self.normalizer.calculate_normalization_values()
+        self.max_for_heatmap,self.min_for_heatmap = self.normalizer.calculate_norm_values_heatmap()
+        self.max_for_heatmap = self.normalizer.normalize_chunk(self.max_for_heatmap)
+        self.min_for_heatmap = self.normalizer.normalize_chunk(self.min_for_heatmap)
 
         if method == "Gauss_filter":
             self.gauss_filter = create_gaussian_filter(size_filter=5)
@@ -133,7 +136,7 @@ class Heatmap:
         #     self.q1, self.q2, self.median = find_q_median_values_for_each_movement(emg_data_for_max_min, range(320), list(
         #         emg_data_for_max_min.keys()))
 
-        upper, lower = grid_aranger.transfer_320_into_grid_arangement(self.emg_data)
+        self.emg_data = grid_aranger.transfer_and_concatenate_320_into_grid_arangement(self.emg_data)
         # if method == "Min_Max_Scaling_over_whole_data":
         #     upper_max,lower_max = grid_aranger.transfer_320_into_grid_arangement(self.max_values)
         #     upper_min,lower_min = grid_aranger.transfer_320_into_grid_arangement(self.min_values)
@@ -146,14 +149,13 @@ class Heatmap:
         self.ref_data = load_pickle_file(
             os.path.join(path_to_subject_dat, "3d_data.pkl")
         )[movement_name]
-        resampling_factor = 2048 / 120
-        num_samples_emg = self.emg_data.shape[1]
-        num_samples_resampled_ref = int(self.ref_data.shape[0] * resampling_factor)
-        resampled_ref = np.empty((num_samples_resampled_ref, 2))
 
-        self.ref_data = resample(self.ref_data, num_samples_resampled_ref)
 
-        self.emg_data = upper
+        self.ref_data = resample(self.ref_data, self.emg_data.shape[2])
+
+        print("ref_data shape: ", self.ref_data.shape)
+        print("emg_data shape: ", self.emg_data.shape)
+
 
         # if method == "Min_Max_Scaling_over_whole_data":
         #     self.max_values = grid_aranger.concatenate_upper_and_lower_grid(upper_max,lower_max)
@@ -279,25 +281,25 @@ class Heatmap:
                 # TODO maybe change this (better to use normalized or not ?)
                 # IT IS BETER TO USE NORMALIZED BECAUSE IF EMG SCHWANKUNGEN
                 self.number_heatmaps_flex += 1
-                plot_local_maxima_minima(
-                    self.ref_data[:, 0],
-                    self.local_maxima,
-                    self.local_minima,
-                    current_sample_position=frame,
-                    color="black",
-                )
+                # plot_local_maxima_minima(
+                #     self.ref_data[:, 0],
+                #     self.local_maxima,
+                #     self.local_minima,
+                #     current_sample_position=frame,
+                #     color="black",
+                # )
             else:
                 self.heatmaps_ex = np.add(
                     self.heatmaps_ex, heatmap
                 )  # np.multiply(heatmap, 1/(distance+0.1) ))
                 self.number_heatmaps_ex += 1
-                plot_local_maxima_minima(
-                    self.ref_data[:, 0],
-                    self.local_maxima,
-                    self.local_minima,
-                    current_sample_position=frame,
-                    color="yellow",
-                )
+                # plot_local_maxima_minima(
+                #     self.ref_data[:, 0],
+                #     self.local_maxima,
+                #     self.local_minima,
+                #     current_sample_position=frame,
+                #     color="yellow",
+                # )
 
         if self.global_counter == 0:
             hmap = sns.heatmap(
@@ -308,6 +310,8 @@ class Heatmap:
                 xticklabels=True,
                 yticklabels=True,
                 cbar_kws={"label": "norm. RMS"},
+                vmax=self.max_for_heatmap,
+                vmin=self.min_for_heatmap,
             )  # ,cbar_ax=self.ax_emg,)
         else:
             hmap = sns.heatmap(
@@ -318,6 +322,8 @@ class Heatmap:
                 xticklabels=True,
                 yticklabels=True,
                 cbar_kws={"label": "norm. RMS"},
+                vmax=self.max_for_heatmap,
+                vmin=self.min_for_heatmap,
             )  # ,cbar_ax=self.ax_emg,)
         self.global_counter += 1
         # self.emg_plot.set(normalized_heatmap, ax=self.ax_emg, cmap='hot', cbar=True, xticklabels=True, yticklabels=True, cbar_kws={'label': 'norm. RMS'},mask=mask_for_heatmap)
@@ -408,13 +414,7 @@ class Heatmap:
     def animate(self, save=False):
         print("number_observation_samples: " + str(self.number_observation_samples))
         # samples = all sample values when using all samples with self.frame_duration in between
-        self.samples = np.linspace(
-            self.number_observation_samples,
-            self.sample_length,
-            self.num_samples,
-            endpoint=False,
-            dtype=int,
-        )
+        self.samples =[i for i in range(0, self.ref_data.shape[0], 64)]
         self.samples = [
             element for element in self.samples if element <= self.ref_data.shape[0]
         ]
@@ -586,12 +586,12 @@ if __name__ == "__main__":
     # "Bandpass_filter" = use bandpass filter on raw data and plot the filtered all emg channels
     plot_emg = False
 
-    window_size = 150
+    window_size = 100
     for method in [
         # "Min_Max_Scaling_over_whole_data",
         # "Robust_Scaling",
-        # "Min_Max_Scaling_all_channels",
-        # "no_scaling",
+        "Min_Max_Scaling_all_channels",
+        "no_scaling",
         # "Robust_all_channels",
         "EMG_signals",
     ]:
@@ -603,7 +603,7 @@ if __name__ == "__main__":
                 if additional_term == "before":
                     path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_07_12_normal1"  # trainingsdata recorded for training
                 else:
-                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_07_12_remapped1"  # trainingsdata recorded after training
+                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_07_12_normal2"  # trainingsdata recorded after training
 
                 print("method is: ", method)
                 print("movement is: ", movement)
@@ -688,7 +688,7 @@ if __name__ == "__main__":
                             mean_flex_rest=mean_flex_rest,
                             mean_ex_rest=mean_ex_rest,
                         )
-        gc.collect()
+                gc.collect()
     # movement = "thumb"
     # heatmap = Heatmap(movement,r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_Test1",additional_term="before")
     # heatmap.animate(save=True)

@@ -42,10 +42,10 @@ class SpatialAttention(nn.Module):
         super(SpatialAttention, self).__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.conv1 = nn.Conv2d(1, 1, kernel_size=3, padding=1)
-        self.sigmoid = nn.Sigmoid()
+        self.softplus = nn.Softplus()
 
     def forward(self, x):
-        x = self.sigmoid(self.conv1(x))
+        x = self.softplus(self.conv1(x))
         return x
 
 class ShallowConvNetWithAttention(nn.Module):
@@ -119,7 +119,7 @@ class ShallowConvNetWithAttention(nn.Module):
             # Flatten and pass through fully connected layers
             combined = combined.view(combined.size(0), -1)
             combined = self.relu(self.fc1(combined))
-            combined = torch.sigmoid(self.fc2(combined))
+            combined = torch.relu(self.fc2(combined))
 
             return combined
         else:
@@ -129,7 +129,7 @@ class ShallowConvNetWithAttention(nn.Module):
             x = self.channel_attention(x)  # Apply channel attention
             x = x.view(x.size(0), -1)  # Flatten the tensor
             x = self.relu(self.fc1(x))
-            x = torch.sigmoid(self.fc2(x))  # Sigmoid for values between 0 and 1
+            x = torch.relu(self.fc2(x))  # Sigmoid for values between 0 and 1
             return x
 
     def train_model(self, train_loader, learning_rate=0.0001, epochs=10):
@@ -174,6 +174,7 @@ class ShallowConvNetWithAttention(nn.Module):
             progress_bar.close()
 
     def predict(self, heatmap1, heatmap2 = None):
+        #TODO hier muss noch die grid aranger funktion rein
         with torch.no_grad():
             if not self.use_difference_heatmap:
                 x = torch.from_numpy(heatmap1)
