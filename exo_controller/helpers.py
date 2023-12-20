@@ -681,15 +681,15 @@ def normalize_2D_array(data, axis=None, negative=False, max_value=None, min_valu
     if (max_value is not None) and (min_value is not None):
         min_value = np.array(min_value)
         max_value = np.array(max_value)
-        norm = (data - min_value) / ((max_value - min_value)+1e10)
+        norm = (data - min_value) / ((max_value - min_value)+1e-10)
 
     elif axis is None:
         data = np.array(data)
-        norm = (data - np.min(data)) / (np.max(data) - np.min(data)+1e10)
+        norm = (data - np.min(data)) / (np.max(data) - np.min(data)+1e-10)
     else:
         data = np.array(data)
         norm = (data - np.min(data, axis=axis)) / (
-            np.max(data, axis=axis) - np.min(data, axis=axis)+1e10
+            np.max(data, axis=axis) - np.min(data, axis=axis)+1e-10
         )
 
     if negative == True:

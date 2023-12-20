@@ -494,7 +494,7 @@ if __name__ == "__main__":
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
         mse_evaluation_results_no_mean_sub = []
-        for epochs in [1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [1,5,10,15,20,50,100,250,500,1000,2000]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True,False]:
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
@@ -525,6 +525,7 @@ if __name__ == "__main__":
                     only_record_data=False,
                     use_control_stream=True,
                     use_shallow_conv=True,
+                    #set this to false if not recorded with virtual hand interface
                     use_virtual_hand_interface_for_coord_generation = True,
                     epochs = epochs,
 
@@ -556,7 +557,7 @@ if __name__ == "__main__":
                     mse_evaluation_results_no_mean_sub.append(mse_loss)
 
             plt.figure()
-            x = [1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]
+            x = [1,5,10,15,20,50,100,250,500,1000,2000]
             x = x[:x.index(epochs)+1]
             plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
             plt.plot(x,evaluation_results_no_mean_sub,label="no_mean_sub",color="blue",marker="X")

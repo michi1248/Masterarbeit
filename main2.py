@@ -157,7 +157,7 @@ class EMGProcessor:
                 shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order))
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=70) # 7
+                shallow_model.train_model(train_loader, epochs=600) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -621,9 +621,9 @@ if __name__ == "__main__":
             "2pinch",
         ],
         grid_order=[1,2],
-        use_difference_heatmap=True,
+        use_difference_heatmap=False,
         use_important_channels=False,
-        use_local=False,
+        use_local=True,
         output_on_exo=True,
         filter_output=True,
         time_for_each_movement_recording=20,

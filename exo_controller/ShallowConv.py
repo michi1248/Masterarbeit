@@ -65,6 +65,13 @@ class ShallowConvNetWithAttention(nn.Module):
         # New convolutional layer to cover the entire grid
         self.grid_conv = nn.Conv2d(1, 2, kernel_size=(8, 8 * self.number_of_grids))
 
+        # Define max pooling layer
+        self.pool = nn.MaxPool2d(2, 2)
+
+        # Define dropout layer
+        self.dropout = nn.Dropout(0.5)
+
+
         if self.use_difference_heatmap:
             # Convolutional layers for the first heatmap
             self.conv1_heatmap1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
@@ -100,7 +107,7 @@ class ShallowConvNetWithAttention(nn.Module):
             if self.use_spatial_attention:
                 self.attention = SpatialAttention().to(self.device)
 
-            self.fc1 = nn.Linear(32 * 8 * 8*self.number_of_grids, 100)
+            self.fc1 = nn.Linear(1024, 100)
             self.fc2 = nn.Linear(100, 2)
             self.relu = nn.ReLU()
             self.to(self.device)
@@ -118,12 +125,14 @@ class ShallowConvNetWithAttention(nn.Module):
     def forward(self, heatmap1, heatmap2=None):
         if self.use_difference_heatmap:
 
+            # activity = self.relu(self.grid_conv(heatmap1))
+            # activity = self.relu(self.grid_conv(heatmap2))
+
             if self.use_spatial_attention:
                 heatmap1 = self.attention_heatmap1(heatmap1) * heatmap1
                 heatmap2 = self.attention_heatmap2(heatmap2) * heatmap2
 
             # Process the first heatmap
-            #x1 = self.relu(self.grid_conv(heatmap1))
             x1 = self.relu(self.conv1_heatmap1(heatmap1))
             x1 = self.relu(self.conv2_heatmap1(x1))
 
@@ -132,6 +141,8 @@ class ShallowConvNetWithAttention(nn.Module):
             x2 = self.relu(self.conv1_heatmap2(heatmap2))
             x2 = self.relu(self.conv2_heatmap2(x2))
 
+            x1 = self.pool(x1)
+            x2 = self.pool(x2)
 
             if self.use_channel_attention:
                 x1 = self.channel_attention1(x1)
@@ -146,6 +157,8 @@ class ShallowConvNetWithAttention(nn.Module):
             combined = torch.relu(self.fc1(combined))
             combined = torch.relu(self.fc2(combined))
 
+            combined = self.dropout(combined)
+
             return combined
         else:
 
@@ -155,15 +168,20 @@ class ShallowConvNetWithAttention(nn.Module):
             #x = self.relu(self.grid_conv(heatmap1))
             x = self.relu(self.conv1(heatmap1))
             x = self.relu(self.conv2(x))
+            # Apply max pooling after convolutional layers
+            x = self.pool(x)
+
             if self.use_channel_attention:
                 x = self.channel_attention(x)
 
             x = x.view(x.size(0), -1)  # Flatten the tensor
             x = torch.relu(self.fc1(x))
             x = torch.relu(self.fc2(x))  # Sigmoid for values between 0 and 1
+            x = self.dropout(x)
+
             return x
 
-    def train_model(self, train_loader, learning_rate=0.001, epochs=10):
+    def train_model(self, train_loader, learning_rate=0.0001, epochs=10):
         self.train()
         criterion = nn.MSELoss()
         optimizer = optim.Adam(self.parameters(), lr=learning_rate,weight_decay=0.001)
@@ -244,7 +262,7 @@ class ShallowConvNetWithAttention(nn.Module):
 
         # Calculate the mean R-squared value
         mean_r_squared = torch.mean(torch.tensor(r_squared_values))
-        print(f'Average Loss: {mean_r_squared}')
+        print(f'Average Loss: {mse_loss}')
         return mean_r_squared.item(),mse_loss.item()
 
 
@@ -355,8 +373,8 @@ class ShallowConvNetWithAttention(nn.Module):
             # Create the data loaders
             train_dataset = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
             test_dataset = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
-            train_loader = DataLoader(train_dataset, batch_size=20, shuffle=False)
-            test_loader = DataLoader(test_dataset, batch_size=20, shuffle=False)
+            train_loader = DataLoader(train_dataset, batch_size=32, shuffle=False)
+            test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
             self.train_loader = train_loader
             self.test_loader = test_loader
             return train_loader, test_loader
