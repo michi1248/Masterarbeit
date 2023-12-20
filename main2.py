@@ -108,7 +108,6 @@ class EMGProcessor:
         """
         for i in data.keys():
             data[i] = np.array(data[i]).astype(np.float32)
-            print("number of nans found: ", np.sum(np.isnan(data[i])))
             data[i][np.isnan(data[i])] = 0
 
         return data
@@ -145,6 +144,7 @@ class EMGProcessor:
                 use_bandpass_filter=self.use_bandpass_filter,
                 filter_=self.filter,
                 use_difference_heatmap=self.use_difference_heatmap,
+                collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation
             )
             model.build_training_data(model.movements)
             model.save_trainings_data()
@@ -154,10 +154,10 @@ class EMGProcessor:
             self.best_time_tree = 2
 
             if self.use_shallow_conv:
-                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger)
+                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order))
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=20) # 7
+                shallow_model.train_model(train_loader, epochs=70) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -180,7 +180,7 @@ class EMGProcessor:
 
         else:
             if self.use_shallow_conv:
-                model = ShallowConvNetWithAttention()
+                model = ShallowConvNetWithAttention(number_of_grids=len(self.grid_order))
                 model.load_model(path=self.patient_id + "_shallow.pt")
                 print("Shallow model loaded")
                 self.best_time_tree = 3
@@ -198,14 +198,13 @@ class EMGProcessor:
                     use_gauss_filter=self.use_gauss_filter,
                     use_bandpass_filter=self.use_bandpass_filter,
                     filter_=self.filter,
+                    collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation
                 )
                 model.load_model(subject=self.patient_id)
                 self.best_time_tree = 1  # This might need to be adjusted based on how your model handles time trees
-
             return model
 
     def process_data(self, emg_data, ref_data):
-
 
         # Process data for model input
         for i in emg_data.keys():
@@ -465,14 +464,19 @@ class EMGProcessor:
                             else:
                                 res_time = np.array(res_time[0])
 
+                    if not self.use_virtual_hand_interface_for_coord_generation:
+                        control_ref_data = ref_data_for_this_movement[sample]
+                    else:
+                        control_ref_data = ref_data[movement][sample]
+
                     if self.use_local:
                         if self.use_control_stream:
-                            self.output_results(res_local,ref_data_for_this_movement[sample])
+                            self.output_results(res_local,control_ref_data)
                         else:
                             self.output_results(res_local)
                     else:
                         if self.use_control_stream:
-                            self.output_results(res_time,ref_data_for_this_movement[sample])
+                            self.output_results(res_time,control_ref_data)
                         else:
                             self.output_results(res_time)
                     time_end = time.time()
@@ -609,27 +613,27 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_07_12_remapped1",
+        patient_id="Michi_16_12_normal3_exo",
         movements=[
             "rest",
             "thumb",
             "index",
             "2pinch",
         ],
-        grid_order=[1,2,3],
+        grid_order=[1,2],
         use_difference_heatmap=True,
         use_important_channels=False,
         use_local=False,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=3,
+        time_for_each_movement_recording=20,
         load_trained_model=False,
         save_trained_model=True,
-        use_spatial_filter=True,
+        use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_07_12_remapped1_control/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_16_12_normal4_exo/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_all_channels",
         only_record_data=False,

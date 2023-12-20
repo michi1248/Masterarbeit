@@ -49,31 +49,45 @@ class SpatialAttention(nn.Module):
         return x
 
 class ShallowConvNetWithAttention(nn.Module):
-    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None):
+    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_channel_attention=True, use_spatial_attention=True):
         super(ShallowConvNetWithAttention, self).__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        # Store the attention flags
+        self.use_channel_attention = use_channel_attention
+        self.use_spatial_attention = use_spatial_attention
+
+        self.number_of_grids = number_of_grids
         self.use_difference_heatmap = use_difference_heatmap
         self.best_time_index = best_time_tree
         self.grid_aranger = grid_aranger
+
+        # New convolutional layer to cover the entire grid
+        self.grid_conv = nn.Conv2d(1, 2, kernel_size=(8, 8 * self.number_of_grids))
 
         if self.use_difference_heatmap:
             # Convolutional layers for the first heatmap
             self.conv1_heatmap1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
             self.conv2_heatmap1 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-            self.attention_heatmap1 = SpatialAttention().to(self.device)
-            self.channel_attention1 = ChannelAttention(num_channels=32)  # Add the ChannelAttention layer
+
 
             # Convolutional layers for the second heatmap
             self.conv1_heatmap2 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
             self.conv2_heatmap2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-            self.attention_heatmap2 = SpatialAttention().to(self.device)
-            self.channel_attention2 = ChannelAttention(num_channels=32)  # Add the ChannelAttention layer
+
 
             # Fully connected layers
             # Adjust the input size based on how you combine the features
-            self.fc1 = nn.Linear(32 * 8 * 24 * 2, 100)  # Assuming concatenation
+            self.fc1 = nn.Linear(32 * 8 * 8*self.number_of_grids * 2, 100)  # Assuming concatenation
             self.fc2 = nn.Linear(100, 2)
+
+            if self.use_channel_attention:
+                self.channel_attention1 = ChannelAttention(num_channels=32)
+                self.channel_attention2 = ChannelAttention(num_channels=32) if use_difference_heatmap else None
+
+            if self.use_spatial_attention:
+                self.attention_heatmap1 = SpatialAttention().to(self.device)
+                self.attention_heatmap2 = SpatialAttention().to(self.device) if use_difference_heatmap else None
 
             self.relu = nn.ReLU()
             self.to(self.device)
@@ -81,14 +95,19 @@ class ShallowConvNetWithAttention(nn.Module):
         else:
             self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
             self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-            self.attention = SpatialAttention().to(self.device)
-            self.channel_attention = ChannelAttention(num_channels=32)  # Add the ChannelAttention layer
-            self.fc1 = nn.Linear(32 * 8 * 24, 100)
+            if self.use_channel_attention:
+                self.channel_attention = ChannelAttention(num_channels=32)
+            if self.use_spatial_attention:
+                self.attention = SpatialAttention().to(self.device)
+
+            self.fc1 = nn.Linear(32 * 8 * 8*self.number_of_grids, 100)
             self.fc2 = nn.Linear(100, 2)
             self.relu = nn.ReLU()
             self.to(self.device)
 
-    def _initialize_weights(self,m):
+    def _initialize_weights(self,m,seed=42):
+
+        torch.manual_seed(seed)
 
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
             init.xavier_uniform_(m.weight)
@@ -98,19 +117,25 @@ class ShallowConvNetWithAttention(nn.Module):
 
     def forward(self, heatmap1, heatmap2=None):
         if self.use_difference_heatmap:
-            # Process the first heatmap
-            x1 = self.attention_heatmap1(heatmap1) * heatmap1  # Apply attention
-            x1 = self.relu(self.conv1_heatmap1(x1))
-            x1 = self.relu(self.conv2_heatmap1(x1))
-            x1 = self.channel_attention1(x1)  # Apply channel attention
 
+            if self.use_spatial_attention:
+                heatmap1 = self.attention_heatmap1(heatmap1) * heatmap1
+                heatmap2 = self.attention_heatmap2(heatmap2) * heatmap2
+
+            # Process the first heatmap
+            #x1 = self.relu(self.grid_conv(heatmap1))
+            x1 = self.relu(self.conv1_heatmap1(heatmap1))
+            x1 = self.relu(self.conv2_heatmap1(x1))
 
             # Process the second heatmap
-            x2 = self.attention_heatmap2(heatmap2) * heatmap2  # Apply attention
-            x2 = self.relu(self.conv1_heatmap2(x2))
+            #x2 = self.relu(self.grid_conv(heatmap2))
+            x2 = self.relu(self.conv1_heatmap2(heatmap2))
             x2 = self.relu(self.conv2_heatmap2(x2))
-            x2 = self.channel_attention1(x2)  # Apply channel attention
 
+
+            if self.use_channel_attention:
+                x1 = self.channel_attention1(x1)
+                x2 = self.channel_attention2(x2)
 
             # Combine the features from both heatmaps
             # Here we're using concatenation; you might choose a different method
@@ -118,24 +143,30 @@ class ShallowConvNetWithAttention(nn.Module):
 
             # Flatten and pass through fully connected layers
             combined = combined.view(combined.size(0), -1)
-            combined = self.relu(self.fc1(combined))
+            combined = torch.relu(self.fc1(combined))
             combined = torch.relu(self.fc2(combined))
 
             return combined
         else:
-            x = self.attention(heatmap1) * heatmap1  # Apply attention
-            x = self.relu(self.conv1(x))
+
+            if self.use_spatial_attention:
+                heatmap1 = self.attention(heatmap1) * heatmap1
+
+            #x = self.relu(self.grid_conv(heatmap1))
+            x = self.relu(self.conv1(heatmap1))
             x = self.relu(self.conv2(x))
-            x = self.channel_attention(x)  # Apply channel attention
+            if self.use_channel_attention:
+                x = self.channel_attention(x)
+
             x = x.view(x.size(0), -1)  # Flatten the tensor
-            x = self.relu(self.fc1(x))
+            x = torch.relu(self.fc1(x))
             x = torch.relu(self.fc2(x))  # Sigmoid for values between 0 and 1
             return x
 
-    def train_model(self, train_loader, learning_rate=0.0001, epochs=10):
+    def train_model(self, train_loader, learning_rate=0.001, epochs=10):
         self.train()
         criterion = nn.MSELoss()
-        optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        optimizer = optim.Adam(self.parameters(), lr=learning_rate,weight_decay=0.001)
 
         for epoch in range(epochs):
             epoch_loss = 0
@@ -147,13 +178,13 @@ class ShallowConvNetWithAttention(nn.Module):
                 if self.use_difference_heatmap:
                     targets, _ = torch.unbind(targets, dim=0)
                     heatmap1, heatmap2 = torch.unbind(inputs, dim=0)
-                    heatmap1 = heatmap1.view(-1, 1, 8, 24)  # Reshape input
-                    heatmap2 = heatmap2.view(-1, 1, 8, 24)  # Reshape inpu
+                    heatmap1 = heatmap1.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape input
+                    heatmap2 = heatmap2.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape inpu
 
                     heatmap1 = heatmap1.to(self.device)
                     heatmap2 = heatmap2.to(self.device)
                 else:
-                    heatmap1 = inputs.view(-1, 1, 8, 24)
+                    heatmap1 = inputs.view(-1, 1, 8, 8*self.number_of_grids)
                     heatmap1 = heatmap1.to(self.device)
 
                 targets = targets.to(self.device)
@@ -179,20 +210,42 @@ class ShallowConvNetWithAttention(nn.Module):
             if not self.use_difference_heatmap:
                 x = torch.from_numpy(heatmap1)
                 x = x.float()  # Convert to float
-                x = x.view(-1, 1, 8, 24)  # Reshape input
+                x = x.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape input
                 x = x.to(self.device)
                 return self(x).cpu().numpy()
             else:
                 x1 = torch.from_numpy(heatmap1)
                 x1 = x1.float()
-                x1 = x1.view(-1, 1, 8, 24)
+                x1 = x1.view(-1, 1, 8, 8*self.number_of_grids)
                 x1 = x1.to(self.device)
 
                 x2 = torch.from_numpy(heatmap2)
                 x2 = x2.float()
-                x2 = x2.view(-1, 1, 8, 24)
+                x2 = x2.view(-1, 1, 8, 8*self.number_of_grids)
                 x2 = x2.to(self.device)
                 return self(x1, x2).cpu().numpy()
+
+    def evaluate_best(self,predictions,ground_truth):
+        self.eval()
+
+        if isinstance(predictions, list):
+            predictions = torch.tensor(np.array(predictions), dtype=torch.float32)
+        if isinstance(ground_truth, list):
+            ground_truth = torch.tensor(np.array(ground_truth), dtype=torch.float32)
+
+        r_squared_values = []
+        for i in range(predictions.shape[1]):  # Assuming the second dimension contains the outputs
+            sst = torch.sum((ground_truth[:, i] - torch.mean(ground_truth[:, i])) ** 2)
+            ssr = torch.sum((ground_truth[:, i] - predictions[:, i]) ** 2)
+            r_squared_values.append(1 - ssr / sst)
+
+        crit = nn.MSELoss()
+        mse_loss = torch.mean(torch.tensor(crit(predictions,ground_truth)))
+
+        # Calculate the mean R-squared value
+        mean_r_squared = torch.mean(torch.tensor(r_squared_values))
+        print(f'Average Loss: {mean_r_squared}')
+        return mean_r_squared.item(),mse_loss.item()
 
 
     def evaluate(self, test_loader):
@@ -209,13 +262,13 @@ class ShallowConvNetWithAttention(nn.Module):
                 if self.use_difference_heatmap:
                     targets,_ = torch.unbind(targets, dim=0)
                     heatmap1, heatmap2 = torch.unbind(inputs, dim=0)
-                    heatmap1 = heatmap1.view(-1, 1, 8, 24)  # Reshape input
-                    heatmap2 = heatmap2.view(-1, 1, 8, 24)  # Reshape inpu
+                    heatmap1 = heatmap1.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape input
+                    heatmap2 = heatmap2.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape inpu
 
                     heatmap1 = heatmap1.to(self.device)
                     heatmap2 = heatmap2.to(self.device)
                 else:
-                    heatmap1 = inputs.view(-1, 1, 8, 24)
+                    heatmap1 = inputs.view(-1, 1, 8, 8*self.number_of_grids)
                     heatmap1 = heatmap1.to(self.device)
 
                 targets = targets.to(self.device)
@@ -337,27 +390,13 @@ class ShallowConvNetWithAttention(nn.Module):
 
 
 if __name__ == "__main__":
-    # Load the data
-    X_train = torch.load('data/X_train.pt')
-    y_train = torch.load('data/y_train.pt')
-    X_test = torch.load('data/X_test.pt')
-    y_test = torch.load('data/y_test.pt')
-
-    # Create the data loaders
-    train_dataset = TensorDataset(X_train, y_train)
-    test_dataset = TensorDataset(X_test, y_test)
-    train_loader = DataLoader(train_dataset, batch_size=10, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False)
-
-    # Create the model
-    model = ShallowConvNetWithAttention()
-
-    # Train the model
-    model.train_model(train_loader, epochs=10)
-
-    # Evaluate the model
-    avg_loss = model.evaluate(test_loader)
-    print('Average test loss: {:.4f}'.format(avg_loss))
-
-    # Save the model
-    model.save_model("shallow_conv_net_with_attention.pth")
+    # input : heatmap:  1 x 8 x 16 ( 1 channel, 8x16 größe)
+    # conv layer über ganzes bild -> in channels = 1 , out channels = 2 , kernel size = 8x16  ( output hat shape 1,
+    # -> zwei output weil ich ja zwei finger einzeln habe vielleicht lernt dann für jeden finger eine zahl
+    #
+    #
+    #
+    #
+    #
+    #
+    pass

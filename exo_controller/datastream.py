@@ -143,7 +143,7 @@ class Realtime_Datagenerator:
 
         if self.use_virtual_hand_interface_for_coord_generation:
             t3.join()
-        print("dafsd")
+
         # get 3d points
         print("movie start values:", self.values_movie_start_emg)
         print("Step 1: \t Getting Kinematics Data from Files")
@@ -152,7 +152,7 @@ class Realtime_Datagenerator:
         if self.use_virtual_hand_interface_for_coord_generation:
 
             for k, v in self.coords_list_virtual_hand.items():
-                print("coords list key:", k)
+
                 # from seconds to samples like this
                 # 60 becuase sampling frequency of the kinematics is 60
                 start = int((self.values_movie_start_emg[k] - self.time_diffs_virtual_hand[k]) * 60 )
@@ -287,6 +287,8 @@ class Realtime_Datagenerator:
         interface = Exo_Control()
         interface.initialize_all()
 
+
+
         while True:
 
 
@@ -307,6 +309,8 @@ class Realtime_Datagenerator:
                 try:
 
                     data = interface.get_coords_exo()
+
+
                     save_buffer.append(
                         [data[0],data[2]]
                     )

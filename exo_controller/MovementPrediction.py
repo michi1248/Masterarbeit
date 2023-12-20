@@ -34,6 +34,7 @@ class MultiDimensionalDecisionTree:
         use_difference_heatmap=False,
         neuronmuscular_delay=30,
         delay_to_movement=30,
+        collected_with_virtual_hand = False
 
     ):
         self.normalizer = normalizer
@@ -47,6 +48,7 @@ class MultiDimensionalDecisionTree:
         self.grid_aranger = Grid_Arrangement(self.grid_order)
         self.grid_aranger.make_grid()
         self.use_difference_heatmap = use_difference_heatmap
+        self.collected_with_virtual_hand = collected_with_virtual_hand
 
         if self.use_gauss_filter == True:
             self.gauss_filter = self.filter.create_gaussian_filter(size_filter=3)
@@ -280,7 +282,6 @@ class MultiDimensionalDecisionTree:
             else:
                 ref_data = self.ref_data[movement] * 0
 
-
             if (movement != "2pinch") and (movement != "rest"):
                 ref_erweitert[self.movment_dict[movement], :] = ref_data[
                     :, 0
@@ -320,7 +321,10 @@ class MultiDimensionalDecisionTree:
                         )
                     # segment = np.squeeze(segment)
                     segment = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(np.reshape(segment,(segment.shape[0],segment.shape[1],1))))
-                    label = ref_erweitert[:, i]
+                    if self.collected_with_virtual_hand:
+                        label= self.ref_data[movement][i, :]
+                    else:
+                        label = ref_erweitert[:, i]
 
                     # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
                     # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
@@ -428,7 +432,10 @@ class MultiDimensionalDecisionTree:
 
                             difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
                                 np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
-                            label = ref_erweitert[:, i]
+                            if self.collected_with_virtual_hand:
+                                label = self.ref_data[movement][i, :]
+                            else:
+                                label = ref_erweitert[:, i]
 
                             # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
                             # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
