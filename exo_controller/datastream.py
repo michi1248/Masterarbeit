@@ -287,8 +287,6 @@ class Realtime_Datagenerator:
         interface = Exo_Control()
         interface.initialize_all()
 
-
-
         while True:
 
 

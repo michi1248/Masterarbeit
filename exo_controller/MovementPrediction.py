@@ -409,7 +409,7 @@ class MultiDimensionalDecisionTree:
                             heatmap = self.normalizer.normalize_chunk(heatmap)
 
                             previous_heatmap = self.calculate_heatmap(
-                                emg_data, i - idx, self.window_size_in_samples
+                                emg_data, i, int(self.window_size_in_samples*3.5)
                             )
 
                             if self.mean_rest is not None:
@@ -427,7 +427,7 @@ class MultiDimensionalDecisionTree:
                                 previous_heatmap = self.filter.apply_gaussian_filter(
                                     previous_heatmap, self.gauss_filter
                                 )
-                            difference_heatmap = np.subtract(heatmap, previous_heatmap)
+                            difference_heatmap = previous_heatmap
                             #difference_heatmap = np.squeeze(difference_heatmap)
 
                             difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(

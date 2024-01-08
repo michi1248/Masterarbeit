@@ -49,7 +49,7 @@ class SpatialAttention(nn.Module):
         return x
 
 class ShallowConvNetWithAttention(nn.Module):
-    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_channel_attention=True, use_spatial_attention=True):
+    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_channel_attention=False, use_spatial_attention=False):
         super(ShallowConvNetWithAttention, self).__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -85,7 +85,7 @@ class ShallowConvNetWithAttention(nn.Module):
 
             # Fully connected layers
             # Adjust the input size based on how you combine the features
-            self.fc1 = nn.Linear(32 * 8 * 8*self.number_of_grids * 2, 100)  # Assuming concatenation
+            self.fc1 = nn.Linear(2048, 100)  # 32 * 8 * 8*self.number_of_grids * 2
             self.fc2 = nn.Linear(100, 2)
 
             if self.use_channel_attention:
@@ -258,7 +258,17 @@ class ShallowConvNetWithAttention(nn.Module):
             r_squared_values.append(1 - ssr / sst)
 
         crit = nn.MSELoss()
-        mse_loss = torch.mean(torch.tensor(crit(predictions,ground_truth)))
+        # Separate the tensors into two parts
+        ground_truth_0 = ground_truth[:, 0]
+        ground_truth_1 = ground_truth[:, 1]
+
+        prediction_0 = predictions[:, 0]
+        prediction_1 = predictions[:, 1]
+
+        # Calculate the loss for each part
+        loss_0 = crit(ground_truth_0, prediction_0)
+        loss_1 = crit(ground_truth_1, prediction_1)
+        mse_loss = (loss_0+ loss_1)/2
 
         # Calculate the mean R-squared value
         mean_r_squared = torch.mean(torch.tensor(r_squared_values))

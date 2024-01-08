@@ -360,12 +360,9 @@ class EMGProcessor:
                             data, self.window_size_in_samples
                         )
                         if self.use_difference_heatmap:
-                            previous_heatmap = calculate_difference_heatmap_realtime(
-                                data,
-                                data.shape[2]
-                                - self.num_previous_samples[self.best_time_tree - 1],
-                                self.window_size_in_samples,
-                            )
+                            previous_heatmap = calculate_local_heatmap_realtime(
+                            data, int(self.window_size_in_samples*3.5)
+                        )
 
                         if self.use_mean_subtraction:
                             heatmap_local = np.subtract(heatmap_local, self.mean_rest)
@@ -386,7 +383,7 @@ class EMGProcessor:
                                     previous_heatmap, self.gauss_filter
                                 )
                         if self.use_difference_heatmap:
-                            difference_heatmap = np.subtract(heatmap_local, previous_heatmap)
+                            difference_heatmap =  previous_heatmap
                             if not self.use_shallow_conv:
                                 difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
                                     np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
@@ -494,12 +491,12 @@ if __name__ == "__main__":
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
         mse_evaluation_results_no_mean_sub = []
-        for epochs in [1,5,10,15,20,50,100,250,500,1000,2000]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
-            for use_mean_sub in [True,False]:
+        for epochs in [1,5,10,15,20,50,100,250,500,1000,2000,3000,4500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+            for use_mean_sub in [True]:#[True,False]
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_16_12_normal3_exo",
+                    patient_id="Michi_16_12_normal1",
                     movements=[
                         "rest",
                         "thumb",
@@ -507,9 +504,9 @@ if __name__ == "__main__":
                         "2pinch",
                     ],
                     grid_order=[1,2],
-                    use_difference_heatmap=False,
+                    use_difference_heatmap=True,
                     use_important_channels=False,
-                    use_local=True,
+                    use_local=False,
                     output_on_exo=True,
                     filter_output=True,
                     time_for_each_movement_recording=20,
@@ -519,14 +516,14 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_16_12_normal3_exo/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_16_12_normal1/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
                     use_control_stream=True,
                     use_shallow_conv=True,
                     #set this to false if not recorded with virtual hand interface
-                    use_virtual_hand_interface_for_coord_generation = True,
+                    use_virtual_hand_interface_for_coord_generation = False,
                     epochs = epochs,
 
                 )
@@ -559,10 +556,15 @@ if __name__ == "__main__":
             plt.figure()
             x = [1,5,10,15,20,50,100,250,500,1000,2000]
             x = x[:x.index(epochs)+1]
-            plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
-            plt.plot(x,evaluation_results_no_mean_sub,label="no_mean_sub",color="blue",marker="X")
-            plt.plot(x,mse_evaluation_results_mean_sub,label="mse_mean_sub",color="red",marker="o")
-            plt.plot(x,mse_evaluation_results_no_mean_sub,label="mse_no_mean_sub",color="blue",marker="o")
+            if len(evaluation_results_mean_sub) == len(x):
+                plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
+            if len(evaluation_results_no_mean_sub) == len(x):
+                plt.plot(x,evaluation_results_no_mean_sub,label="no_mean_sub",color="blue",marker="X")
+            if len(mse_evaluation_results_mean_sub) == len(x):
+                plt.plot(x, mse_evaluation_results_mean_sub, label="mse_mean_sub", color="red", marker="o")
+            if len(mse_evaluation_results_no_mean_sub) == len(x):
+                plt.plot(x, mse_evaluation_results_no_mean_sub, label="mse_no_mean_sub", color="blue", marker="o")
+
             plt.ylabel("avg_loss")
             plt.xlabel("epochs")
             plt.title(method)
