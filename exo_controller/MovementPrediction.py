@@ -146,6 +146,19 @@ class MultiDimensionalDecisionTree:
                 )
             )
 
+    def evaluate_best(self,predictions,ground_truth):
+
+        mae = mean_absolute_error(ground_truth, predictions, multioutput="raw_values")
+        mse = mean_squared_error(ground_truth, predictions, multioutput="raw_values")
+        r2 = r2_score(ground_truth, predictions, multioutput="raw_values")
+
+        print("local Mean Absolute Error: ", mae)
+        print("local Mean Squared Error : ", mse)
+        print("local R^2 Score : ", r2)
+        return np.mean(r2),np.mean(mse)
+
+
+
 
     def select_default_num_previous(self):
         """
@@ -251,7 +264,7 @@ class MultiDimensionalDecisionTree:
                 )
         return rms_values
 
-    def build_training_data(self, movement_names, split_ratio=0.99):
+    def build_training_data(self, movement_names, split_ratio=0.95):
         """
         This function builds the training data for the random forest
         the format for one input value should be [[movement1, movement2, ....][value1, value2, ....]] for ref labels

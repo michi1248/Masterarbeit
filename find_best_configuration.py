@@ -14,7 +14,8 @@ from exo_controller import ExtractImportantChannels
 from exo_controller import normalizations
 from exo_controller.helpers import *
 from exo_controller.spatial_filters import Filters
-from exo_controller.ShallowConv import ShallowConvNetWithAttention
+#from exo_controller.ShallowConv import ShallowConvNetWithAttention
+from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
 import time
 import keyboard
 
@@ -158,20 +159,32 @@ class EMGProcessor:
             self.window_size_in_samples = model.window_size_in_samples
             print("num_previous_samples: ", self.num_previous_samples)
 
-        self.best_time_tree = 2
 
-        shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order))
-        shallow_model.apply(shallow_model._initialize_weights)
-        train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-        shallow_model.train_model(train_loader, epochs=self.epochs)
-        shallow_model.evaluate(test_loader)
-        self.train_loader = train_loader
+
+
+        self.best_time_tree = 2
+        if not self.use_shallow_conv:
+            model.train()
+            model.evaluate()
+        else:
+            shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order))
+            shallow_model.apply(shallow_model._initialize_weights)
+            train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
+            shallow_model.train_model(train_loader, epochs=self.epochs)
+            shallow_model.evaluate(test_loader)
+            self.train_loader = train_loader
         if self.save_trained_model:
-            shallow_model.save_model(path=self.patient_id + "_shallow.pt")
+            if not self.use_shallow_conv:
+                model.save_model(subject=self.patient_id )
+                print("Model saved")
+            else:
+                shallow_model.save_model(path=self.patient_id + "_shallow.pt")
             print("Shallow model saved")
 
-        return shallow_model
-
+        if self.use_shallow_conv:
+            return shallow_model
+        else:
+            return model
 
 
 
@@ -485,18 +498,21 @@ if __name__ == "__main__":
     normalizer = None
     mean_rest = None
     grid_arranger = None
+    use_shallow_conv = True
 
     for method in ["Min_Max_Scaling_all_channels","Robust_all_channels","no_scaling","Robust_Scaling"]:
         evaluation_results_mean_sub = []
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
         mse_evaluation_results_no_mean_sub = []
-        for epochs in [1,5,10,15,20,50,100,250,500,1000,2000,3000,4500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [1,5,10,15,20,50,100,125,150,250,500,1000,2000,3000,4500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True]:#[True,False]
+                if (count > 0) and use_shallow_conv is False:
+                    continue
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_16_12_normal1",
+                    patient_id="Michi_16_12_normal3_exo",
                     movements=[
                         "rest",
                         "thumb",
@@ -504,9 +520,9 @@ if __name__ == "__main__":
                         "2pinch",
                     ],
                     grid_order=[1,2],
-                    use_difference_heatmap=True,
+                    use_difference_heatmap=False,
                     use_important_channels=False,
-                    use_local=False,
+                    use_local=True,
                     output_on_exo=True,
                     filter_output=True,
                     time_for_each_movement_recording=20,
@@ -516,14 +532,14 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_16_12_normal1/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_16_12_normal4_exo/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
                     use_control_stream=True,
-                    use_shallow_conv=True,
+                    use_shallow_conv=use_shallow_conv,
                     #set this to false if not recorded with virtual hand interface
-                    use_virtual_hand_interface_for_coord_generation = False,
+                    use_virtual_hand_interface_for_coord_generation = True,
                     epochs = epochs,
 
                 )
@@ -553,21 +569,22 @@ if __name__ == "__main__":
                     evaluation_results_no_mean_sub.append(avg_loss)
                     mse_evaluation_results_no_mean_sub.append(mse_loss)
 
-            plt.figure()
-            x = [1,5,10,15,20,50,100,250,500,1000,2000]
-            x = x[:x.index(epochs)+1]
-            if len(evaluation_results_mean_sub) == len(x):
-                plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
-            if len(evaluation_results_no_mean_sub) == len(x):
-                plt.plot(x,evaluation_results_no_mean_sub,label="no_mean_sub",color="blue",marker="X")
-            if len(mse_evaluation_results_mean_sub) == len(x):
-                plt.plot(x, mse_evaluation_results_mean_sub, label="mse_mean_sub", color="red", marker="o")
-            if len(mse_evaluation_results_no_mean_sub) == len(x):
-                plt.plot(x, mse_evaluation_results_no_mean_sub, label="mse_no_mean_sub", color="blue", marker="o")
+            if use_shallow_conv:
+                plt.figure()
+                x = [1,5,10,15,20,50,100,125,150,250,500,1000,2000,3000,4500]
+                x = x[:x.index(epochs)+1]
+                if len(evaluation_results_mean_sub) == len(x):
+                    plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
+                if len(evaluation_results_no_mean_sub) == len(x):
+                    plt.plot(x,evaluation_results_no_mean_sub,label="no_mean_sub",color="blue",marker="X")
+                if len(mse_evaluation_results_mean_sub) == len(x):
+                    plt.plot(x, mse_evaluation_results_mean_sub, label="mse_mean_sub", color="red", marker="o")
+                if len(mse_evaluation_results_no_mean_sub) == len(x):
+                    plt.plot(x, mse_evaluation_results_no_mean_sub, label="mse_no_mean_sub", color="blue", marker="o")
 
-            plt.ylabel("avg_loss")
-            plt.xlabel("epochs")
-            plt.title(method)
-            plt.legend()
-            plt.savefig(r"D:\Lab\MasterArbeit/" + method + ".png")
+                plt.ylabel("avg_loss")
+                plt.xlabel("epochs")
+                plt.title(method)
+                plt.legend()
+                plt.savefig(r"D:\Lab\MasterArbeit/" + method + ".png")
 
