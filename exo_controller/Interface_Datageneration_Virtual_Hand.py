@@ -130,7 +130,13 @@ class Interface(tk.Frame):
             "start of capturing for movement: " + self.name + " video time: ", time_now
         )
 
+        self.outer_Instance.recording_started_emg = True
+        self.outer_Instance.recording_started_virtual_hand = True
+
         time.sleep(self.outer_Instance.recording_time)
+
+        self.outer_Instance.recording_started_emg = False
+        self.outer_Instance.recording_started_virtual_hand = False
 
         self.button.configure(text="start capturing", bg="white", fg="black")
         self.update()
