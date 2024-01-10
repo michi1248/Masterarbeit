@@ -203,7 +203,7 @@ class Realtime_Datagenerator:
                         result_array.append(v[0])
                         counter += 1
                         continue
-                    resampled = resample(v[counter-1:counter], int(time_difference*2048))
+                    resampled = resample(v[counter-1:counter], round(time_difference*2048))
                     for value in resampled:
                         result_array.append(value)
                     counter += 1
@@ -305,7 +305,7 @@ class Realtime_Datagenerator:
                         counter += 1
                         continue
 
-                    resampled = resample(v_reshaped[counter - 1:counter], int(time_difference * 2048))
+                    resampled = resample(v_reshaped[counter - 1:counter], round(time_difference * 2048))
 
                     for value in resampled:
                         result_array.append(value)
