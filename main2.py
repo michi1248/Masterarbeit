@@ -613,7 +613,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Test",
+        patient_id="Michi_11_01_2024_remapped2_control",
         movements=[
             "rest",
             "thumb",
@@ -626,7 +626,7 @@ if __name__ == "__main__":
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=5,
+        time_for_each_movement_recording=25,
         load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
@@ -635,7 +635,7 @@ if __name__ == "__main__":
         use_gauss_filter=True,
         use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Michi_16_12_normal4_exo/",  # False
         window_size=150,
-        scaling_method="Min_Max_Scaling_all_channels",
+        scaling_method="no_scaling",
         only_record_data=True,
         use_control_stream=True,
         use_shallow_conv=True,
