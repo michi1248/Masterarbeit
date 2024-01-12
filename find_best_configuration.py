@@ -191,10 +191,10 @@ class EMGProcessor:
     def process_data(self, emg_data, ref_data):
 
         # Process data for model input
-        for i in emg_data.keys():
-            emg_data[i] = np.array(
-                emg_data[i].transpose(1, 0, 2).reshape(len(self.grid_order)*64, -1)
-            )  # reshape emg data such as it has the shape 320 x #samples for each movement
+        # for i in emg_data.keys():
+        #     emg_data[i] = np.array(
+        #         emg_data[i].transpose(1, 0, 2).reshape(len(self.grid_order)*64, -1)
+        #     )  # reshape emg data such as it has the shape 320 x #samples for each movement
 
 
         if self.use_important_channels:
@@ -311,7 +311,7 @@ class EMGProcessor:
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
         for i in emg_data.keys():
             emg_data[i] = np.array(
-                emg_data[i].transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
+                emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
             )
         emg_data = self.remove_nan_values(emg_data)
 
@@ -498,21 +498,22 @@ if __name__ == "__main__":
     normalizer = None
     mean_rest = None
     grid_arranger = None
+
     use_shallow_conv = True
 
-    for method in ["Min_Max_Scaling_all_channels","Robust_all_channels","no_scaling","Robust_Scaling"]:
+    for method in ["Robust_Scaling","Robust_all_channels","Min_Max_Scaling_all_channels","no_scaling"]:
         evaluation_results_mean_sub = []
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
         mse_evaluation_results_no_mean_sub = []
-        for epochs in [1,5,10,15,20,50,100,125,150,250,500,1000,2000,3000,4500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
-            for use_mean_sub in [True]:#[True,False]
+        for epochs in [1,5,10,15,20,50,100,125,150,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+            for use_mean_sub in [True,False]:#[True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_16_12_normal3_exo",
+                    patient_id="Michi_11_01_2024_remapped2",
                     movements=[
                         "rest",
                         "thumb",
@@ -525,14 +526,14 @@ if __name__ == "__main__":
                     use_local=True,
                     output_on_exo=True,
                     filter_output=True,
-                    time_for_each_movement_recording=20,
+                    time_for_each_movement_recording=25,
                     load_trained_model=False,
                     save_trained_model=True,
-                    use_spatial_filter=False,
+                    use_spatial_filter=True,
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_16_12_normal4_exo/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_remapped2_control/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
@@ -571,7 +572,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [1,5,10,15,20,50,100,125,150,250,500,1000,2000,3000,4500]
+                x = [1,5,10,15,20,50,100,125,150,250,500]
                 x = x[:x.index(epochs)+1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")

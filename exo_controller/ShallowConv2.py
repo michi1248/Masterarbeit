@@ -28,21 +28,18 @@ class ShallowConvNetWithAttention(nn.Module):
         self.best_time_index = best_time_tree
         self.grid_aranger = grid_aranger
 
-        # New convolutional layer to cover the entire grid
-        self.grid_conv = nn.Conv2d(1, 2, kernel_size=(8, 8 * self.number_of_grids),padding=0)
+        # Global Activity Path
+        self.global_pool = nn.AdaptiveAvgPool2d(1)
 
-        self.fc_overall1 = nn.Linear(8* 8 * self.number_of_grids,80)
-        self.fc_overall2 = nn.Linear(80,2)
-        self.fc_combined = nn.Linear(4,2)
+        # Spatial Activity Path
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=0)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=0)
+        self.fc1 = nn.Linear(32 * 1 * 5, 120)
 
-
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-
-
-        self.fc1 = nn.Linear(4096, 100)
-        self.fc2 = nn.Linear(100, 2)
-        self.relu = nn.ReLU()
+        # Merging and Output
+        self.fc2 = nn.Linear(120 + 1, 60)  # 120 from spatial path + 1 from global path
+        self.output = nn.Linear(60, 2)  # Output two regression values
         self.to(self.device)
 
     def _initialize_weights(self,m,seed=42):
@@ -86,21 +83,23 @@ class ShallowConvNetWithAttention(nn.Module):
             return combined
         else:
 
-            activity = torch.relu(self.fc_overall1(heatmap1.view(heatmap1.size(0), -1)))
-            activity = torch.relu(self.fc_overall2(activity))
+            # Global Activity Path
+            global_path = self.global_pool(heatmap1)
+            global_path = global_path.view(global_path.size(0), -1)  # Flatten
 
-            #x = self.relu(self.grid_conv(heatmap1))
-            x = self.relu(self.conv1(heatmap1))
-            x = self.relu(self.conv2(x))
-            x = x.view(x.size(0), -1)  # Flatten the tensor
-            x = torch.relu(self.fc1(x))
-            x = torch.relu(self.fc2(x))  # Sigmoid for values between 0 and 1
+            # Spatial Activity Path
+            spatial_path = F.relu(self.conv1(heatmap1))
+            spatial_path = self.pool(spatial_path)
+            spatial_path = F.relu(self.conv2(spatial_path))
+            spatial_path = spatial_path.view(spatial_path.size(0), -1)  # Flatten
+            spatial_path = F.relu(self.fc1(spatial_path))
 
-            combined = torch.cat((x, activity), dim=-1)
-            combined = combined.view(combined.size(0), -1)
-            combined = torch.relu(self.fc_combined(combined))
+            # Merge and Output
+            merged = torch.cat((spatial_path, global_path), dim=1)
+            merged = F.relu(self.fc2(merged))
+            output = self.output(merged)
 
-            return activity
+        return output
 
     def train_model(self, train_loader, learning_rate=0.0001, epochs=10):
         self.train()
@@ -151,6 +150,16 @@ class ShallowConvNetWithAttention(nn.Module):
                 x = x.float()  # Convert to float
                 x = x.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape input
                 x = x.to(self.device)
+                # pred  = self(x).cpu().numpy()
+                # if pred[0] < 0:
+                #     pred[0] = 0
+                # if pred[1] < 0:
+                #     pred[1] = 0
+                # if pred[0] > 1:
+                #     pred[0] = 1
+                # if pred[1] > 1:
+                #     pred[1] = 1
+                # return pred
                 return self(x).cpu().numpy()
             else:
                 x1 = torch.from_numpy(heatmap1)
@@ -193,7 +202,7 @@ class ShallowConvNetWithAttention(nn.Module):
 
         # Calculate the mean R-squared value
         mean_r_squared = torch.mean(torch.tensor(r_squared_values))
-        print(f'Average Loss: {mse_loss}')
+        print(f'Average Loss to next recording: {mse_loss}')
         return mean_r_squared.item(),mse_loss.item()
 
 
@@ -233,7 +242,7 @@ class ShallowConvNetWithAttention(nn.Module):
 
 
         avg_loss = total_loss / len(test_loader)
-        print(f'Average Loss: {avg_loss}')
+        print(f'Average Loss Test Data: {avg_loss}')
 
         # Convert lists to numpy arrays for plotting
         all_targets = np.array(all_targets)

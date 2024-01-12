@@ -32,8 +32,8 @@ class MultiDimensionalDecisionTree:
         use_spatial_filter=False,
         filter_ = None,
         use_difference_heatmap=False,
-        neuronmuscular_delay=30,
-        delay_to_movement=30,
+        neuromuscular_delay=20,
+        delay_to_movement=20,
         collected_with_virtual_hand = False
 
     ):
@@ -85,7 +85,7 @@ class MultiDimensionalDecisionTree:
         if num_previous_samples is None:
             num_previous_samples = self.select_default_num_previous()
         self.num_previous_samples = num_previous_samples
-        self.neuromuscular_delay = neuronmuscular_delay
+        self.neuromuscular_delay = neuromuscular_delay
         self.delay_to_movement = delay_to_movement
         self.neuromuscular_delay_in_samples = int(
             (self.neuromuscular_delay / 1000) * 2048
@@ -287,26 +287,26 @@ class MultiDimensionalDecisionTree:
             ref_erweitert = np.zeros(
                 (self.num_movements, len(self.ref_data[movement]))
             )  # [num_movements x num_samples]
-            if movement != "2pinch":
-                ref_erweitert[ref_erweitert == 0.0] = 0.0
+            # if movement != "2pinch":
+            #     ref_erweitert[ref_erweitert == 0.0] = 0.0
+            #
+            # if movement != "rest":
+            #     ref_data = normalize_2D_array(self.ref_data[movement], axis=0)
+            # else:
+            #     ref_data = self.ref_data[movement] * 0
+            #
+            # if (movement != "2pinch") and (movement != "rest"):
+            #     ref_erweitert[self.movment_dict[movement], :] = ref_data[
+            #         :, 0
+            #     ]
+            # else:  # in 2 pinch case
+            #     # thumb has to be 0.45 and index 0.6
+            #     for k in range(2):
+            #         ref_erweitert[k, :] = ref_data[:, k]
+            #     ref_erweitert[0, :] = np.multiply(ref_erweitert[0, :], 0.45)
+            #     ref_erweitert[1, :] = np.multiply(ref_erweitert[1, :], 0.6)
 
-            if movement != "rest":
-                ref_data = normalize_2D_array(self.ref_data[movement], axis=0)
-            else:
-                ref_data = self.ref_data[movement] * 0
-
-            if (movement != "2pinch") and (movement != "rest"):
-                ref_erweitert[self.movment_dict[movement], :] = ref_data[
-                    :, 0
-                ]
-            else:  # in 2 pinch case
-                # thumb has to be 0.45 and index 0.6
-                for k in range(2):
-                    ref_erweitert[k, :] = ref_data[:, k]
-                ref_erweitert[0, :] = np.multiply(ref_erweitert[0, :], 0.45)
-                ref_erweitert[1, :] = np.multiply(ref_erweitert[1, :], 0.6)
-
-
+            ref_data = self.ref_data[movement]
             emg_data = self.emg_data[movement]
             if self.use_bandpass_filter:
                 emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
@@ -383,22 +383,23 @@ class MultiDimensionalDecisionTree:
                     ref_erweitert = np.zeros(
                         (self.num_movements, len(self.ref_data[movement]))
                     )  # [num_movements x num_samples]
-                    if movement != "2pinch":
-                        ref_erweitert[ref_erweitert == 0.0] = 0.0
-                    if movement != "rest":
-                        ref_data = normalize_2D_array(self.ref_data[movement], axis=0)
-                    else:
-                        ref_data = self.ref_data[movement]
-
-                    if (movement != "2pinch") and (movement != "rest"):
-                        ref_erweitert[self.movment_dict[movement], :] = ref_data[
-                            :, 0
-                        ]  # jetzt werte für die bewegung an passenden index eintragen für anderen finger einträge auf 0.5 setzen
-                    else:
-                        for k in range(2):
-                            ref_erweitert[k, :] = ref_data[
-                                :, k
-                            ]  # TODO maybe change back to k if do not want both values to be the same
+                    # if movement != "2pinch":
+                    #     ref_erweitert[ref_erweitert == 0.0] = 0.0
+                    # if movement != "rest":
+                    #     ref_data = normalize_2D_array(self.ref_data[movement], axis=0)
+                    # else:
+                    #     ref_data = self.ref_data[movement]
+                    #
+                    # if (movement != "2pinch") and (movement != "rest"):
+                    #     ref_erweitert[self.movment_dict[movement], :] = ref_data[
+                    #         :, 0
+                    #     ]  # jetzt werte für die bewegung an passenden index eintragen für anderen finger einträge auf 0.5 setzen
+                    # else:
+                    #     for k in range(2):
+                    #         ref_erweitert[k, :] = ref_data[
+                    #             :, k
+                    #         ]  # TODO maybe change back to k if do not want both values to be the same
+                    ref_data = self.ref_data[movement]
                     emg_data = self.emg_data[movement]
                     if self.use_bandpass_filter:
                         emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)

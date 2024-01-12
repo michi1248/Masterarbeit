@@ -112,7 +112,7 @@ class Normalization:
         print("movements", movements)
 
         for movement in movements:
-            emg_data_one_movement = a[movement].transpose(1, 0, 2).reshape(64*len(self.grid_order), -1)
+            emg_data_one_movement = a[movement]#.transpose(1, 0, 2).reshape(64*len(self.grid_order), -1)
 
             if (self.mean is not None) and (self.mean is not None):
                 # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
@@ -141,7 +141,6 @@ class Normalization:
         min_values = 10000000
         for movement in range(len(self.all_emg_data)):
             sample_length = self.all_emg_data[movement].shape[2]
-
             num_samples = int(
                 sample_length / (self.sampling_frequency * (self.frame_duration / 1000))
             )
@@ -153,6 +152,8 @@ class Normalization:
                 heatmap = self.calculate_heatmap(
                     self.all_emg_data[movement], frame, number_observation_samples
                 )
+                if (self.mean is not None) and (self.mean is not None):
+                    heatmap = heatmap - self.mean
                 if np.max(heatmap) > max_values:
                     max_values = np.max(heatmap)
                 if np.min(heatmap) < min_values:

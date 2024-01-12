@@ -11,7 +11,7 @@ from exo_controller import ExtractImportantChannels
 from exo_controller import normalizations
 from exo_controller.helpers import *
 from exo_controller.spatial_filters import Filters
-from exo_controller.ShallowConv import ShallowConvNetWithAttention
+from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
 import time
 import keyboard
 
@@ -157,7 +157,7 @@ class EMGProcessor:
                 shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order))
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=600) # 7
+                shallow_model.train_model(train_loader, epochs=160) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -209,7 +209,7 @@ class EMGProcessor:
         # Process data for model input
         for i in emg_data.keys():
             emg_data[i] = np.array(
-                emg_data[i].transpose(1, 0, 2).reshape(len(self.grid_order)*64, -1)
+                emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order)*64, -1)
             )  # reshape emg data such as it has the shape 320 x #samples for each movement
 
 
@@ -327,7 +327,7 @@ class EMGProcessor:
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
         for i in emg_data.keys():
             emg_data[i] = np.array(
-                emg_data[i].transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
+                emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
             )
         emg_data = self.remove_nan_values(emg_data)
 
@@ -356,21 +356,22 @@ class EMGProcessor:
         for movement in ref_data.keys():
             if movement in self.movements:
 
-                if movement != "rest":
-                    ref_data_for_this_movement = normalize_2D_array(ref_data[movement], axis=0)
-                else:
-                    ref_data_for_this_movement = ref_data[movement] * 0
+                # if movement != "rest":
+                #     ref_data_for_this_movement = normalize_2D_array(ref_data[movement], axis=0)
+                # else:
+                #     ref_data_for_this_movement = ref_data[movement] * 0
 
-                if movement == "2pinch":
+                # if movement == "2pinch":
+                #
+                #     ref_data_for_this_movement[:, 0] = np.multiply(ref_data_for_this_movement[:, 0], 0.45)
+                #     ref_data_for_this_movement[:, 1] = np.multiply(ref_data_for_this_movement[:, 1], 0.6)
 
-                    ref_data_for_this_movement[:, 0] = np.multiply(ref_data_for_this_movement[:, 0], 0.45)
-                    ref_data_for_this_movement[:, 1] = np.multiply(ref_data_for_this_movement[:, 1], 0.6)
-
-                if movement == "thumb":
-                    ref_data_for_this_movement = np.hstack((ref_data_for_this_movement, np.zeros((ref_data[movement].shape[0], 1))))
-
-                if movement == "index":
-                    ref_data_for_this_movement = np.hstack((np.zeros((ref_data[movement].shape[0], 1)), ref_data_for_this_movement))
+                # if movement == "thumb":
+                #     ref_data_for_this_movement = np.hstack((ref_data_for_this_movement, np.zeros((ref_data[movement].shape[0], 1))))
+                #
+                # if movement == "index":
+                #     ref_data_for_this_movement = np.hstack((np.zeros((ref_data[movement].shape[0], 1)), ref_data_for_this_movement))
+                ref_data_for_this_movement = ref_data[movement]
 
                 emg_buffer = []
                 # ref_data[movement] = normalize_2D_array(ref_data[movement], axis=0)
@@ -613,7 +614,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_11_01_2024_remapped2_control",
+        patient_id="Michi_11_01_2024_remapped2",
         movements=[
             "rest",
             "thumb",
@@ -629,14 +630,14 @@ if __name__ == "__main__":
         time_for_each_movement_recording=25,
         load_trained_model=False,
         save_trained_model=True,
-        use_spatial_filter=False,
-        use_mean_subtraction=True,
+        use_spatial_filter=True,
+        use_mean_subtraction=False,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Michi_16_12_normal4_exo/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_remapped2_control/",  # False
         window_size=150,
-        scaling_method="no_scaling",
-        only_record_data=True,
+        scaling_method="Robust_all_channels",
+        only_record_data=False,
         use_control_stream=True,
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True

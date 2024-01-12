@@ -49,7 +49,7 @@ class Heatmap:
 
         self.normalizer = normalizations.Normalization(
             method=method,
-            grid_order=[1, 2, 3],
+            grid_order=[1, 2],
             important_channels=range(64*3),
             frame_duration=frame_duration,
         )
@@ -61,9 +61,9 @@ class Heatmap:
             movements=["rest", "2pinch", "index", "thumb"],
         )
         self.normalizer.calculate_normalization_values()
-        self.max_for_heatmap,self.min_for_heatmap = self.normalizer.calculate_norm_values_heatmap()
-        self.max_for_heatmap = self.normalizer.normalize_chunk(self.max_for_heatmap)
-        self.min_for_heatmap = self.normalizer.normalize_chunk(self.min_for_heatmap)
+        # self.max_for_heatmap,self.min_for_heatmap = self.normalizer.calculate_norm_values_heatmap()
+        # self.max_for_heatmap = self.normalizer.normalize_chunk(self.max_for_heatmap)
+        # self.min_for_heatmap = self.normalizer.normalize_chunk(self.min_for_heatmap)
 
         if method == "Gauss_filter":
             self.gauss_filter = create_gaussian_filter(size_filter=5)
@@ -98,11 +98,11 @@ class Heatmap:
             load_pickle_file(os.path.join(path_to_subject_dat, "emg_data.pkl"))[
                 movement_name
             ]
-            .transpose(1, 0, 2)
-            .reshape(64*3, -1)
+            # .transpose(1, 0, 2)
+            # .reshape(64*3, -1)
         )
 
-        grid_aranger = grid_arrangement.Grid_Arrangement([1, 2, 3])
+        grid_aranger = grid_arrangement.Grid_Arrangement([1, 2])
         grid_aranger.make_grid()
 
         # emg_data_for_max_min = load_pickle_file(os.path.join(path_to_subject_dat, "emg_data.pkl"))
@@ -302,6 +302,8 @@ class Heatmap:
                 # )
 
         if self.global_counter == 0:
+
+
             hmap = sns.heatmap(
                 normalized_heatmap,
                 ax=self.ax_emg,
@@ -310,10 +312,11 @@ class Heatmap:
                 xticklabels=True,
                 yticklabels=True,
                 cbar_kws={"label": "norm. RMS"},
-                vmax=self.max_for_heatmap,
-                vmin=self.min_for_heatmap,
+
             )  # ,cbar_ax=self.ax_emg,)
+
         else:
+
             hmap = sns.heatmap(
                 normalized_heatmap,
                 ax=self.ax_emg,
@@ -322,9 +325,9 @@ class Heatmap:
                 xticklabels=True,
                 yticklabels=True,
                 cbar_kws={"label": "norm. RMS"},
-                vmax=self.max_for_heatmap,
-                vmin=self.min_for_heatmap,
+
             )  # ,cbar_ax=self.ax_emg,)
+
         self.global_counter += 1
         # self.emg_plot.set(normalized_heatmap, ax=self.ax_emg, cmap='hot', cbar=True, xticklabels=True, yticklabels=True, cbar_kws={'label': 'norm. RMS'},mask=mask_for_heatmap)
         # self.ax_emg.imshow(heatmap, cmap='hot', interpolation='nearest')
@@ -347,12 +350,17 @@ class Heatmap:
                 linewidth=3,
             )
         else:
+            if self.movement_name == "thumb":
+                index_movement = 0
+            elif self.movement_name == "index":
+                index_movement = 1
+
             self.ax_ref.plot(
-                self.x_for_ref, normalize_2D_array(self.ref_data), color="blue"
+                self.x_for_ref, normalize_2D_array(self.ref_data[:, index_movement]), color="blue"
             )
             self.ax_ref.scatter(
                 self.x_for_ref[frame],
-                normalize_2D_array(self.ref_data)[frame],
+                normalize_2D_array(self.ref_data)[:, index_movement][frame],
                 color="green",
                 marker="x",
                 s=90,
@@ -385,12 +393,13 @@ class Heatmap:
         # Save the frame as an image
         frame_filename = os.path.join(self.path_to_save_plots, f"frame_{frame:03d}.png")
         self.fig.canvas.draw()
-        # plt.savefig(frame_filename, bbox_inches='tight', dpi=100)
+        #plt.savefig(frame_filename)
         pil_image = Image.frombytes(
             "RGB", self.fig.canvas.get_width_height(), self.fig.canvas.tostring_rgb()
         )
         pil_image.save(frame_filename)
         self.pbar.update(1)
+        plt.close()
 
         return self.ax_emg, self.ax_ref
 
@@ -430,17 +439,22 @@ class Heatmap:
             or ("rest" in self.movement_name)
         ):
             self.local_maxima, self.local_minima = get_locations_of_all_maxima(
-                self.ref_data[:, 0], distance=5000
+                self.ref_data[:, 0], distance=2000
             )
             plot_local_maxima_minima(
                 self.ref_data[:, 0], self.local_maxima, self.local_minima
             )
         else:
+            if self.movement_name == "thumb":
+                index_movement = 0
+            elif self.movement_name == "index":
+                index_movement = 1
+
             self.local_maxima, self.local_minima = get_locations_of_all_maxima(
-                self.ref_data[:]
+                self.ref_data[:, index_movement]
             )
             plot_local_maxima_minima(
-                self.ref_data, self.local_maxima, self.local_minima
+                self.ref_data[:, index_movement], self.local_maxima, self.local_minima
             )
 
         if not save:
@@ -586,13 +600,13 @@ if __name__ == "__main__":
     # "Bandpass_filter" = use bandpass filter on raw data and plot the filtered all emg channels
     plot_emg = False
 
-    window_size = 100
+    window_size = 150
     for method in [
-        # "Min_Max_Scaling_over_whole_data",
-        # "Robust_Scaling",
-        "Min_Max_Scaling_all_channels",
-        "no_scaling",
-        # "Robust_all_channels",
+        #"Min_Max_Scaling_over_whole_data",
+        #"Robust_Scaling",
+        #"Min_Max_Scaling_all_channels",
+        #"no_scaling",
+        "Robust_all_channels",
         "EMG_signals",
     ]:
         mean_flex_rest = None
@@ -601,9 +615,9 @@ if __name__ == "__main__":
         for additional_term in ["before", "after"]:
             for movement in ["rest", "thumb", "index", "2pinch"]:
                 if additional_term == "before":
-                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_07_12_normal1"  # trainingsdata recorded for training
+                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_11_01_2024_normal2"  # trainingsdata recorded for training
                 else:
-                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_07_12_normal2"  # trainingsdata recorded after training
+                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_11_01_2024_normal3"  # trainingsdata recorded after training
 
                 print("method is: ", method)
                 print("movement is: ", movement)

@@ -956,7 +956,10 @@ def get_locations_of_all_maxima(movement_signal, distance=2800):
         if movement_signal.shape[1] == 1:
             movement_signal = movement_signal.squeeze(axis=1)
         else:
-            movement_signal = movement_signal[:, 0]
+            if np.max(movement_signal[:,0]) > np.max(movement_signal[:, 1]):
+                movement_signal = movement_signal[:, 0]
+            else:
+                movement_signal = movement_signal[:, 1]
 
     local_maxima, _ = find_peaks(movement_signal, distance=distance)
     local_minima, _ = find_peaks(-movement_signal, distance=distance)
