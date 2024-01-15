@@ -199,14 +199,19 @@ class EMGProcessor:
         #         emg_data[i].transpose(1, 0, 2).reshape(len(self.grid_order)*64, -1)
         #     )  # reshape emg data such as it has the shape 320 x #samples for each movement
 
+        copied_emg_data = emg_data.copy()
+        for i in copied_emg_data.keys():
+            copied_emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(copied_emg_data[i])
 
         if self.use_important_channels:
             important_channels = extract_important_channels_realtime(
-                self.movements.copy(), emg_data, ref_data
+                self.movements.copy(), copied_emg_data, ref_data
             )
-            self.channels = [
-                self.grid_aranger.from_grid_position_to_row_position(ch) for ch in important_channels
+            self.channels = important_channels
+            self.channels_row_shape = [
+                self.grid_aranger.from_grid_position_to_row_position(ch[0], ch[1]) for ch in important_channels
             ]
+
         else:
             self.channels = range(len(self.grid_order) * 64)
 
@@ -316,6 +321,9 @@ class EMGProcessor:
             emg_data[i] = np.array(
                 emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
             )
+            for channel in range(emg_data[i].shape[0]):
+                if channel not in self.channels_row_shape:
+                    emg_data[i][channel,:] = 0
         emg_data = self.remove_nan_values(emg_data)
 
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")

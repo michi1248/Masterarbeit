@@ -11,6 +11,7 @@ import torch
 from scipy.signal import find_peaks
 from scipy.signal import butter, lfilter
 from scipy.fft import fft, fftfreq
+import seaborn as sns
 
 # from ChannelExtraction import ChannelExtraction
 import sys
@@ -75,11 +76,12 @@ def extract_important_channels_realtime(movement_list, emg, ref):
     for movement in tqdm.tqdm(
         movement_list, desc="Extracting important channels for from all movements"
     ):
-        extractor = ExtractImportantChannels.ChannelExtraction(movement, emg, ref)
-        channels = extractor.get_channels()
-        for channel in channels:
-            if channel not in important_channels:
-                important_channels.append(channel)
+        if "rest" not in movement:
+            extractor = ExtractImportantChannels.ChannelExtraction(movement, emg, ref)
+            channels = extractor.get_channels()
+            for channel in channels:
+                if channel not in important_channels:
+                    important_channels.append(channel)
     return important_channels
 
 
@@ -944,7 +946,7 @@ def plot_predictions(ground_truth, prediction, tree_number=None, realtime=False)
         plt.show()
 
 
-def get_locations_of_all_maxima(movement_signal, distance=2800):
+def get_locations_of_all_maxima(movement_signal, distance=5000):
     """
     returns the locations of all local maxima and minima in the movement signal, distance is the minimum distance between two maxima/minima
     :param movement_signal:
@@ -1001,7 +1003,7 @@ def choose_possible_channels(
     mean_flex_heatmap,
     mean_ex_heatmap,
     threshold_neighbours=0.25,
-    threshold_difference_amplitude=0.35,
+    threshold_difference_amplitude=0.2,
 ):
     """
     Chooses the channels that are more active in one movement than in the other
@@ -1017,6 +1019,23 @@ def choose_possible_channels(
     """
     # threshold = only areas with values above it will be considered
 
+    difference_heatmap = normalize_2D_array(difference_heatmap, axis=None, negative=False)
+    plt.figure()
+    sns.heatmap(difference_heatmap)
+    plt.title("difference heatmap")
+    plt.show()
+
+    plt.figure()
+    sns.heatmap(mean_flex_heatmap)
+    plt.title("mean flex heatmap")
+    plt.show()
+
+    plt.figure()
+    sns.heatmap(mean_ex_heatmap)
+    plt.title("mean ex heatmap")
+    plt.show()
+
+
     ex_list = []
     flex_list = []
     # TODO jede listen eintrag besteht aus [row,col]
@@ -1025,6 +1044,7 @@ def choose_possible_channels(
     # Determine whether the channel is more active in movement 1 or movement 2
     # Find the centroids of each area and calculate the channel with the highest activity
     # TODO additionaly filter for outliers (has high activity but surrounding not)
+
 
     # Iterate through the grid
     for i in range(difference_heatmap.shape[0]):
@@ -1074,7 +1094,7 @@ def choose_possible_channels(
             ):
                 activity_in_movement_1 = mean_flex_heatmap[i][j]
                 activity_in_movement_2 = mean_ex_heatmap[i][j]
-                # print("refference channel found for low acitivity")
+                print("refference channel found for low acitivity")
                 # Assign the channel to the respective list based on activity
                 if activity_in_movement_1 < activity_in_movement_2:
                     flex_list.append([i, j])

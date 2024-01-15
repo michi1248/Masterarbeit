@@ -157,7 +157,7 @@ class EMGProcessor:
                 shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order))
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=500) # 7
+                shallow_model.train_model(train_loader, epochs=700) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -212,14 +212,20 @@ class EMGProcessor:
                 emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order)*64, -1)
             )  # reshape emg data such as it has the shape 320 x #samples for each movement
 
+        copied_emg_data = emg_data.copy()
+        for i in copied_emg_data.keys():
+            copied_emg_data[i] =self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(copied_emg_data[i])
+
 
         if self.use_important_channels:
             important_channels = extract_important_channels_realtime(
-                self.movements.copy(), emg_data, ref_data
+                self.movements.copy(), copied_emg_data, ref_data
             )
-            self.channels = [
-                self.grid_aranger.from_grid_position_to_row_position(ch) for ch in important_channels
+            self.channels = important_channels
+            self.channels_row_shape = [
+                self.grid_aranger.from_grid_position_to_row_position(ch[0],ch[1]) for ch in important_channels
             ]
+
         else:
             self.channels = range(len(self.grid_order) * 64)
 
@@ -329,12 +335,14 @@ class EMGProcessor:
             emg_data[i] = np.array(
                 emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
             )
+            for channel in range(emg_data[i].shape[0]):
+                if channel not in self.channels_row_shape:
+                    emg_data[i][channel,:] = 0
         emg_data = self.remove_nan_values(emg_data)
 
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
         ref_data = self.remove_nan_values(ref_data)
         ref_data = resample_reference_data(ref_data, emg_data)
-
 
 
         for i in emg_data.keys():
@@ -354,6 +362,8 @@ class EMGProcessor:
 
 
         for movement in ref_data.keys():
+            buffer_pred = []
+            buffer_control = []
             if movement in self.movements:
 
                 # if movement != "rest":
@@ -472,6 +482,8 @@ class EMGProcessor:
 
                     if self.use_local:
                         if self.use_control_stream:
+                            buffer_pred.append(res_local)
+                            buffer_control.append(control_ref_data)
                             self.output_results(res_local,control_ref_data)
                         else:
                             self.output_results(res_local)
@@ -484,6 +496,13 @@ class EMGProcessor:
                     if time_end - time_start < (64/2048):
                         time.sleep((64/2048) - (time_end - time_start))
 
+            plt.figure()
+            plt.plot(np.array(buffer_pred)[:,0])
+            plt.plot(np.add(np.array(buffer_pred)[:,1],1))
+            plt.plot(np.add(np.array(buffer_control)[:,0],2))
+            plt.plot(np.add(np.array(buffer_control)[:,1],3))
+            plt.legend(["pred thumb","pred index","ref thumb", "ref index"])
+            plt.show()
 
     def run_prediction_loop(self, model):
 
@@ -586,6 +605,7 @@ class EMGProcessor:
                     else:
                         res_time = np.array(res_time[0])
 
+
             if self.use_local:
                 print(res_local)
                 self.output_results(res_local)
@@ -623,7 +643,7 @@ if __name__ == "__main__":
         ],
         grid_order=[1,2],
         use_difference_heatmap=False,
-        use_important_channels=False,
+        use_important_channels=True,
         use_local=True,
         output_on_exo=True,
         filter_output=True,

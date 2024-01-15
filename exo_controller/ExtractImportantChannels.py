@@ -118,11 +118,7 @@ class ChannelExtraction:
         self.heatmaps_ex = np.zeros((num_rows, num_cols))
         self.number_heatmaps_flex = 0
         self.number_heatmaps_ex = 0
-        if (
-            ("pinch" in self.movement_name)
-            or ("fist" in self.movement_name)
-            or ("rest" in self.movement_name)
-        ):
+        if np.max(self.ref_data[:, 0]) > np.max(self.ref_data[:, 1]):
             self.local_maxima, self.local_minima = helpers.get_locations_of_all_maxima(
                 self.ref_data[:, 0], distance=5000
             )
@@ -131,10 +127,10 @@ class ChannelExtraction:
             )
         else:
             self.local_maxima, self.local_minima = helpers.get_locations_of_all_maxima(
-                self.ref_data[:]
+                self.ref_data[:, 1], distance=5000
             )
             helpers.plot_local_maxima_minima(
-                self.ref_data, self.local_maxima, self.local_minima
+                self.ref_data[:, 1], self.local_maxima, self.local_minima
             )
 
         for i in self.samples:
@@ -150,16 +146,14 @@ class ChannelExtraction:
             element for element in self.samples if element <= len(self.ref_data)
         ]
         # make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
-        num_rows, num_cols = self.emg_data[self.movement_name].shape
+        num_rows, num_cols,_ = self.emg_data[self.movement_name].shape
         self.heatmaps_flex = np.zeros((num_rows, num_cols))
         self.heatmaps_ex = np.zeros((num_rows, num_cols))
         self.number_heatmaps_flex = 0
         self.number_heatmaps_ex = 0
-        if (
-            ("pinch" in self.movement_name)
-            or ("fist" in self.movement_name)
-            or ("rest" in self.movement_name)
-        ):
+
+
+        if np.max(self.ref_data[:,0]) > np.max(self.ref_data[:, 1]):
             self.local_maxima, self.local_minima = helpers.get_locations_of_all_maxima(
                 self.ref_data[:, 0], distance=5000
             )
@@ -168,11 +162,12 @@ class ChannelExtraction:
             )
         else:
             self.local_maxima, self.local_minima = helpers.get_locations_of_all_maxima(
-                self.ref_data[:]
+                self.ref_data[:, 1], distance=5000
             )
             helpers.plot_local_maxima_minima(
-                self.ref_data, self.local_maxima, self.local_minima
+                self.ref_data[:, 1], self.local_maxima, self.local_minima
             )
+
 
         important_channels = []
         for i in self.samples:

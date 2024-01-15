@@ -308,6 +308,12 @@ class MultiDimensionalDecisionTree:
 
             ref_data = self.ref_data[movement]
             emg_data = self.emg_data[movement]
+
+            emg_data_new = np.zeros((emg_data.shape[0],emg_data.shape[1],emg_data.shape[2]))
+            for important_channel in self.important_channels:
+                emg_data_new[important_channel[0],important_channel[1], :] = emg_data[important_channel[0],important_channel[1], :]
+            emg_data = emg_data_new
+
             if self.use_bandpass_filter:
                 emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
             if self.use_spatial_filter:
