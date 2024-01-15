@@ -157,7 +157,7 @@ class EMGProcessor:
                 shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order))
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=160) # 7
+                shallow_model.train_model(train_loader, epochs=500) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -630,13 +630,13 @@ if __name__ == "__main__":
         time_for_each_movement_recording=25,
         load_trained_model=False,
         save_trained_model=True,
-        use_spatial_filter=True,
+        use_spatial_filter=False,
         use_mean_subtraction=False,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_remapped2_control/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_remapped2/",  # False
         window_size=150,
-        scaling_method="Robust_all_channels",
+        scaling_method="no_scaling",
         only_record_data=False,
         use_control_stream=True,
         use_shallow_conv=True,

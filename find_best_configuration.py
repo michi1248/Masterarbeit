@@ -46,7 +46,8 @@ class EMGProcessor:
         use_control_stream,
         use_shallow_conv,
         use_virtual_hand_interface_for_coord_generation,
-        epochs
+        epochs,
+        split_index_if_same_dataset = None
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -82,6 +83,8 @@ class EMGProcessor:
         self.gauss_filter = None
         self.normalizer = None
         self.epochs = epochs
+
+        self.split_index_if_same_dataset = split_index_if_same_dataset
 
         self.initialize()
 
@@ -317,7 +320,7 @@ class EMGProcessor:
 
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
         ref_data = self.remove_nan_values(ref_data)
-        ref_data = resample_reference_data(ref_data, emg_data)
+        #ref_data = resample_reference_data(ref_data, emg_data)
 
 
 
@@ -340,22 +343,23 @@ class EMGProcessor:
         for movement in ref_data.keys():
             if movement in self.movements:
 
-                if movement != "rest":
-                    ref_data_for_this_movement = normalize_2D_array(ref_data[movement], axis=0)
-                else:
-                    ref_data_for_this_movement = ref_data[movement] * 0
+                # if movement != "rest":
+                #     ref_data_for_this_movement = normalize_2D_array(ref_data[movement], axis=0)
+                # else:
+                #     ref_data_for_this_movement = ref_data[movement] * 0
+                #
+                # if movement == "2pinch":
+                #
+                #     ref_data_for_this_movement[:, 0] = np.multiply(ref_data_for_this_movement[:, 0], 0.45)
+                #     ref_data_for_this_movement[:, 1] = np.multiply(ref_data_for_this_movement[:, 1], 0.6)
+                #
+                # if movement == "thumb":
+                #     ref_data_for_this_movement = np.hstack((ref_data_for_this_movement, np.zeros((ref_data[movement].shape[0], 1))))
+                #
+                # if movement == "index":
+                #     ref_data_for_this_movement = np.hstack((np.zeros((ref_data[movement].shape[0], 1)), ref_data_for_this_movement))
 
-                if movement == "2pinch":
-
-                    ref_data_for_this_movement[:, 0] = np.multiply(ref_data_for_this_movement[:, 0], 0.45)
-                    ref_data_for_this_movement[:, 1] = np.multiply(ref_data_for_this_movement[:, 1], 0.6)
-
-                if movement == "thumb":
-                    ref_data_for_this_movement = np.hstack((ref_data_for_this_movement, np.zeros((ref_data[movement].shape[0], 1))))
-
-                if movement == "index":
-                    ref_data_for_this_movement = np.hstack((np.zeros((ref_data[movement].shape[0], 1)), ref_data_for_this_movement))
-
+                ref_data_for_this_movement = ref_data[movement]
                 emg_buffer = []
                 # ref_data[movement] = normalize_2D_array(ref_data[movement], axis=0)
                 print("movement: ", movement, file=sys.stderr)
@@ -499,6 +503,8 @@ if __name__ == "__main__":
     mean_rest = None
     grid_arranger = None
 
+    split_index_if_same_dataset = 0.8
+
     use_shallow_conv = True
 
     for method in ["Robust_Scaling","Robust_all_channels","Min_Max_Scaling_all_channels","no_scaling"]:
@@ -506,6 +512,12 @@ if __name__ == "__main__":
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
         mse_evaluation_results_no_mean_sub = []
+
+        best_r2_mean = None
+        best_r2_no_mean = None
+        best_mse_mean = None
+        best_mse_no_mean = None
+
         for epochs in [1,5,10,15,20,50,100,125,150,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True,False]:#[True,False]
                 if (count > 0) and use_shallow_conv is False:
@@ -529,11 +541,11 @@ if __name__ == "__main__":
                     time_for_each_movement_recording=25,
                     load_trained_model=False,
                     save_trained_model=True,
-                    use_spatial_filter=True,
+                    use_spatial_filter=False,
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_remapped2_control/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_remapped2/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
@@ -542,6 +554,7 @@ if __name__ == "__main__":
                     #set this to false if not recorded with virtual hand interface
                     use_virtual_hand_interface_for_coord_generation = True,
                     epochs = epochs,
+                    split_index_if_same_dataset = split_index_if_same_dataset
 
                 )
                 if count == 0:
@@ -570,6 +583,24 @@ if __name__ == "__main__":
                     evaluation_results_no_mean_sub.append(avg_loss)
                     mse_evaluation_results_no_mean_sub.append(mse_loss)
 
+                if best_r2_mean is None:
+                    best_r2_mean = avg_loss
+                    best_mse_mean = mse_loss
+                if best_r2_no_mean is None:
+                    best_r2_no_mean = avg_loss
+                    best_mse_no_mean = mse_loss
+
+                if use_mean_sub:
+                    if avg_loss < best_r2_mean:
+                        best_r2_mean = avg_loss
+                    if mse_loss < best_mse_mean:
+                        best_mse_mean = mse_loss
+                else:
+                    if avg_loss < best_r2_no_mean:
+                        best_r2_no_mean = avg_loss
+                    if mse_loss < best_mse_no_mean:
+                        best_mse_no_mean = mse_loss
+
             if use_shallow_conv:
                 plt.figure()
                 x = [1,5,10,15,20,50,100,125,150,250,500]
@@ -583,9 +614,18 @@ if __name__ == "__main__":
                 if len(mse_evaluation_results_no_mean_sub) == len(x):
                     plt.plot(x, mse_evaluation_results_no_mean_sub, label="mse_no_mean_sub", color="blue", marker="o")
 
+                # Creating a dummy plot element for the additional text
+                plt.plot([], [], ' ', label='Best mse no mean is ' + str(round(best_mse_no_mean,3)))
+                plt.plot([], [], ' ', label='Best mse mean is ' + str(round(best_mse_mean,3)))
+                plt.plot([], [], ' ', label='Best r2 no mean is ' + str(round(best_r2_no_mean,3)))
+                plt.plot([], [], ' ', label='Best r2 mean is ' + str(round(best_r2_mean,3)))
+
                 plt.ylabel("avg_loss")
                 plt.xlabel("epochs")
                 plt.title(method)
                 plt.legend()
-                plt.savefig(r"D:\Lab\MasterArbeit/" + method + ".png")
+
+                train_name = emg_processor.patient_id.split("_")[-1]
+                test_name = emg_processor.use_recorded_data.split("_")[-1].split("/")[0]
+                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + ".png")
 

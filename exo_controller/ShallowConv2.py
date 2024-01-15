@@ -97,11 +97,11 @@ class ShallowConvNetWithAttention(nn.Module):
             # Merge and Output
             merged = torch.cat((spatial_path, global_path), dim=1)
             merged = F.relu(self.fc2(merged))
-            output = self.output(merged)
+            output = torch.sigmoid(self.output(merged))
 
         return output
 
-    def train_model(self, train_loader, learning_rate=0.0001, epochs=10):
+    def train_model(self, train_loader, learning_rate=0.001, epochs=10):
         self.train()
         criterion = nn.MSELoss()
         optimizer = optim.Adam(self.parameters(), lr=learning_rate,weight_decay=0.0001)
@@ -127,17 +127,23 @@ class ShallowConvNetWithAttention(nn.Module):
 
                 targets = targets.to(self.device)
 
-                optimizer.zero_grad()
-                if self.use_difference_heatmap:
-                    outputs = self(heatmap1, heatmap2)
-                else:
-                    outputs = self(heatmap1)
 
-                loss = criterion(outputs, targets)
-                loss.backward()
+                if self.use_difference_heatmap:
+                    output  = self(heatmap1, heatmap2)
+                else:
+                    output = self(heatmap1)
+
+                output1 = output[:,0]
+                output2 = output[:,1]
+                loss1 = criterion(output1, targets[:,0])
+                loss2 = criterion(output2, targets[:,1])
+                total_loss = loss1 + loss2
+
+                optimizer.zero_grad()
+                total_loss.backward()
                 optimizer.step()
 
-                epoch_loss += loss.item()
+                epoch_loss += total_loss.item()
                 progress_bar.set_postfix({'loss': epoch_loss / ( len(train_loader))})
 
             progress_bar.close()
