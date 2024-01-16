@@ -157,7 +157,7 @@ class EMGProcessor:
                 shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order))
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=700) # 7
+                shallow_model.train_model(train_loader, epochs=160) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -335,9 +335,10 @@ class EMGProcessor:
             emg_data[i] = np.array(
                 emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
             )
-            for channel in range(emg_data[i].shape[0]):
-                if channel not in self.channels_row_shape:
-                    emg_data[i][channel,:] = 0
+            if self.use_important_channels:
+                for channel in range(emg_data[i].shape[0]):
+                    if channel not in self.channels_row_shape:
+                        emg_data[i][channel,:] = 0
         emg_data = self.remove_nan_values(emg_data)
 
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
@@ -634,7 +635,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_11_01_2024_remapped2",
+        patient_id="Michi_11_01_2024_normal2",
         movements=[
             "rest",
             "thumb",
@@ -643,7 +644,7 @@ if __name__ == "__main__":
         ],
         grid_order=[1,2],
         use_difference_heatmap=False,
-        use_important_channels=True,
+        use_important_channels=False,
         use_local=True,
         output_on_exo=True,
         filter_output=True,
@@ -654,9 +655,9 @@ if __name__ == "__main__":
         use_mean_subtraction=False,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_remapped2/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
         window_size=150,
-        scaling_method="no_scaling",
+        scaling_method="Min_Max_Scaling_all_channels",
         only_record_data=False,
         use_control_stream=True,
         use_shallow_conv=True,

@@ -322,7 +322,7 @@ class EMGProcessor:
                 emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
             )
             if self.use_important_channels:
-                print("in important channels")
+
                 for channel in range(emg_data[i].shape[0]):
                     if channel not in self.channels_row_shape:
                         emg_data[i][channel,:] = 0
@@ -471,7 +471,6 @@ class EMGProcessor:
             emg_data, ref_data = self.load_data()
             if self.only_record_data:
                 return
-
             self.process_data(emg_data, ref_data)
             model = self.train_model(emg_data, ref_data,already_build=already_build)
         else:
@@ -495,6 +494,8 @@ if __name__ == "__main__":
     normalizer = None
     mean_rest = None
     grid_arranger = None
+    important_channels = None
+    channels_row_shape = None
 
     split_index_if_same_dataset = 0.8
 
@@ -511,8 +512,9 @@ if __name__ == "__main__":
         best_mse_mean = None
         best_mse_no_mean = None
 
-        for use_mean_sub in [True, False]:  # [True,False]
-            for epochs in [1,10,20,50,100,125,150,250,500,1000,2000,4000]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+
+        for epochs in [1,10,20,50,100,125,150,250,500,1000,2000,4000]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+            for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
                 print("epochs: ", epochs)
@@ -550,7 +552,7 @@ if __name__ == "__main__":
                     split_index_if_same_dataset = split_index_if_same_dataset
 
                 )
-                if count == 0:
+                if count <= 1:
                     avg_loss, mse_loss = emg_processor.run(already_build=False)
                 else:
                     emg_processor.num_previous_samples = num_previous_samples
@@ -558,6 +560,8 @@ if __name__ == "__main__":
                     emg_processor.normalizer = normalizer
                     emg_processor.mean_rest = mean_rest
                     emg_processor.grid_aranger = grid_arranger
+                    emg_processor.channels = important_channels
+                    emg_processor.channels_row_shape = channels_row_shape
                     avg_loss, mse_loss = emg_processor.run(already_build=True)
 
                 if count == 0:
@@ -566,6 +570,8 @@ if __name__ == "__main__":
                     normalizer = emg_processor.normalizer
                     mean_rest = emg_processor.mean_rest
                     grid_arranger = emg_processor.grid_aranger
+                    important_channels = emg_processor.channels
+                    channels_row_shape = emg_processor.channels_row_shape
                 count += 1
                 print("avg__r2_loss_after_eval: ", avg_loss)
                 print("mse_loss_after_eval: ", mse_loss)
