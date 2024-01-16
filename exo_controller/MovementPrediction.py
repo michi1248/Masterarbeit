@@ -309,10 +309,11 @@ class MultiDimensionalDecisionTree:
             ref_data = self.ref_data[movement]
             emg_data = self.emg_data[movement]
 
-            emg_data_new = np.zeros((emg_data.shape[0],emg_data.shape[1],emg_data.shape[2]))
-            for important_channel in self.important_channels:
-                emg_data_new[important_channel[0],important_channel[1], :] = emg_data[important_channel[0],important_channel[1], :]
-            emg_data = emg_data_new
+            if np.ndim(self.important_channels) == 2:
+                emg_data_new = np.zeros((emg_data.shape[0],emg_data.shape[1],emg_data.shape[2]))
+                for important_channel in self.important_channels:
+                    emg_data_new[important_channel[0],important_channel[1], :] = emg_data[important_channel[0],important_channel[1], :]
+                emg_data = emg_data_new
 
             if self.use_bandpass_filter:
                 emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
@@ -497,40 +498,78 @@ class MultiDimensionalDecisionTree:
         plot_predictions(truth, predictions, tree_number=tree_number, realtime=realtime)
 
     def load_trainings_data(self):
-        self.X_test_local = np.array(
-            load_pickle_file(
-                r"trainings_data/resulting_trainings_data/subject_"
-                + str(self.patient_number)
-                + "/X_test_local.pkl"
+        if self.mean_rest is None:
+            self.X_test_local = np.array(
+                load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/X_test_local.pkl"
+                )
             )
-        )
-        self.y_test_local = np.array(
-            load_pickle_file(
-                r"trainings_data/resulting_trainings_data/subject_"
-                + str(self.patient_number)
-                + "/y_test_local.pkl"
+            self.y_test_local = np.array(
+                load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/y_test_local.pkl"
+                )
             )
-        )
-        self.X_train_local = np.array(
-            load_pickle_file(
-                r"trainings_data/resulting_trainings_data/subject_"
-                + str(self.patient_number)
-                + "/X_train_local.pkl"
+            self.X_train_local = np.array(
+                load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/X_train_local.pkl"
+                )
             )
-        )
-        self.y_train_local = np.array(
-            load_pickle_file(
-                r"trainings_data/resulting_trainings_data/subject_"
-                + str(self.patient_number)
-                + "/y_train_local.pkl"
+            self.y_train_local = np.array(
+                load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/y_train_local.pkl"
+                )
             )
-        )
-        if self.use_difference_heatmap:
-            self.training_data_time = load_pickle_file(
-                r"trainings_data/resulting_trainings_data/subject_"
-                + str(self.patient_number)
-                + "/training_data_time.pkl"
+            if self.use_difference_heatmap:
+                self.training_data_time = load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/training_data_time.pkl"
+                )
+        else:
+            self.X_test_local = np.array(
+                load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/X_test_local_mean.pkl"
+                )
             )
+            self.y_test_local = np.array(
+                load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/y_test_local_mean.pkl"
+                )
+            )
+            self.X_train_local = np.array(
+                load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/X_train_local_mean.pkl"
+                )
+            )
+            self.y_train_local = np.array(
+                load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/y_train_local_mean.pkl"
+                )
+            )
+            if self.use_difference_heatmap:
+                self.training_data_time = load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/training_data_time_mean.pkl"
+                )
+
+
 
     def add_data_for_local_detection(self, x_train, y_train, x_test, y_test):
         self.X_train_local = x_train
@@ -593,37 +632,71 @@ class MultiDimensionalDecisionTree:
             return best_time_tree
 
     def save_trainings_data(self):
-        save_as_pickle(
-            self.X_test_local,
-            r"trainings_data/resulting_trainings_data/subject_"
-            + str(self.patient_number)
-            + "/X_test_local.pkl",
-        )
-        save_as_pickle(
-            self.y_test_local,
-            r"trainings_data/resulting_trainings_data/subject_"
-            + str(self.patient_number)
-            + "/y_test_local.pkl",
-        )
-        save_as_pickle(
-            self.X_train_local,
-            r"trainings_data/resulting_trainings_data/subject_"
-            + str(self.patient_number)
-            + "/X_train_local.pkl",
-        )
-        save_as_pickle(
-            self.y_train_local,
-            r"trainings_data/resulting_trainings_data/subject_"
-            + str(self.patient_number)
-            + "/y_train_local.pkl",
-        )
-        if self.use_difference_heatmap:
+        if self.mean_rest is None:
             save_as_pickle(
-                self.training_data_time,
+                self.X_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/training_data_time.pkl",
+                + "/X_test_local.pkl",
             )
+            save_as_pickle(
+                self.y_test_local,
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_number)
+                + "/y_test_local.pkl",
+            )
+            save_as_pickle(
+                self.X_train_local,
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_number)
+                + "/X_train_local.pkl",
+            )
+            save_as_pickle(
+                self.y_train_local,
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_number)
+                + "/y_train_local.pkl",
+            )
+            if self.use_difference_heatmap:
+                save_as_pickle(
+                    self.training_data_time,
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/training_data_time.pkl",
+                )
+        else:
+            save_as_pickle(
+                self.X_test_local,
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_number)
+                + "/X_test_local_mean.pkl",
+            )
+            save_as_pickle(
+                self.y_test_local,
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_number)
+                + "/y_test_local_mean.pkl",
+            )
+            save_as_pickle(
+                self.X_train_local,
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_number)
+                + "/X_train_local_mean.pkl",
+            )
+            save_as_pickle(
+                self.y_train_local,
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_number)
+                + "/y_train_local_mean.pkl",
+            )
+            if self.use_difference_heatmap:
+                save_as_pickle(
+                    self.training_data_time,
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(self.patient_number)
+                    + "/training_data_time_mean.pkl",
+                )
+
 
     def simulate_realtime_prediction(self):
         for i in tqdm.tqdm(range(len(self.trees)), desc="Evaluating trees"):

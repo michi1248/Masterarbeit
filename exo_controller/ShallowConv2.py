@@ -9,14 +9,35 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch.nn.init as init
 
+class EarlyStopping:
+    def __init__(self, patience=7, min_delta=0):
+        """
+        Early stops the training if validation loss doesn't improve after a given patience.
+        :param patience: (int) How long to wait after last time validation loss improved.
+        :param min_delta: (float) Minimum change in the monitored quantity to qualify as an improvement.
+        """
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
 
-
-
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif val_loss > self.best_loss - self.min_delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_loss = val_loss
+            self.counter = 0
 
 
 class ShallowConvNetWithAttention(nn.Module):
-    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_channel_attention=False, use_spatial_attention=False):
+    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_channel_attention=False, use_spatial_attention=False,use_mean = None):
         super(ShallowConvNetWithAttention, self).__init__()
+        self.use_mean = use_mean
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Store the attention flags
@@ -32,20 +53,17 @@ class ShallowConvNetWithAttention(nn.Module):
         self.global_pool = nn.AdaptiveAvgPool2d(1)
 
         # Spatial Activity Path
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=0)
+        self.conv1 = nn.Conv2d(2, 64, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=0)
-        self.fc1 = nn.Linear(32 * 1 * 5, 120)
+        self.conv2 = nn.Conv2d(64, 32, kernel_size=3, padding=1)
+        self.fc1 = nn.Linear(512, 60)
 
-        # Merging and Output
-        self.fc2 = nn.Linear(120 + 1, 60)  # 120 from spatial path + 1 from global path
-        self.output = nn.Linear(60, 2)  # Output two regression values
+
+        self.fc2 = nn.Linear(60 + 2 ,2)
         self.to(self.device)
 
     def _initialize_weights(self,m,seed=42):
-
         torch.manual_seed(seed)
-
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
             init.xavier_uniform_(m.weight)
             if m.bias is not None:
@@ -53,58 +71,35 @@ class ShallowConvNetWithAttention(nn.Module):
 
 
     def forward(self, heatmap1, heatmap2=None):
-        if self.use_difference_heatmap:
-
-            # activity = self.relu(self.grid_conv(heatmap1))
 
 
 
-            # Process the first heatmap
-            x1 = self.relu(self.conv1_heatmap1(heatmap1))
-            x1 = self.relu(self.conv2_heatmap1(x1))
+        split_images = torch.chunk(heatmap1, 2, dim=3)  # This will create two tensors of shape [batch_size, 1, 8, 8]
+        stacked_input = torch.cat(split_images, dim=1)  # New shape will be [batch_size, 2, 8, 8]
 
-            # Process the second heatmap
-            #x2 = self.relu(self.grid_conv(heatmap2))
-            x2 = self.relu(self.conv1_heatmap2(heatmap2))
-            x2 = self.relu(self.conv2_heatmap2(x2))
+        # Global Activity Path
+        global_path = self.global_pool(stacked_input)
+        global_path = global_path.view(global_path.size(0), -1)  # Flatten
 
-
-            # Combine the features from both heatmaps
-            # Here we're using concatenation; you might choose a different method
-            combined = torch.cat((x1, x2), dim=1)
-
-            # Flatten and pass through fully connected layers
-            combined = combined.view(combined.size(0), -1)
-            combined = torch.relu(self.fc1(combined))
-            combined = torch.relu(self.fc2(combined))
+        # Spatial Activity Path
+        gelu = torch.nn.GELU(approximate='tanh')
+        spatial_path = gelu(self.conv1(stacked_input))
+        spatial_path = self.pool(spatial_path)
+        spatial_path = gelu(self.conv2(spatial_path))
+        spatial_path = spatial_path.view(spatial_path.size(0), -1)  # Flatten
+        spatial_path = gelu(self.fc1(spatial_path))
 
 
+        merged = torch.cat((global_path, spatial_path), dim=1)
+        merged = gelu(self.fc2(merged))
 
-            return combined
-        else:
-
-            # Global Activity Path
-            global_path = self.global_pool(heatmap1)
-            global_path = global_path.view(global_path.size(0), -1)  # Flatten
-
-            # Spatial Activity Path
-            spatial_path = F.relu(self.conv1(heatmap1))
-            spatial_path = self.pool(spatial_path)
-            spatial_path = F.relu(self.conv2(spatial_path))
-            spatial_path = spatial_path.view(spatial_path.size(0), -1)  # Flatten
-            spatial_path = F.relu(self.fc1(spatial_path))
-
-            # Merge and Output
-            merged = torch.cat((spatial_path, global_path), dim=1)
-            merged = F.relu(self.fc2(merged))
-            output = torch.sigmoid(self.output(merged))
-
-        return output
+        return merged
 
     def train_model(self, train_loader, learning_rate=0.001, epochs=10):
         self.train()
-        criterion = nn.MSELoss()
+        criterion = nn.L1Loss()
         optimizer = optim.Adam(self.parameters(), lr=learning_rate,weight_decay=0.0001)
+        #early_stopping = EarlyStopping(patience=5, min_delta=0.001)  # Adjust as needed
 
         for epoch in range(epochs):
             epoch_loss = 0
@@ -124,9 +119,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 else:
                     heatmap1 = inputs.view(-1, 1, 8, 8*self.number_of_grids)
                     heatmap1 = heatmap1.to(self.device)
-
                 targets = targets.to(self.device)
-
 
                 if self.use_difference_heatmap:
                     output  = self(heatmap1, heatmap2)
@@ -137,7 +130,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 output2 = output[:,1]
                 loss1 = criterion(output1, targets[:,0])
                 loss2 = criterion(output2, targets[:,1])
-                total_loss = loss1 + loss2
+                total_loss = (loss1 + loss2) * 100
 
                 optimizer.zero_grad()
                 total_loss.backward()
@@ -279,37 +272,67 @@ class ShallowConvNetWithAttention(nn.Module):
         return model
 
     def load_trainings_data(self,patient_number):
-        X_test = np.array(
-            helpers.load_pickle_file(
-                r"trainings_data/resulting_trainings_data/subject_"
-                + str(patient_number)
-                + "/X_test_local.pkl"
+        if self.use_mean is None:
+            X_test = np.array(
+                helpers.load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(patient_number)
+                    + "/X_test_local.pkl"
+                )
             )
-        )
-        y_test = np.array(
-            helpers.load_pickle_file(
-                r"trainings_data/resulting_trainings_data/subject_"
-                + str(patient_number)
-                + "/y_test_local.pkl"
+            y_test = np.array(
+                helpers.load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(patient_number)
+                    + "/y_test_local.pkl"
+                )
             )
-        )
-        X_train = np.array(
-            helpers.load_pickle_file(
-                r"trainings_data/resulting_trainings_data/subject_"
-                + str(patient_number)
-                + "/X_train_local.pkl"
+            X_train = np.array(
+                helpers.load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(patient_number)
+                    + "/X_train_local.pkl"
+                )
             )
-        )
-        y_train = np.array(
-            helpers.load_pickle_file(
-                r"trainings_data/resulting_trainings_data/subject_"
-                + str(patient_number)
-                + "/y_train_local.pkl"
+            y_train = np.array(
+                helpers.load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(patient_number)
+                    + "/y_train_local.pkl"
+                )
             )
-        )
+        else:
+            X_test = np.array(
+                helpers.load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(patient_number)
+                    + "/X_test_local_mean.pkl"
+                )
+            )
+            y_test = np.array(
+                helpers.load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(patient_number)
+                    + "/y_test_local_mean.pkl"
+                )
+            )
+            X_train = np.array(
+                helpers.load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(patient_number)
+                    + "/X_train_local_mean.pkl"
+                )
+            )
+            y_train = np.array(
+                helpers.load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(patient_number)
+                    + "/y_train_local_mean.pkl"
+                )
+            )
 
-        X_train = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(X_train).transpose(2,1,0)
-        X_test = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(X_test).transpose(2,1,0)
+        X_train = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(X_train).transpose(2,0,1)
+        X_test = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(X_test).transpose(2,0,1)
         # y_train = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(y_train).transpose(2,1,0)
         # y_test = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(y_test).transpose(2,1,0)
 
@@ -319,8 +342,8 @@ class ShallowConvNetWithAttention(nn.Module):
             # Create the data loaders
             train_dataset = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
             test_dataset = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
-            train_loader = DataLoader(train_dataset, batch_size=10, shuffle=False)
-            test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False)
+            train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
             self.train_loader = train_loader
             self.test_loader = test_loader
             return train_loader, test_loader
@@ -332,8 +355,8 @@ class ShallowConvNetWithAttention(nn.Module):
                 + "/training_data_time.pkl"
             )[self.best_time_index]
             #X_train, X_test, y_train, y_test is order in time data
-            X_train_time = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(self.training_data_time[0]).transpose(2,1,0)
-            X_test_time = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(self.training_data_time[1]).transpose(2,1,0)
+            X_train_time = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(self.training_data_time[0]).transpose(2,0,1)
+            X_test_time = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(self.training_data_time[1]).transpose(2,0,1)
             # y_train_time = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(self.training_data_time[2]).transpose(2,1,0)
             # y_test_time = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(self.training_data_time[3]).transpose(2,1,0)
             y_train_time = self.training_data_time[2]
@@ -343,8 +366,8 @@ class ShallowConvNetWithAttention(nn.Module):
             test_dataset_time = TensorDataset(torch.from_numpy(np.stack((X_test,X_test_time),axis=0)), torch.from_numpy(np.stack((y_test,y_test_time),axis=0)))
 
 
-            train_loader_time = DataLoader(train_dataset_time, batch_size=10, shuffle=False)
-            test_loader_time = DataLoader(test_dataset_time, batch_size=10, shuffle=False)
+            train_loader_time = DataLoader(train_dataset_time, batch_size=64, shuffle=True)
+            test_loader_time = DataLoader(test_dataset_time, batch_size=64, shuffle=True)
             self.train_loader = train_loader_time
             self.test_loader  = test_loader_time
             return train_loader_time, test_loader_time
