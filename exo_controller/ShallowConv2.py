@@ -133,7 +133,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 output2 = output[:,1]
                 loss1 = criterion(output1, targets[:,0])
                 loss2 = criterion(output2, targets[:,1])
-                total_loss = (loss1 + loss2) #* 100
+                total_loss = (loss1 + loss2) * 100
 
                 optimizer.zero_grad()
                 total_loss.backward()
@@ -187,7 +187,7 @@ class ShallowConvNetWithAttention(nn.Module):
         for i in range(predictions.shape[1]):  # Assuming the second dimension contains the outputs
             sst = torch.sum((ground_truth[:, i] - torch.mean(ground_truth[:, i])) ** 2)
             ssr = torch.sum((ground_truth[:, i] - predictions[:, i]) ** 2)
-            r_squared_values.append(1 - ssr / sst)
+            r_squared_values.append(1 - ssr / (sst + 1e-8))
 
         #crit = nn.MSELoss()
         crit = nn.L1Loss()
@@ -202,7 +202,7 @@ class ShallowConvNetWithAttention(nn.Module):
         # Calculate the loss for each part
         loss_0 = crit(ground_truth_0, prediction_0)
         loss_1 = crit(ground_truth_1, prediction_1)
-        mse_loss = (loss_0+ loss_1)/2
+        mse_loss = (loss_0+ loss_1)/(2 + 1e-8)
 
         # Calculate the mean R-squared value
         mean_r_squared = torch.mean(torch.tensor(r_squared_values))

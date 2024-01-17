@@ -53,7 +53,7 @@ class MichaelFilter:
         if self.only_additional_filter:
             new = self.last_avg[-2] + (
                 self.normalize(np.sqrt(np.square(prediction - self.last_avg[-2])))
-                / self.weight_additional_filter
+                / (self.weight_additional_filter )
             ) * (prediction - self.last_avg[-2])
             self.last_avg[-1] = new
             prediction = new

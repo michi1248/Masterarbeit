@@ -491,11 +491,12 @@ if __name__ == "__main__":
     count = 0
     num_previous_samples = None
     window_size_in_samples = None
-    normalizer = None
+    normalizer_mean = None
     mean_rest = None
     grid_arranger = None
     important_channels = None
     channels_row_shape = None
+    normalizer_no_mean = None
 
     split_index_if_same_dataset = 0.8
 
@@ -532,7 +533,7 @@ if __name__ == "__main__":
                     use_important_channels=False,
                     use_local=True,
                     output_on_exo=True,
-                    filter_output=True,
+                    filter_output=False,
                     time_for_each_movement_recording=25,
                     load_trained_model=False,
                     save_trained_model=True,
@@ -557,18 +558,25 @@ if __name__ == "__main__":
                 else:
                     emg_processor.num_previous_samples = num_previous_samples
                     emg_processor.window_size_in_samples = window_size_in_samples
-                    emg_processor.normalizer = normalizer
-                    emg_processor.mean_rest = mean_rest
+                    # unterscheiden ob mean oder nicht mean
+                    if use_mean_sub:
+                        emg_processor.normalizer = normalizer_mean
+                        emg_processor.mean_rest = mean_rest
+                    else:
+                        emg_processor.normalizer = normalizer_no_mean
                     emg_processor.grid_aranger = grid_arranger
                     if emg_processor.use_important_channels:
                         emg_processor.channels = important_channels
                         emg_processor.channels_row_shape = channels_row_shape
                     avg_loss, mse_loss = emg_processor.run(already_build=True)
 
+                if count == 1:
+                    normalizer_no_mean = emg_processor.normalizer
+
                 if count == 0:
                     num_previous_samples = emg_processor.num_previous_samples
                     window_size_in_samples = emg_processor.window_size_in_samples
-                    normalizer = emg_processor.normalizer
+                    normalizer_mean = emg_processor.normalizer
                     mean_rest = emg_processor.mean_rest
                     grid_arranger = emg_processor.grid_aranger
                     if emg_processor.use_important_channels:

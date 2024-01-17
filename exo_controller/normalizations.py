@@ -53,7 +53,7 @@ class Normalization:
             median = self.median[:, :, 0]
             q1 = self.q1[:, :, 0]
             q2 = self.q2[:, :, 0]
-            return (np.array(data) - median) / (q2 - q1)
+            return (np.array(data) - median) / ((q2 - q1)+ 1e-8)
         elif self.method == "Robust_all_channels":
             return (np.array(data) - self.median) / (self.q2 - self.q1)
         else:
@@ -77,16 +77,16 @@ class Normalization:
                 min_value = self.min_values[:, :, 0]
                 max_value = self.max_values[:, :, 0]
 
-            norm = (data - min_value) / ((max_value - min_value))
+            norm = (data - min_value) / ((max_value - min_value)+1e-8)
 
         elif axis is None:
             data = np.array(data)
-            norm = (data - np.min(data)) / (np.max(data) - np.min(data))
+            norm = (data - np.min(data)) / ((np.max(data) - np.min(data))+ 1e-8)
         else:
             data = np.array(data)
-            norm = (data - np.min(data, axis=axis)) / (
+            norm = (data - np.min(data, axis=axis)) / ((
                 np.max(data, axis=axis) - np.min(data, axis=axis)
-            )
+            ) + 1e-8 )
 
         if negative == True:
             norm = (norm * 2) - 1
