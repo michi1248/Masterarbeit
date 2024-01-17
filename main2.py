@@ -635,7 +635,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_11_01_2024_normal2",
+        patient_id="Michi_11_01_2024_remapped2",
         movements=[
             "rest",
             "thumb",
@@ -655,7 +655,7 @@ if __name__ == "__main__":
         use_mean_subtraction=False,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_remapped2_control/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_all_channels",
         only_record_data=False,

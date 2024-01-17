@@ -59,6 +59,8 @@ class ShallowConvNetWithAttention(nn.Module):
         self.fc1 = nn.Linear(512, 60)
 
 
+
+
         self.fc2 = nn.Linear(60 + 2 ,2)
         self.to(self.device)
 
@@ -98,6 +100,7 @@ class ShallowConvNetWithAttention(nn.Module):
     def train_model(self, train_loader, learning_rate=0.001, epochs=10):
         self.train()
         criterion = nn.L1Loss()
+        #criterion = nn.MSELoss()
         optimizer = optim.Adam(self.parameters(), lr=learning_rate,weight_decay=0.0001)
         #early_stopping = EarlyStopping(patience=5, min_delta=0.001)  # Adjust as needed
 
@@ -130,7 +133,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 output2 = output[:,1]
                 loss1 = criterion(output1, targets[:,0])
                 loss2 = criterion(output2, targets[:,1])
-                total_loss = (loss1 + loss2) * 100
+                total_loss = (loss1 + loss2) #* 100
 
                 optimizer.zero_grad()
                 total_loss.backward()
@@ -186,7 +189,9 @@ class ShallowConvNetWithAttention(nn.Module):
             ssr = torch.sum((ground_truth[:, i] - predictions[:, i]) ** 2)
             r_squared_values.append(1 - ssr / sst)
 
-        crit = nn.MSELoss()
+        #crit = nn.MSELoss()
+        crit = nn.L1Loss()
+
         # Separate the tensors into two parts
         ground_truth_0 = ground_truth[:, 0]
         ground_truth_1 = ground_truth[:, 1]
@@ -272,7 +277,8 @@ class ShallowConvNetWithAttention(nn.Module):
         return model
 
     def load_trainings_data(self,patient_number):
-        if self.use_mean is None:
+        if not self.use_mean :
+            print("not using mean in Shallow Conv")
             X_test = np.array(
                 helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
@@ -302,6 +308,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 )
             )
         else:
+            print("Using mean in Shallow Conv")
             X_test = np.array(
                 helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"

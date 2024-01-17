@@ -1020,20 +1020,7 @@ def choose_possible_channels(
     # threshold = only areas with values above it will be considered
 
     difference_heatmap = normalize_2D_array(difference_heatmap, axis=None, negative=False)
-    plt.figure()
-    sns.heatmap(difference_heatmap)
-    plt.title("difference heatmap")
-    plt.show()
 
-    plt.figure()
-    sns.heatmap(mean_flex_heatmap)
-    plt.title("mean flex heatmap")
-    plt.show()
-
-    plt.figure()
-    sns.heatmap(mean_ex_heatmap)
-    plt.title("mean ex heatmap")
-    plt.show()
 
 
     ex_list = []
@@ -1101,6 +1088,30 @@ def choose_possible_channels(
                 else:
                     ex_list.append([i, j])
 
+    plt.figure()
+    sns.heatmap(difference_heatmap)
+    plt.title("difference heatmap")
+    plt.show()
+
+    plt.figure()
+    sns.heatmap(mean_flex_heatmap)
+    plt.title("mean flex heatmap")
+    plt.show()
+
+    plt.figure()
+    sns.heatmap(mean_ex_heatmap)
+    plt.title("mean ex heatmap")
+    plt.show()
+
+    plt.figure()
+    data = np.zeros((difference_heatmap.shape[0],difference_heatmap.shape[1]))
+    for i in flex_list:
+        data[i[0],i[1]] = 1
+    for i in ex_list:
+        data[i[0],i[1]] = 1
+    sns.heatmap(data)
+    plt.title("choosen channels")
+    plt.show()
     return flex_list, ex_list
 
 

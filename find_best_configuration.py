@@ -513,7 +513,7 @@ if __name__ == "__main__":
         best_mse_no_mean = None
 
 
-        for epochs in [1,10,20,50,100,125,150,250,500,1000,2000,4000]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [1,10,20,25,35,50,100,125,150,175,200,250,500,1000,1500,2000,2500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
@@ -529,7 +529,7 @@ if __name__ == "__main__":
                     ],
                     grid_order=[1,2],
                     use_difference_heatmap=False,
-                    use_important_channels=True,
+                    use_important_channels=False,
                     use_local=True,
                     output_on_exo=True,
                     filter_output=True,
@@ -560,8 +560,9 @@ if __name__ == "__main__":
                     emg_processor.normalizer = normalizer
                     emg_processor.mean_rest = mean_rest
                     emg_processor.grid_aranger = grid_arranger
-                    emg_processor.channels = important_channels
-                    emg_processor.channels_row_shape = channels_row_shape
+                    if emg_processor.use_important_channels:
+                        emg_processor.channels = important_channels
+                        emg_processor.channels_row_shape = channels_row_shape
                     avg_loss, mse_loss = emg_processor.run(already_build=True)
 
                 if count == 0:
@@ -570,8 +571,9 @@ if __name__ == "__main__":
                     normalizer = emg_processor.normalizer
                     mean_rest = emg_processor.mean_rest
                     grid_arranger = emg_processor.grid_aranger
-                    important_channels = emg_processor.channels
-                    channels_row_shape = emg_processor.channels_row_shape
+                    if emg_processor.use_important_channels:
+                        important_channels = emg_processor.channels
+                        channels_row_shape = emg_processor.channels_row_shape
                 count += 1
                 print("avg__r2_loss_after_eval: ", avg_loss)
                 print("mse_loss_after_eval: ", mse_loss)
@@ -602,7 +604,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [1,10,20,50,100,125,150,250,500,1000,2000,4000]
+                x = [1,10,20,25,35,50,100,125,150,175,200,250,500,1000,1500,2000,2500]
                 x = x[:x.index(epochs)+1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
@@ -626,5 +628,5 @@ if __name__ == "__main__":
 
                 train_name = emg_processor.patient_id.split("_")[-1]
                 test_name = emg_processor.use_recorded_data.split("_")[-1].split("/")[0]
-                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + "_important_channels.png")
+                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + ".png")
 

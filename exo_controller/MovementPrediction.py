@@ -499,6 +499,7 @@ class MultiDimensionalDecisionTree:
 
     def load_trainings_data(self):
         if self.mean_rest is None:
+            print("not using mean in MovementPrediction.py")
             self.X_test_local = np.array(
                 load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
@@ -534,6 +535,7 @@ class MultiDimensionalDecisionTree:
                     + "/training_data_time.pkl"
                 )
         else:
+            print("using mean in MovementPrediction.py")
             self.X_test_local = np.array(
                 load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
@@ -633,6 +635,7 @@ class MultiDimensionalDecisionTree:
 
     def save_trainings_data(self):
         if self.mean_rest is None:
+            print("not using mean in MovementPrediction.py")
             save_as_pickle(
                 self.X_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
@@ -665,6 +668,7 @@ class MultiDimensionalDecisionTree:
                     + "/training_data_time.pkl",
                 )
         else:
+            print("using mean in MovementPrediction.py")
             save_as_pickle(
                 self.X_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
