@@ -162,9 +162,6 @@ class EMGProcessor:
             self.window_size_in_samples = model.window_size_in_samples
             print("num_previous_samples: ", self.num_previous_samples)
 
-
-
-
         self.best_time_tree = 2
         if not self.use_shallow_conv:
             model.train()
@@ -371,7 +368,7 @@ class EMGProcessor:
                         )
                         if self.use_difference_heatmap:
                             previous_heatmap = calculate_local_heatmap_realtime(
-                            data, int(self.window_size_in_samples*3.5)
+                            data, int(self.window_size_in_samples*2)
                         )
 
                         if self.use_mean_subtraction:
@@ -411,7 +408,6 @@ class EMGProcessor:
 
                                 else:
                                     res_local = np.array(res_local[0])
-
 
                         else:
                             res_local = model.trees[0].predict(
@@ -534,9 +530,9 @@ if __name__ == "__main__":
                         "2pinch",
                     ],
                     grid_order=[1,2],
-                    use_difference_heatmap=True,
+                    use_difference_heatmap=False,
                     use_important_channels=False,
-                    use_local=False,  # set this to false if you want to use prediction with difference heatmap
+                    use_local=True,  # set this to false if you want to use prediction with difference heatmap
                     output_on_exo=True,
                     filter_output=False,
                     time_for_each_movement_recording=25,

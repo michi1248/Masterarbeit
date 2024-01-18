@@ -193,7 +193,7 @@ class ShallowConvNetWithAttention(nn.Module):
         self.train()
         criterion = nn.L1Loss()
         #criterion = nn.MSELoss()
-        optimizer = optim.AdamW(self.parameters(), lr=learning_rate,weight_decay=0.01,amsgrad=True)
+        optimizer = optim.AdamW(self.parameters(), lr=learning_rate,weight_decay=0.1,amsgrad=True)
         #early_stopping = EarlyStopping(patience=5, min_delta=0.001)  # Adjust as needed
 
         scheduler = optim.lr_scheduler.OneCycleLR(
@@ -205,12 +205,11 @@ class ShallowConvNetWithAttention(nn.Module):
             div_factor=10 ** 1.5,
             final_div_factor=1e3,
         )
-        #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
+        #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.75)
 
         progress_bar = tqdm(train_loader, desc="Epochs", leave=False, total=epochs)
         for epoch in range(epochs):
             epoch_loss = 0
-
             for inputs, targets in train_loader:
                 inputs, targets = inputs.float(), targets.float()  #
                 if self.use_difference_heatmap:
