@@ -412,6 +412,7 @@ class EMGProcessor:
                                 else:
                                     res_local = np.array(res_local[0])
 
+
                         else:
                             res_local = model.trees[0].predict(
                                 [heatmap_local]
@@ -506,7 +507,7 @@ if __name__ == "__main__":
 
     use_shallow_conv = True
 
-    for method in  ["Min_Max_Scaling_over_whole_data"]:#["Min_Max_Scaling_all_channels","Min_Max_Scaling_over_whole_data","Robust_Scaling","Robust_all_channels","no_scaling"]:
+    for method in  ["Min_Max_Scaling_over_whole_data","Min_Max_Scaling_all_channels","Robust_Scaling","Robust_all_channels","no_scaling"]:
         evaluation_results_mean_sub = []
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
@@ -533,9 +534,9 @@ if __name__ == "__main__":
                         "2pinch",
                     ],
                     grid_order=[1,2],
-                    use_difference_heatmap=False,
-                    use_important_channels=True,
-                    use_local=True,
+                    use_difference_heatmap=True,
+                    use_important_channels=False,
+                    use_local=False,  # set this to false if you want to use prediction with difference heatmap
                     output_on_exo=True,
                     filter_output=False,
                     time_for_each_movement_recording=25,

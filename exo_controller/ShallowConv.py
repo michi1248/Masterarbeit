@@ -154,10 +154,12 @@ class ShallowConvNetWithAttention(nn.Module):
 
             # Flatten and pass through fully connected layers
             combined = combined.view(combined.size(0), -1)
+            combined = self.dropout(combined)
             combined = torch.relu(self.fc1(combined))
+            combined = self.dropout(combined)
             combined = torch.relu(self.fc2(combined))
 
-            combined = self.dropout(combined)
+
 
             return combined
         else:

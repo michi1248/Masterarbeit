@@ -9,59 +9,80 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch.nn.init as init
 
-class EarlyStopping:
-    def __init__(self, patience=50, min_delta=0):
-        """
-        Early stops the training if validation loss doesn't improve after a given patience.
-        :param patience: (int) How long to wait after last time validation loss improved.
-        :param min_delta: (float) Minimum change in the monitored quantity to qualify as an improvement.
-        """
-        self.patience = patience
-        self.min_delta = min_delta
-        self.counter = 0
-        self.best_loss = None
-        self.early_stop = False
-
-    def __call__(self, val_loss):
-        if self.best_loss is None:
-            self.best_loss = val_loss
-        elif val_loss > self.best_loss - self.min_delta:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_loss = val_loss
-            self.counter = 0
 
 
 class ShallowConvNetWithAttention(nn.Module):
-    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_channel_attention=False, use_spatial_attention=False,use_mean = None):
+    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None):
         super(ShallowConvNetWithAttention, self).__init__()
         self.use_mean = use_mean
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        # Store the attention flags
-        self.use_channel_attention = use_channel_attention
-        self.use_spatial_attention = use_spatial_attention
 
         self.number_of_grids = number_of_grids
         self.use_difference_heatmap = use_difference_heatmap
         self.best_time_index = best_time_tree
         self.grid_aranger = grid_aranger
+        # Dropout rate
+        self.dropout_rate = 0.2
 
-        # Global Activity Path
-        self.global_pool = nn.AdaptiveAvgPool2d(1)
+        if self.use_difference_heatmap:
+            # Global Activity Path
+            self.global_pool1 = nn.AdaptiveAvgPool2d(1)
+            self.global_pool2 = nn.AdaptiveAvgPool2d(1)
 
-        # Spatial Activity Path
-        self.conv1 = nn.Conv2d(2, 64, kernel_size=3, padding=1)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(64, 32, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(512, 60)
+            # Spatial Activity Path
+            self.conv1_1 = nn.Conv2d(2, 64, groups=2, kernel_size=3, padding=1)
+            self.pool_1 = nn.MaxPool2d(2, 2)
+            self.conv2_1 = nn.Conv2d(64, 32, kernel_size=3, padding=1)
+            self.fc1_1 = nn.Linear(2048, 60)
 
+            # Add Batch Normalization after convolutional layers
+            self.bn1_1 = nn.BatchNorm2d(64)
+            self.bn2_1 = nn.BatchNorm2d(32)
 
+            # Instance Normalization
+            self.in1_1 = nn.InstanceNorm2d(64)
+            self.in2_1 = nn.InstanceNorm2d(32)
+            self.fc2_1 = nn.Linear(60, 2)
 
+            # Spatial Activity Path
+            self.conv1_2 = nn.Conv2d(2, 64, groups=2, kernel_size=3, padding=1)
+            self.pool_2 = nn.MaxPool2d(2, 2)
+            self.conv2_2 = nn.Conv2d(64, 32, kernel_size=3, padding=1)
+            self.fc1_2 = nn.Linear(2048, 60)
 
-        self.fc2 = nn.Linear(60 + 2 ,2)
+            # Add Batch Normalization after convolutional layers
+            self.bn1_2 = nn.BatchNorm2d(64)
+            self.bn2_2 = nn.BatchNorm2d(32)
+
+            # Instance Normalization
+            self.in1_2 = nn.InstanceNorm2d(64)
+            self.in2_2 = nn.InstanceNorm2d(32)
+            self.fc2_2 = nn.Linear(60, 2)
+
+            self.output = nn.Linear(4,2)
+
+        else:
+            # Global Activity Path
+            self.global_pool = nn.AdaptiveAvgPool2d(1)
+
+            # Spatial Activity Path
+            self.conv1 = nn.Conv2d(2, 64, groups=2, kernel_size=3, padding=1)
+            self.pool = nn.MaxPool2d(2, 2)
+            self.conv2 = nn.Conv2d(64, 32, kernel_size=3, padding=1)
+            self.fc1 = nn.Linear(2048, 60)
+
+            # Add Batch Normalization after convolutional layers
+            self.bn1 = nn.BatchNorm2d(64)
+            self.bn2 = nn.BatchNorm2d(32)
+
+            #Instance Normalization
+            self.in1 = nn.InstanceNorm2d(64)
+            self.in2 = nn.InstanceNorm2d(32)
+
+            # Dropout rate
+            self.dropout_rate = 0.2
+
+            self.fc2 = nn.Linear(60  ,2)
         self.to(self.device)
 
     def _initialize_weights(self,m,seed=42):
@@ -74,35 +95,117 @@ class ShallowConvNetWithAttention(nn.Module):
 
     def forward(self, heatmap1, heatmap2=None):
 
+        if self.use_difference_heatmap:
+            # Split the input into two parts
+            split_images1 = torch.chunk(heatmap1, 2,dim=3)  # This will create two tensors of shape [batch_size, 1, 8, 8]
+            stacked_input1 = torch.cat(split_images1, dim=1)
+            split_images2 = torch.chunk(heatmap2, 2,dim=3)  # This will create two tensors of shape [batch_size, 1, 8, 8]
+            stacked_input2 = torch.cat(split_images2, dim=1)  # New shape will be [batch_size, 2, 8, 8]
 
+            # Global Activity Path
+            global_path1 = self.global_pool1(stacked_input1)
+            global_path1 = global_path1.view(global_path1.size(0), -1)  # Flatten
+            global_path1 = torch.mean(global_path1, dim=1, keepdim=True)  # Average over the channels
 
-        split_images = torch.chunk(heatmap1, 2, dim=3)  # This will create two tensors of shape [batch_size, 1, 8, 8]
-        stacked_input = torch.cat(split_images, dim=1)  # New shape will be [batch_size, 2, 8, 8]
+            global_path2 = self.global_pool2(stacked_input2)
+            global_path2 = global_path2.view(global_path2.size(0), -1)  # Flatten
+            global_path2 = torch.mean(global_path2, dim=1, keepdim=True)  # Average over the channels
 
-        # Global Activity Path
-        global_path = self.global_pool(stacked_input)
-        global_path = global_path.view(global_path.size(0), -1)  # Flatten
+            # Spatial Activity Path
+            gelu = torch.nn.GELU(approximate='tanh')
+            spatial_path1 = self.conv1_1(stacked_input1)
+            spatial_path1 = self.bn1_1(spatial_path1)
+            spatial_path1 = self.in1_1(spatial_path1)  # Uncomment if using instance normalization
+            spatial_path1 = torch.nn.GELU(approximate='tanh')(spatial_path1)
+            # spatial_path = self.pool(spatial_path)
 
-        # Spatial Activity Path
-        gelu = torch.nn.GELU(approximate='tanh')
-        spatial_path = gelu(self.conv1(stacked_input))
-        spatial_path = self.pool(spatial_path)
-        spatial_path = gelu(self.conv2(spatial_path))
-        spatial_path = spatial_path.view(spatial_path.size(0), -1)  # Flatten
-        spatial_path = gelu(self.fc1(spatial_path))
+            spatial_path1 = self.conv2_1(spatial_path1)
+            spatial_path1 = self.bn2_1(spatial_path1)
+            spatial_path1 = self.in2_1(spatial_path1)  # Uncomment if using instance normalization
+            spatial_path1 = torch.nn.GELU(approximate='tanh')(spatial_path1)
+            # spatial_path = self.pool(spatial_path)
 
+            spatial_path1 = spatial_path1.view(spatial_path1.size(0), -1) * global_path1
+            spatial_path1 = F.dropout(spatial_path1, p=self.dropout_rate, training=self.training)  # Dropout after conv2
+            spatial_path1 = self.fc1_1(spatial_path1)
+            spatial_path1 = F.dropout(spatial_path1, p=self.dropout_rate, training=self.training)  # Dropout after fc1
+            spatial_path1 = self.fc2_1(spatial_path1)
 
-        merged = torch.cat((global_path, spatial_path), dim=1)
-        merged = gelu(self.fc2(merged))
+            # Spatial Activity Path
+            gelu = torch.nn.GELU(approximate='tanh')
+            spatial_path2 = self.conv1_2(stacked_input2)
+            spatial_path2 = self.bn1_2(spatial_path2)
+            spatial_path2 = self.in1_2(spatial_path2)  # Uncomment if using instance normalization
+            spatial_path2 = torch.nn.GELU(approximate='tanh')(spatial_path2)
+            # spatial_path = self.pool(spatial_path)
 
-        return merged
+            spatial_path2 = self.conv2_2(spatial_path2)
+            spatial_path2 = self.bn2_2(spatial_path2)
+            spatial_path2 = self.in2_2(spatial_path2)  # Uncomment if using instance normalization
+            spatial_path2 = torch.nn.GELU(approximate='tanh')(spatial_path2)
+            # spatial_path = self.pool(spatial_path)
 
-    def train_model(self, train_loader, learning_rate=0.001, epochs=10):
+            spatial_path2 = spatial_path2.view(spatial_path2.size(0), -1) * global_path2
+            spatial_path2 = F.dropout(spatial_path2, p=self.dropout_rate, training=self.training)  # Dropout after conv2
+            spatial_path2 = self.fc1_2(spatial_path2)
+            spatial_path2 = F.dropout(spatial_path2, p=self.dropout_rate, training=self.training)  # Dropout after fc1
+            spatial_path2 = self.fc2_2(spatial_path2)
+
+            merged_spatial_path = torch.cat((spatial_path1, spatial_path2), dim=1)
+            merged_spatial_path = self.output(merged_spatial_path)
+            merged_spatial_path = torch.nn.GELU(approximate='tanh')(merged_spatial_path)
+
+            return merged_spatial_path
+
+        else:
+            # Split the input into two parts
+            split_images = torch.chunk(heatmap1, 2, dim=3)  # This will create two tensors of shape [batch_size, 1, 8, 8]
+            stacked_input = torch.cat(split_images, dim=1)  # New shape will be [batch_size, 2, 8, 8]
+
+            # Global Activity Path
+            global_path = self.global_pool(stacked_input)
+            global_path = global_path.view(global_path.size(0), -1)  # Flatten
+            global_path = torch.mean(global_path, dim=1, keepdim=True)  # Average over the channels
+
+            # Spatial Activity Path
+            gelu = torch.nn.GELU(approximate='tanh')
+            spatial_path = self.conv1(stacked_input)
+            spatial_path = self.bn1(spatial_path)
+            spatial_path = self.in1(spatial_path)  # Uncomment if using instance normalization
+            spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
+            #spatial_path = self.pool(spatial_path)
+
+            spatial_path = self.conv2(spatial_path)
+            spatial_path = self.bn2(spatial_path)
+            spatial_path = self.in2(spatial_path)  # Uncomment if using instance normalization
+            spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
+            #spatial_path = self.pool(spatial_path)
+
+            spatial_path = spatial_path.view(spatial_path.size(0), -1) * global_path
+            spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after conv2
+            spatial_path = self.fc1(spatial_path)
+            spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after fc1
+            spatial_path = self.fc2(spatial_path)
+
+            return spatial_path
+
+    def train_model(self, train_loader, learning_rate=0.00001, epochs=10):
         self.train()
         criterion = nn.L1Loss()
         #criterion = nn.MSELoss()
-        optimizer = optim.AdamW(self.parameters(), lr=learning_rate,weight_decay=0.1,amsgrad=True)
+        optimizer = optim.AdamW(self.parameters(), lr=learning_rate,weight_decay=0.01,amsgrad=True)
         #early_stopping = EarlyStopping(patience=5, min_delta=0.001)  # Adjust as needed
+
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=learning_rate * (10 ** 1.5),
+            total_steps=train_loader.__len__()*epochs,
+            anneal_strategy="cos",
+            three_phase=False,
+            div_factor=10 ** 1.5,
+            final_div_factor=1e3,
+        )
+        #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
 
         progress_bar = tqdm(train_loader, desc="Epochs", leave=False, total=epochs)
         for epoch in range(epochs):
@@ -139,6 +242,8 @@ class ShallowConvNetWithAttention(nn.Module):
                 optimizer.step()
 
                 epoch_loss += total_loss.item()
+
+                scheduler.step()
 
             progress_bar.update(1)
 
@@ -202,7 +307,7 @@ class ShallowConvNetWithAttention(nn.Module):
         # Calculate the loss for each part
         loss_0 = crit(ground_truth_0, prediction_0)
         loss_1 = crit(ground_truth_1, prediction_1)
-        mse_loss = (loss_0+ loss_1)/(2 + 1e-8)
+        mse_loss = (loss_0+ loss_1)/(2)
 
         # Calculate the mean R-squared value
         mean_r_squared = torch.mean(torch.tensor(r_squared_values))
@@ -356,11 +461,18 @@ class ShallowConvNetWithAttention(nn.Module):
             return train_loader, test_loader
 
         else: # self.use_difference_heatmap:
-            self.training_data_time = helpers.load_pickle_file(
-                r"trainings_data/resulting_trainings_data/subject_"
-                + str(patient_number)
-                + "/training_data_time.pkl"
-            )[self.best_time_index]
+            if not self.use_mean:
+                self.training_data_time = helpers.load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(patient_number)
+                    + "/training_data_time.pkl"
+                )[self.best_time_index]
+            else:
+                self.training_data_time = helpers.load_pickle_file(
+                    r"trainings_data/resulting_trainings_data/subject_"
+                    + str(patient_number)
+                    + "/training_data_time_mean.pkl"
+                )[self.best_time_index]
             #X_train, X_test, y_train, y_test is order in time data
             X_train_time = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(self.training_data_time[0]).transpose(2,0,1)
             X_test_time = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(self.training_data_time[1]).transpose(2,0,1)
