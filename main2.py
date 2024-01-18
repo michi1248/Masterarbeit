@@ -157,7 +157,7 @@ class EMGProcessor:
                 shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order))
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=160) # 7
+                shallow_model.train_model(train_loader, epochs=3000) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -635,7 +635,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_11_01_2024_remapped2",
+        patient_id="Michi_11_01_2024_normal2",
         movements=[
             "rest",
             "thumb",
@@ -652,12 +652,12 @@ if __name__ == "__main__":
         load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
-        use_mean_subtraction=False,
+        use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_remapped2_control/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
         window_size=150,
-        scaling_method="Min_Max_Scaling_all_channels",
+        scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
         use_control_stream=True,
         use_shallow_conv=True,

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import torch.nn.init as init
 
 class EarlyStopping:
-    def __init__(self, patience=7, min_delta=0):
+    def __init__(self, patience=50, min_delta=0):
         """
         Early stops the training if validation loss doesn't improve after a given patience.
         :param patience: (int) How long to wait after last time validation loss improved.
@@ -101,15 +101,14 @@ class ShallowConvNetWithAttention(nn.Module):
         self.train()
         criterion = nn.L1Loss()
         #criterion = nn.MSELoss()
-        optimizer = optim.Adam(self.parameters(), lr=learning_rate,weight_decay=0.0001)
+        optimizer = optim.AdamW(self.parameters(), lr=learning_rate,weight_decay=0.1,amsgrad=True)
         #early_stopping = EarlyStopping(patience=5, min_delta=0.001)  # Adjust as needed
 
+        progress_bar = tqdm(train_loader, desc="Epochs", leave=False, total=epochs)
         for epoch in range(epochs):
             epoch_loss = 0
-            progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}", leave=False)
+
             for inputs, targets in train_loader:
-
-
                 inputs, targets = inputs.float(), targets.float()  #
                 if self.use_difference_heatmap:
                     targets, _ = torch.unbind(targets, dim=0)
@@ -133,16 +132,17 @@ class ShallowConvNetWithAttention(nn.Module):
                 output2 = output[:,1]
                 loss1 = criterion(output1, targets[:,0])
                 loss2 = criterion(output2, targets[:,1])
-                total_loss = (loss1 + loss2) * 100
+                total_loss = (loss1 + loss2) #* 100
 
                 optimizer.zero_grad()
                 total_loss.backward()
                 optimizer.step()
 
                 epoch_loss += total_loss.item()
-                progress_bar.set_postfix({'loss': epoch_loss / ( len(train_loader))})
 
-            progress_bar.close()
+            progress_bar.update(1)
+
+        progress_bar.close()
 
     def predict(self, heatmap1, heatmap2 = None):
         #TODO hier muss noch die grid aranger funktion rein
@@ -349,8 +349,8 @@ class ShallowConvNetWithAttention(nn.Module):
             # Create the data loaders
             train_dataset = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
             test_dataset = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
-            train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-            test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
+            train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
             self.train_loader = train_loader
             self.test_loader = test_loader
             return train_loader, test_loader
@@ -373,8 +373,8 @@ class ShallowConvNetWithAttention(nn.Module):
             test_dataset_time = TensorDataset(torch.from_numpy(np.stack((X_test,X_test_time),axis=0)), torch.from_numpy(np.stack((y_test,y_test_time),axis=0)))
 
 
-            train_loader_time = DataLoader(train_dataset_time, batch_size=64, shuffle=True)
-            test_loader_time = DataLoader(test_dataset_time, batch_size=64, shuffle=True)
+            train_loader_time = DataLoader(train_dataset_time, batch_size=128, shuffle=True)
+            test_loader_time = DataLoader(test_dataset_time, batch_size=128, shuffle=True)
             self.train_loader = train_loader_time
             self.test_loader  = test_loader_time
             return train_loader_time, test_loader_time

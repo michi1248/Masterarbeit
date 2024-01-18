@@ -494,15 +494,19 @@ if __name__ == "__main__":
     normalizer_mean = None
     mean_rest = None
     grid_arranger = None
-    important_channels = None
-    channels_row_shape = None
+
+    important_channels_mean = None
+    channels_row_shape_mean = None
+    important_channels_no_mean = None
+    channels_row_shape_no_mean = None
+
     normalizer_no_mean = None
 
     split_index_if_same_dataset = 0.8
 
     use_shallow_conv = True
 
-    for method in ["Min_Max_Scaling_all_channels","Robust_Scaling","Robust_all_channels","no_scaling"]:
+    for method in  ["Min_Max_Scaling_over_whole_data"]:#["Min_Max_Scaling_all_channels","Min_Max_Scaling_over_whole_data","Robust_Scaling","Robust_all_channels","no_scaling"]:
         evaluation_results_mean_sub = []
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
@@ -514,14 +518,14 @@ if __name__ == "__main__":
         best_mse_no_mean = None
 
 
-        for epochs in [1,10,20,25,35,50,100,125,150,175,200,250,500,1000,1500,2000,2500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [1,10,20,25,35,50,100,125,150,175,200,250,500,1000,1500,2000,2500,3000,4000]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_11_01_2024_remapped2",
+                    patient_id="Michi_11_01_2024_normal2",
                     movements=[
                         "rest",
                         "thumb",
@@ -530,7 +534,7 @@ if __name__ == "__main__":
                     ],
                     grid_order=[1,2],
                     use_difference_heatmap=False,
-                    use_important_channels=False,
+                    use_important_channels=True,
                     use_local=True,
                     output_on_exo=True,
                     filter_output=False,
@@ -541,7 +545,7 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_remapped2_control/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
@@ -566,12 +570,19 @@ if __name__ == "__main__":
                         emg_processor.normalizer = normalizer_no_mean
                     emg_processor.grid_aranger = grid_arranger
                     if emg_processor.use_important_channels:
-                        emg_processor.channels = important_channels
-                        emg_processor.channels_row_shape = channels_row_shape
+                        if use_mean_sub:
+                            emg_processor.channels = important_channels_mean
+                            emg_processor.channels_row_shape = channels_row_shape_mean
+                        else:
+                            emg_processor.channels = important_channels_no_mean
+                            emg_processor.channels_row_shape = channels_row_shape_no_mean
                     avg_loss, mse_loss = emg_processor.run(already_build=True)
 
                 if count == 1:
                     normalizer_no_mean = emg_processor.normalizer
+                    if emg_processor.use_important_channels:
+                        important_channels_no_mean = emg_processor.channels
+                        channels_row_shape_no_mean = emg_processor.channels_row_shape
 
                 if count == 0:
                     num_previous_samples = emg_processor.num_previous_samples
@@ -580,8 +591,8 @@ if __name__ == "__main__":
                     mean_rest = emg_processor.mean_rest
                     grid_arranger = emg_processor.grid_aranger
                     if emg_processor.use_important_channels:
-                        important_channels = emg_processor.channels
-                        channels_row_shape = emg_processor.channels_row_shape
+                        important_channels_mean = emg_processor.channels
+                        channels_row_shape_mean = emg_processor.channels_row_shape
                 count += 1
                 print("avg__r2_loss_after_eval: ", avg_loss)
                 print("mse_loss_after_eval: ", mse_loss)
@@ -612,7 +623,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [1,10,20,25,35,50,100,125,150,175,200,250,500,1000,1500,2000,2500]
+                x = [1,10,20,25,35,50,100,125,150,175,200,250,500,1000,1500,2000,2500,3000,4000]
                 x = x[:x.index(epochs)+1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
@@ -636,5 +647,5 @@ if __name__ == "__main__":
 
                 train_name = emg_processor.patient_id.split("_")[-1]
                 test_name = emg_processor.use_recorded_data.split("_")[-1].split("/")[0]
-                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + ".png")
+                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + "_important_channels.png")
 
