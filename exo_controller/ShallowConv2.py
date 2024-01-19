@@ -30,32 +30,32 @@ class ShallowConvNetWithAttention(nn.Module):
             self.global_pool2 = nn.AdaptiveAvgPool2d(1)
 
             # Spatial Activity Path
-            self.conv1_1 = nn.Conv2d(number_of_grids, 64, groups=number_of_grids, kernel_size=3, padding=1)
+            self.conv1_1 = nn.Conv2d(number_of_grids, 64*number_of_grids, groups=number_of_grids, kernel_size=3, padding=1)
             self.pool_1 = nn.MaxPool2d(2, 2)
             self.conv2_1 = nn.Conv2d(64* number_of_grids, 32, kernel_size=3, padding=1)
-            self.fc1_1 = nn.Linear(64*number_of_grids*32*number_of_grids, 60)   # channels per electrode * number of grids * input  (64 * 2 * 32)
+            self.fc1_1 = nn.Linear(2048, 60)   # channels per electrode * number of grids * input  (64 * 2 * 32)
 
             # Add Batch Normalization after convolutional layers
-            self.bn1_1 = nn.BatchNorm2d(64)
+            self.bn1_1 = nn.BatchNorm2d(64*number_of_grids)
             self.bn2_1 = nn.BatchNorm2d(32)
 
             # Instance Normalization
-            self.in1_1 = nn.InstanceNorm2d(64)
+            self.in1_1 = nn.InstanceNorm2d(64*number_of_grids)
             self.in2_1 = nn.InstanceNorm2d(32)
             self.fc2_1 = nn.Linear(60, 2)
 
             # Spatial Activity Path
-            self.conv1_2 = nn.Conv2d(number_of_grids, 64, groups=number_of_grids, kernel_size=3, padding=1)
+            self.conv1_2 = nn.Conv2d(number_of_grids, 64*number_of_grids, groups=number_of_grids, kernel_size=3, padding=1)
             self.pool_2 = nn.MaxPool2d(2, 2)
             self.conv2_2 = nn.Conv2d(64* number_of_grids, 32, kernel_size=3, padding=1)
-            self.fc1_2 = nn.Linear(64*number_of_grids*32*number_of_grids, 60)
+            self.fc1_2 = nn.Linear(2048, 60)
 
             # Add Batch Normalization after convolutional layers
-            self.bn1_2 = nn.BatchNorm2d(64)
+            self.bn1_2 = nn.BatchNorm2d(64*number_of_grids)
             self.bn2_2 = nn.BatchNorm2d(32)
 
             # Instance Normalization
-            self.in1_2 = nn.InstanceNorm2d(64)
+            self.in1_2 = nn.InstanceNorm2d(64*number_of_grids)
             self.in2_2 = nn.InstanceNorm2d(32)
             self.fc2_2 = nn.Linear(60, 2)
 
@@ -69,14 +69,14 @@ class ShallowConvNetWithAttention(nn.Module):
             self.conv1 = nn.Conv2d(number_of_grids, 64* number_of_grids, groups=number_of_grids, kernel_size=3, padding=1)
             self.pool = nn.MaxPool2d(2, 2)
             self.conv2 = nn.Conv2d(64* number_of_grids, 32, kernel_size=3, padding=1)
-            self.fc1 = nn.Linear(64*number_of_grids*32*number_of_grids, 60)
+            self.fc1 = nn.Linear(2048, 60)
 
             # Add Batch Normalization after convolutional layers
-            self.bn1 = nn.BatchNorm2d(64)
+            self.bn1 = nn.BatchNorm2d(64*number_of_grids)
             self.bn2 = nn.BatchNorm2d(32)
 
             #Instance Normalization
-            self.in1 = nn.InstanceNorm2d(64)
+            self.in1 = nn.InstanceNorm2d(64*number_of_grids)
             self.in2 = nn.InstanceNorm2d(32)
 
             # Dropout rate
@@ -103,14 +103,18 @@ class ShallowConvNetWithAttention(nn.Module):
                 chunks = torch.chunk(heatmap1, 2, dim=2)
                 good_chunks = chunks[0]
                 bad_chunks = chunks[1]
-                bad_chunks = torch.chunk(bad_chunks, 3, dim=2)
-                stacked_input1 = torch.cat((good_chunks, bad_chunks[0],bad_chunks[1]), dim=1)
+                bad_chunks = torch.chunk(bad_chunks, 3, dim=3)
+                good_chunks_split = torch.chunk(good_chunks, 3, dim=3)
+                concat_tensors = list(good_chunks_split) + [bad_chunks[0], bad_chunks[1]]
+                stacked_input1 = torch.cat(concat_tensors, dim=1)
 
-                chunks2 = torch.chunk(heatmap2, 2, dim=1)
-                good_chunks2 = chunks2[0]
-                bad_chunks2 = chunks2[1]
-                bad_chunks2 = torch.chunk(bad_chunks2, 3, dim=2)
-                stacked_input2 = torch.cat((good_chunks, bad_chunks[0], bad_chunks[1]), dim=1)
+                chunks = torch.chunk(heatmap2, 2, dim=2)
+                good_chunks = chunks[0]
+                bad_chunks = chunks[1]
+                bad_chunks = torch.chunk(bad_chunks, 3, dim=3)
+                good_chunks_split = torch.chunk(good_chunks, 3, dim=3)
+                concat_tensors = list(good_chunks_split) + [bad_chunks[0], bad_chunks[1]]
+                stacked_input2 = torch.cat(concat_tensors, dim=1)
             else:
                 split_images1 = torch.chunk(heatmap1,self.number_of_grids,dim=3)
                 stacked_input1 = torch.cat(split_images1, dim=1)
@@ -178,8 +182,11 @@ class ShallowConvNetWithAttention(nn.Module):
                 chunks = torch.chunk(heatmap1, 2, dim=2)
                 good_chunks = chunks[0]
                 bad_chunks = chunks[1]
-                bad_chunks = torch.chunk(bad_chunks, 3, dim=2)
-                stacked_input = torch.cat((good_chunks, bad_chunks[0],bad_chunks[1]), dim=1)
+                bad_chunks = torch.chunk(bad_chunks, 3, dim=3)
+
+                good_chunks_split = torch.chunk(good_chunks, 3, dim=3)
+                concat_tensors = list(good_chunks_split) + [bad_chunks[0], bad_chunks[1]]
+                stacked_input = torch.cat(concat_tensors, dim=1)
             else:
                 # Split the input into two parts
                 split_images = torch.chunk(heatmap1, self.number_of_grids, dim=3)  # This will create two tensors of shape [batch_size, 1, 8, 8]
@@ -309,7 +316,7 @@ class ShallowConvNetWithAttention(nn.Module):
 
                     x2 = torch.from_numpy(heatmap2)
                     x2 = x2.float()
-                    x2 = x2.view(-1, 1, 26,24)
+                    x2 = x2.view(-1, 1, 16,24)
                     x2 = x2.to(self.device)
                 else:
                     x1 = x1.view(-1, 1, 8, 8*self.number_of_grids)
@@ -370,13 +377,20 @@ class ShallowConvNetWithAttention(nn.Module):
                 if self.use_difference_heatmap:
                     targets,_ = torch.unbind(targets, dim=0)
                     heatmap1, heatmap2 = torch.unbind(inputs, dim=0)
-                    heatmap1 = heatmap1.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape input
-                    heatmap2 = heatmap2.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape inpu
+                    if self.number_of_grids == 5:
+                        heatmap1 = heatmap1.view(-1, 1, 16,24)
+                        heatmap2 = heatmap2.view(-1, 1, 16, 24)
+                    else:
+                        heatmap1 = heatmap1.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape input
+                        heatmap2 = heatmap2.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape inpu
 
                     heatmap1 = heatmap1.to(self.device)
                     heatmap2 = heatmap2.to(self.device)
                 else:
-                    heatmap1 = inputs.view(-1, 1, 8, 8*self.number_of_grids)
+                    if self.number_of_grids == 5:
+                        heatmap1 = inputs.view(-1, 1, 16, 24)
+                    else:
+                        heatmap1 = inputs.view(-1, 1, 8, 8*self.number_of_grids)
                     heatmap1 = heatmap1.to(self.device)
 
                 targets = targets.to(self.device)
