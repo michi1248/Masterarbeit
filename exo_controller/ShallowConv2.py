@@ -509,8 +509,8 @@ class ShallowConvNetWithAttention(nn.Module):
             # Create the data loaders
             train_dataset = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
             test_dataset = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
-            train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-            test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
+            train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
             self.train_loader = train_loader
             self.test_loader = test_loader
             return train_loader, test_loader
@@ -540,8 +540,8 @@ class ShallowConvNetWithAttention(nn.Module):
             test_dataset_time = TensorDataset(torch.from_numpy(np.stack((X_test,X_test_time),axis=0)), torch.from_numpy(np.stack((y_test,y_test_time),axis=0)))
 
 
-            train_loader_time = DataLoader(train_dataset_time, batch_size=128, shuffle=True)
-            test_loader_time = DataLoader(test_dataset_time, batch_size=128, shuffle=True)
+            train_loader_time = DataLoader(train_dataset_time, batch_size=32, shuffle=True)
+            test_loader_time = DataLoader(test_dataset_time, batch_size=32, shuffle=True)
             self.train_loader = train_loader_time
             self.test_loader  = test_loader_time
             return train_loader_time, test_loader_time
