@@ -526,7 +526,7 @@ if __name__ == "__main__":
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_11_01_2024_normal2",
+                    patient_id="Michi_18_01_2024_normal2",
                     movements=[
                         "rest",
                         "thumb",
@@ -546,7 +546,7 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=False,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,

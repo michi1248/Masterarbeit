@@ -30,10 +30,10 @@ class ShallowConvNetWithAttention(nn.Module):
             self.global_pool2 = nn.AdaptiveAvgPool2d(1)
 
             # Spatial Activity Path
-            self.conv1_1 = nn.Conv2d(number_of_grids, 64*number_of_grids, groups=number_of_grids, kernel_size=3, padding=1)
+            self.conv1_1 = nn.Conv2d(number_of_grids, 64*number_of_grids, groups=number_of_grids, kernel_size=5, padding=1)
             self.pool_1 = nn.MaxPool2d(2, 2)
-            self.conv2_1 = nn.Conv2d(64* number_of_grids, 32, kernel_size=3, padding=1)
-            self.fc1_1 = nn.Linear(2048, 60)   # channels per electrode * number of grids * input  (64 * 2 * 32)
+            self.conv2_1 = nn.Conv2d(64* number_of_grids, 32, kernel_size=5, padding=1)
+            self.fc1_1 = nn.Linear(512, 60)   # channels per electrode * number of grids * input  (64 * 2 * 32)
 
             # Add Batch Normalization after convolutional layers
             self.bn1_1 = nn.BatchNorm2d(64*number_of_grids)
@@ -45,10 +45,10 @@ class ShallowConvNetWithAttention(nn.Module):
             self.fc2_1 = nn.Linear(60, 2)
 
             # Spatial Activity Path
-            self.conv1_2 = nn.Conv2d(number_of_grids, 64*number_of_grids, groups=number_of_grids, kernel_size=3, padding=1)
+            self.conv1_2 = nn.Conv2d(number_of_grids, 64*number_of_grids, groups=number_of_grids, kernel_size=5, padding=1)
             self.pool_2 = nn.MaxPool2d(2, 2)
-            self.conv2_2 = nn.Conv2d(64* number_of_grids, 32, kernel_size=3, padding=1)
-            self.fc1_2 = nn.Linear(2048, 60)
+            self.conv2_2 = nn.Conv2d(64* number_of_grids, 32, kernel_size=5, padding=1)
+            self.fc1_2 = nn.Linear(512, 60)
 
             # Add Batch Normalization after convolutional layers
             self.bn1_2 = nn.BatchNorm2d(64*number_of_grids)
@@ -66,10 +66,10 @@ class ShallowConvNetWithAttention(nn.Module):
             self.global_pool = nn.AdaptiveAvgPool2d(1)
 
             # Spatial Activity Path
-            self.conv1 = nn.Conv2d(number_of_grids, 64* number_of_grids, groups=number_of_grids, kernel_size=3, padding=1)
+            self.conv1 = nn.Conv2d(number_of_grids, 64* number_of_grids, groups=number_of_grids, kernel_size=5, padding=1)
             self.pool = nn.MaxPool2d(2, 2)
-            self.conv2 = nn.Conv2d(64* number_of_grids, 32, kernel_size=3, padding=1)
-            self.fc1 = nn.Linear(2048, 60)
+            self.conv2 = nn.Conv2d(64* number_of_grids, 32, kernel_size=5, padding=1)
+            self.fc1 = nn.Linear(512, 60)
 
             # Add Batch Normalization after convolutional layers
             self.bn1 = nn.BatchNorm2d(64*number_of_grids)
