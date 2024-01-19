@@ -500,6 +500,7 @@ class Realtime_Datagenerator:
                             [data[0],data[2]]
                         )
                 except Exception as e:
+                    print("error in get_coords_virtual_hand_interface")
                     print(e)
                     continue
             self.time_diffs_virtual_hand.update({self.movement_name_virtual_hand[self.movement_count_virtual_hand]: time_diff})

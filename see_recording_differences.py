@@ -49,8 +49,8 @@ class Heatmap:
 
         self.normalizer = normalizations.Normalization(
             method=method,
-            grid_order=[1, 2],
-            important_channels=range(64*3),
+            grid_order=[1, 2, 3, 4, 5],
+            important_channels=range(64*5),
             frame_duration=frame_duration,
         )
 
@@ -65,8 +65,9 @@ class Heatmap:
         # self.max_for_heatmap = self.normalizer.normalize_chunk(self.max_for_heatmap)
         # self.min_for_heatmap = self.normalizer.normalize_chunk(self.min_for_heatmap)
 
-        if method == "Gauss_filter":
-            self.gauss_filter = create_gaussian_filter(size_filter=5)
+
+        self.gauss_filter = create_gaussian_filter(size_filter=5)
+
 
         self.movement_name = movement_name
         self.mean_ex = mean_ex_rest
@@ -102,7 +103,7 @@ class Heatmap:
             # .reshape(64*3, -1)
         )
 
-        grid_aranger = grid_arrangement.Grid_Arrangement([1, 2])
+        grid_aranger = grid_arrangement.Grid_Arrangement([1, 2, 3, 4, 5])
         grid_aranger.make_grid()
 
         # emg_data_for_max_min = load_pickle_file(os.path.join(path_to_subject_dat, "emg_data.pkl"))
@@ -244,13 +245,15 @@ class Heatmap:
 
         normalized_heatmap = self.normalizer.normalize_chunk(heatmap)
 
+        normalized_heatmap = apply_gaussian_filter(normalized_heatmap,self.gauss_filter)
+
         if self.movement_name == "rest":
             self.heatmaps_flex = np.add(self.heatmaps_flex, heatmap)
             # add heatmap and not normalized heatmap because impact of all heatmaps will be the same but maybe some heatmaps have higher values and i want to use this ??
             # TODO maybe change this (better to use normalized or not ?)
             # IT IS BETER TO USE NORMALIZED BECAUSE IF EMG SCHWANKUNGEN
             self.number_heatmaps_flex += 1
-            self.heatmaps_ex = np.add(self.heatmaps_ex, heatmap)
+            self.heatmaps_ex = np.add(self.heatmaps_ex, normalized_heatmap)
             self.number_heatmaps_ex += 1
 
         # only do the following if +- window size near extrema
@@ -275,7 +278,7 @@ class Heatmap:
             if belongs_to_movement == 1:
                 # the closer the sample is to the extrema the more impact it has on the heatmap
                 self.heatmaps_flex = np.add(
-                    self.heatmaps_flex, heatmap
+                    self.heatmaps_flex, normalized_heatmap
                 )  # np.multiply(heatmap, 1/(distance+0.1) ))
                 # add heatmap and not normalized heatmap because impact of all heatmaps will be the same but maybe some heatmaps have higher values and i want to use this ??
                 # TODO maybe change this (better to use normalized or not ?)
@@ -602,10 +605,10 @@ if __name__ == "__main__":
 
     window_size = 150
     for method in [
-        #"Min_Max_Scaling_over_whole_data",
-        #"Robust_Scaling",
-        #"Min_Max_Scaling_all_channels",
-        #"no_scaling",
+        "Min_Max_Scaling_over_whole_data",
+        "Robust_Scaling",
+        "Min_Max_Scaling_all_channels",
+        "no_scaling",
         "Robust_all_channels",
         "EMG_signals",
     ]:
@@ -615,9 +618,9 @@ if __name__ == "__main__":
         for additional_term in ["before", "after"]:
             for movement in ["rest", "thumb", "index", "2pinch"]:
                 if additional_term == "before":
-                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_11_01_2024_normal2"  # trainingsdata recorded for training
+                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_18_01_2024_normal2"  # trainingsdata recorded for training
                 else:
-                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_11_01_2024_normal3"  # trainingsdata recorded after training
+                    path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_18_01_2024_normal3"  # trainingsdata recorded after training
 
                 print("method is: ", method)
                 print("movement is: ", movement)
@@ -643,7 +646,7 @@ if __name__ == "__main__":
                     + str(movement)
                     + str(fps)
                     + "fps_most_firings.gif",
-                    fps=2,
+                    fps=fps,
                 )
                 mean_flex, mean_ex = heatmap.channel_extraction()
                 heatmap.channel_extraction(mark_choosen_channels=True)
@@ -684,8 +687,8 @@ if __name__ == "__main__":
                         + "/"
                         + str(movement)
                         + str(fps)
-                        + "fps_most_firings.gif",
-                        fps=2,
+                        + "fps_most_firings_trash.gif",
+                        fps=10,
                     )
                     mean_flex, mean_ex = heatmap.channel_extraction()
                     heatmap.channel_extraction(mark_choosen_channels=True)

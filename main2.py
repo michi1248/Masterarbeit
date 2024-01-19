@@ -157,7 +157,7 @@ class EMGProcessor:
                 shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order))
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=3000) # 7
+                shallow_model.train_model(train_loader, epochs=40) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -250,7 +250,7 @@ class EMGProcessor:
 
         #shape should be grid
         if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data)
+            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter)
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
             self.normalizer.set_mean(mean=self.mean_rest)
 
@@ -635,31 +635,31 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_11_01_2024_normal2",
+        patient_id="Test",
         movements=[
             "rest",
             "thumb",
             "index",
             "2pinch",
         ],
-        grid_order=[1,2],
+        grid_order=[1,3],
         use_difference_heatmap=False,
         use_important_channels=False,
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=25,
+        time_for_each_movement_recording=30,
         load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
+        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
-        use_control_stream=True,
+        use_control_stream=False,
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True
     )

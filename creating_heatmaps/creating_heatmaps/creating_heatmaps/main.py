@@ -8,9 +8,9 @@ def main():
     cutting_number = 25000
     sampling_frequency = 2048
     frame_len = 64
-    recording_name = "remapped2"
+    recording_name = "normal2"
     base_path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data"
-    file_path = rf"subject_Michi_11_01_2024_{recording_name}"
+    file_path = rf"subject_Michi_18_01_2024_{recording_name}"
     data_path = os.path.join(base_path, file_path)
 
     emg, kinematics = load_data(data_path)
@@ -34,7 +34,7 @@ def main():
         x_axis = np.arange(0, emg_data.shape[1], 1) / sampling_frequency
         test_emg_data = emg_data.copy()
         #bad_channels = find_bad_channels(movement_type, valid, x_axis, test_emg_data)
-        bad_channels = [18,42,74,75]
+        bad_channels = [116,117,118,266,267]
 
         emg_data[bad_channels, :] = 0
 
@@ -52,11 +52,18 @@ def main():
             ]
         )
 
-        ext_grid, flex_grid = np.split(rms_data, 2, axis=0)
-        target_shape = (8, 8, ext_grid.shape[1])
+        #ext_grid, flex_grid = np.split(rms_data, 2, axis=0)
+        ext_grid = rms_data[:192]
+        flex_grid = rms_data[192:]
+        #target_shape = (8, 8, ext_grid.shape[1])
 
-        ext_grid = reshape_grid(ext_grid, target_shape)
-        flex_grid = reshape_grid(flex_grid, target_shape)
+        ext_grid = reshape_grid(ext_grid, (8,24,ext_grid.shape[1]))
+        flex_grid = reshape_grid(flex_grid, (8,16,flex_grid.shape[1]))
+        #
+        print("Ext grid shape: ", ext_grid.shape)
+        print("Flex grid shape: ", flex_grid.shape)
+        # ext_grid = reshape_grid(ext_grid, (8, 24, ext_grid.shape[1]))
+        # flex_grid = reshape_grid(flex_grid, (8, 16, ext_grid.shape[1]))
 
 
         rms_datas.append((ext_grid, flex_grid))

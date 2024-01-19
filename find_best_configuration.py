@@ -233,16 +233,20 @@ class EMGProcessor:
 
         #shape should be grid
         if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data)
+            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter)
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
             self.normalizer.set_mean(mean=self.mean_rest)
+
+
 
         # Calculate normalization values
         self.normalizer.get_all_emg_data(
             path_to_data=f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl",
             movements=self.movements.copy(),
         )
+
         self.normalizer.calculate_normalization_values()
+
 
 
     def format_for_exo(self, results,control_results=None):
@@ -522,14 +526,14 @@ if __name__ == "__main__":
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_11_01_2024_normal2",
+                    patient_id="Michi_18_01_2024_normal2",
                     movements=[
                         "rest",
                         "thumb",
                         "index",
                         "2pinch",
                     ],
-                    grid_order=[1,2],
+                    grid_order=[1,2,3,4,5],
                     use_difference_heatmap=False,
                     use_important_channels=False,
                     use_local=True,  # set this to false if you want to use prediction with difference heatmap
@@ -542,7 +546,7 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,

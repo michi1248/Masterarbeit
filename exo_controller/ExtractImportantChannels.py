@@ -12,6 +12,7 @@ class ChannelExtraction:
         ref,
         sampling_frequency=2048,
         frame_duration=150,
+        use_gaussian_filter=False,
     ):
         """
 
@@ -46,6 +47,9 @@ class ChannelExtraction:
         self.global_counter = 0
         self.last_frame = 0
         self.closest_mu = 0
+        self.use_gaussian_filter = use_gaussian_filter
+        if self.use_gaussian_filter:
+            self.gauss_filter = helpers.create_gaussian_filter(size_filter=5)
 
     def make_heatmap_emg(self, frame):
         """
@@ -108,6 +112,7 @@ class ChannelExtraction:
         :return:
         """
         # samples = all sample values when using all samples with self.frame_duration in between
+
         self.samples =[i for i in range(0, self.sample_length, 64)]
         self.samples = [
             element for element in self.samples if element <= len(self.ref_data)
@@ -120,14 +125,14 @@ class ChannelExtraction:
         self.number_heatmaps_ex = 0
         if np.max(self.ref_data[:, 0]) > np.max(self.ref_data[:, 1]):
             self.local_maxima, self.local_minima = helpers.get_locations_of_all_maxima(
-                self.ref_data[:, 0], distance=5000
+                self.ref_data[:, 0]
             )
             helpers.plot_local_maxima_minima(
                 self.ref_data[:, 0], self.local_maxima, self.local_minima
             )
         else:
             self.local_maxima, self.local_minima = helpers.get_locations_of_all_maxima(
-                self.ref_data[:, 1], distance=5000
+                self.ref_data[:, 1]
             )
             helpers.plot_local_maxima_minima(
                 self.ref_data[:, 1], self.local_maxima, self.local_minima
@@ -185,8 +190,12 @@ class ChannelExtraction:
 
     def heatmap_extraction(self):
         mean_flex_heatmap = np.divide(self.heatmaps_flex, self.number_heatmaps_flex)
+        if self.use_gaussian_filter:
+            helpers.apply_gaussian_filter(mean_flex_heatmap, self.gauss_filter)
 
         mean_ex_heatmap = np.divide(self.heatmaps_ex, self.number_heatmaps_ex)
+        if self.use_gaussian_filter:
+            helpers.apply_gaussian_filter(mean_ex_heatmap, self.gauss_filter)
 
         mean_ex_heatmap[np.isnan(mean_ex_heatmap)] = 0
         mean_flex_heatmap[np.isnan(mean_flex_heatmap)] = 0
