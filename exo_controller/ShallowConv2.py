@@ -60,6 +60,7 @@ class ShallowConvNetWithAttention(nn.Module):
             self.fc2_2 = nn.Linear(60, 2)
 
             self.output = nn.Linear(4,2)
+            self.merge_layer = nn.Linear(number_of_grids*2 + 4, 2)
 
         else:
             # Global Activity Path
@@ -84,7 +85,7 @@ class ShallowConvNetWithAttention(nn.Module):
 
             self.fc2 = nn.Linear(60  ,2)
 
-
+            self.merge_layer = nn.Linear(number_of_grids + 2 ,2)
         self.to(self.device)
 
     def _initialize_weights(self,m,seed=42):
@@ -124,11 +125,12 @@ class ShallowConvNetWithAttention(nn.Module):
             # Global Activity Path
             global_path1 = self.global_pool1(stacked_input1)
             global_path1 = global_path1.view(global_path1.size(0), -1)  # Flatten
-            global_path1 = torch.mean(global_path1, dim=1, keepdim=True)  # Average over the channels
+            global_path1 = torch.square(global_path1)  # Average over the channels
 
             global_path2 = self.global_pool2(stacked_input2)
             global_path2 = global_path2.view(global_path2.size(0), -1)  # Flatten
             global_path2 = torch.mean(global_path2, dim=1, keepdim=True)  # Average over the channels
+            global_path2 = torch.square(global_path2)  # Average over the channels
 
             # Spatial Activity Path
             gelu = torch.nn.GELU(approximate='tanh')
@@ -172,8 +174,11 @@ class ShallowConvNetWithAttention(nn.Module):
 
             merged_spatial_path = torch.cat((spatial_path1, spatial_path2), dim=1)
             merged_spatial_path = self.output(merged_spatial_path)
-            merged_spatial_path = torch.nn.GELU(approximate='tanh')(merged_spatial_path)
 
+            global_path1 = global_path1.view(global_path1.size(0), -1)
+            global_path2 = global_path2.view(global_path2.size(0), -1)
+            merged = torch.cat((merged_spatial_path,global_path1, global_path2), dim=1)
+            merged_spatial_path = self.merge_layer(merged)
             return merged_spatial_path
 
         else:
@@ -195,7 +200,7 @@ class ShallowConvNetWithAttention(nn.Module):
             # Global Activity Path
             global_path = self.global_pool(stacked_input)
             global_path = global_path.view(global_path.size(0), -1)  # Flatten
-            global_path = torch.mean(global_path, dim=1, keepdim=True)  # Average over the channels
+            global_path = torch.square(global_path)  # Average over the channels
 
             # Spatial Activity Path
             gelu = torch.nn.GELU(approximate='tanh')
@@ -211,13 +216,18 @@ class ShallowConvNetWithAttention(nn.Module):
             spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
             #spatial_path = self.pool(spatial_path)
 
-            spatial_path = spatial_path.view(spatial_path.size(0), -1) * global_path
+            spatial_path = spatial_path.view(spatial_path.size(0), -1)
             spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after conv2
             spatial_path = self.fc1(spatial_path)
             spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after fc1
             spatial_path = self.fc2(spatial_path)
 
-            return spatial_path
+            gobal_path = global_path.view(global_path.size(0), -1)
+            merged_spatial_path = torch.cat((spatial_path, gobal_path), dim=1)
+            merged_spatial_path = self.merge_layer(merged_spatial_path)
+
+
+            return merged_spatial_path
 
     def train_model(self, train_loader, learning_rate=0.00001, epochs=10):
         self.train()
@@ -434,6 +444,21 @@ class ShallowConvNetWithAttention(nn.Module):
         model = ShallowConvNetWithAttention()
         model.load_state_dict(torch.load(file_path))
         model.eval()
+        return model
+
+    @classmethod
+    def load_and_further_train(cls, file_path, train_loader, additional_epochs=10, new_learning_rate=0.000001):
+        """
+        Load a pre-trained model and further train it with given data.
+
+        :param file_path: Path to the pre-trained model file.
+        :param train_loader: DataLoader for the training data.
+        :param additional_epochs: Number of additional epochs to train.
+        :param new_learning_rate: Learning rate for further training.
+        :return: Trained model.
+        """
+        model = cls.load_model(file_path)
+        model.train_model(train_loader, learning_rate=new_learning_rate, epochs=additional_epochs)
         return model
 
     def load_trainings_data(self,patient_number):

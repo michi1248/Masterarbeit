@@ -507,7 +507,7 @@ if __name__ == "__main__":
 
     use_shallow_conv = True
 
-    for method in  ["no_scaling"]:#"Min_Max_Scaling_all_channels","Robust_Scaling","Robust_all_channels",
+    for method in  ["Min_Max_Scaling_over_whole_data"]:#"Min_Max_Scaling_all_channels","Robust_Scaling","Robust_all_channels",
         evaluation_results_mean_sub = []
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
