@@ -507,7 +507,7 @@ if __name__ == "__main__":
 
     use_shallow_conv = True
 
-    for method in  ["Min_Max_Scaling_over_whole_data","Min_Max_Scaling_all_channels","Robust_Scaling","Robust_all_channels","no_scaling"]:
+    for method in  ["no_scaling"]:#"Min_Max_Scaling_all_channels","Robust_Scaling","Robust_all_channels",
         evaluation_results_mean_sub = []
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
@@ -519,7 +519,7 @@ if __name__ == "__main__":
         best_mse_no_mean = None
 
 
-        for epochs in [1,3,5,7,10,20,25,35,50,100,125,150,175,200,250,500,1000,1500,2000,2500,3000,4000]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [1,3,5,7,10,20,25,35,50,100,125,150,]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
@@ -624,7 +624,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [1,3,5,7,10,20,25,35,50,100,125,150,175,200,250,500,1000,1500,2000,2500,3000,4000]
+                x = [1,3,5,7,10,20,25,35,50,100,125,150,175,200,250,500]
                 x = x[:x.index(epochs)+1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")

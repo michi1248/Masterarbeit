@@ -442,7 +442,7 @@ class Heatmap:
             or ("rest" in self.movement_name)
         ):
             self.local_maxima, self.local_minima = get_locations_of_all_maxima(
-                self.ref_data[:, 0], distance=2000
+                self.ref_data[:, 0],
             )
             plot_local_maxima_minima(
                 self.ref_data[:, 0], self.local_maxima, self.local_minima
