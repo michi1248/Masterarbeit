@@ -133,7 +133,20 @@ class EMGProcessor:
             f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/3d_data.pkl"
         )
         print("shape ref data: ", ref_data["rest"].shape)
-        #ref_data["rest"] = ref_data["rest"]*0
+
+        # add gaussian noise to the ground truth data so that the model can learn to deal with noise
+        for movement in self.movements:
+            # Generate Gaussian noise for each column
+            mean_1 = 0
+            mean_2 = 0
+            std_1 = np.divide(np.std(ref_data[movement][:, 0]), 8)
+            std_2 = np.divide(np.std(ref_data[movement][:, 1]), 8)
+
+            noise1 = np.random.normal(mean_1, std_1, ref_data[movement].shape[0])
+            noise2 = np.random.normal(mean_2, std_2, ref_data[movement].shape[0])
+            ref_data[movement][:, 0] = np.add(ref_data[movement][:, 0], noise1)
+            ref_data[movement][:, 1] = np.add(ref_data[movement][:, 1], noise2)
+
         return emg_data, ref_data
 
     def train_model(self, emg_data, ref_data,already_build=False):
@@ -527,7 +540,7 @@ if __name__ == "__main__":
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_18_01_2024_normal2",
+                    patient_id="Michi_18_01_2024_remapped3",
                     movements=[
                         "rest",
                         "thumb",
@@ -547,7 +560,7 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=False,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal2/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_remapped3_control/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
