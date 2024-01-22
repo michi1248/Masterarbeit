@@ -133,7 +133,7 @@ class EMGProcessor:
             f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/3d_data.pkl"
         )
         print("shape ref data: ", ref_data["rest"].shape)
-        ref_data["rest"] = ref_data["rest"]*0
+        #ref_data["rest"] = ref_data["rest"]*0
         return emg_data, ref_data
 
     def train_model(self, emg_data, ref_data,already_build=False):
@@ -453,6 +453,7 @@ class EMGProcessor:
                             if self.use_control_stream:
                                 predictions.append(res_local)
                                 ground_truth.append(control_ref_data)
+                                self.output_results(res_local, control_ref_data)
                             else:
                                 self.output_results(res_local)
 
@@ -546,7 +547,7 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=False,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal2/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
