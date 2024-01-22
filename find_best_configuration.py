@@ -139,10 +139,11 @@ class EMGProcessor:
             # Generate Gaussian noise for each column
             mean_1 = 0
             mean_2 = 0
-            std_1 = np.divide(np.std(ref_data[movement][:, 0]), 8)
-            std_2 = np.divide(np.std(ref_data[movement][:, 1]), 8)
+            std_1 = np.divide(np.std(ref_data[movement][:, 0]), 10)
+            std_2 = np.divide(np.std(ref_data[movement][:, 1]), 10)
 
             noise1 = np.random.normal(mean_1, std_1, ref_data[movement].shape[0])
+
             noise2 = np.random.normal(mean_2, std_2, ref_data[movement].shape[0])
             ref_data[movement][:, 0] = np.add(ref_data[movement][:, 0], noise1)
             ref_data[movement][:, 1] = np.add(ref_data[movement][:, 1], noise2)
@@ -230,6 +231,7 @@ class EMGProcessor:
             grid_order=self.grid_order,
             important_channels=self.channels,
             frame_duration=self.window_size,
+            use_spatial_filter=self.use_spatial_filter,
         )
 
         #shape should be 320 x #samples
@@ -380,12 +382,33 @@ class EMGProcessor:
                         ):  # check if now too many sampels are in the buffer and i can delete old one
                             emg_buffer.pop(0)
                         data = np.concatenate(emg_buffer, axis=-1)
+
+                        if ((data.shape[2] - self.window_size_in_samples) < 0 ):
+                            emg_to_use = data[:,:,:]
+                        else:
+                            emg_to_use = data[:,:,
+                                         (data.shape[2]-1) - self.window_size_in_samples: -1
+                                         ]
+                        if self.use_difference_heatmap:
+                            # data for difference heatmap
+                            if ((data.shape[2] - (self.window_size_in_samples*2.5)) < 0 ):
+                                emg_to_use_difference = data[:,:,:]
+                            else:
+                                emg_to_use_difference = data[:,:,
+                                                        (data.shape[2] - 1) - self.window_size_in_samples: -1
+                                                        ]
+
+                        if self.use_spatial_filter:
+                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
+                            if self.use_difference_heatmap:
+                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
+
                         heatmap_local = calculate_local_heatmap_realtime(
-                            data, self.window_size_in_samples
+                            emg_to_use
                         )
                         if self.use_difference_heatmap:
                             previous_heatmap = calculate_local_heatmap_realtime(
-                            data, int(self.window_size_in_samples*2)
+                            emg_to_use_difference
                         )
 
                         if self.use_mean_subtraction:
@@ -466,7 +489,6 @@ class EMGProcessor:
                             if self.use_control_stream:
                                 predictions.append(res_local)
                                 ground_truth.append(control_ref_data)
-                                self.output_results(res_local, control_ref_data)
                             else:
                                 self.output_results(res_local)
 
@@ -533,7 +555,7 @@ if __name__ == "__main__":
         best_mse_no_mean = None
 
 
-        for epochs in [1,3,5,7,10,20,25,35,50,100,125,150,]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [1,3,5,7,10,20,25,35,50,100,125,150,175,200,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
@@ -559,7 +581,7 @@ if __name__ == "__main__":
                     use_spatial_filter=False,
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
-                    use_gauss_filter=False,
+                    use_gauss_filter=True,
                     use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_remapped3_control/",  # False
                     window_size=150,
                     scaling_method=method,
@@ -662,5 +684,5 @@ if __name__ == "__main__":
 
                 train_name = emg_processor.patient_id.split("_")[-1]
                 test_name = emg_processor.use_recorded_data.split("_")[-1].split("/")[0]
-                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + "_important_channels.png")
+                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + ".png")
 

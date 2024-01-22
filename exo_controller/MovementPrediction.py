@@ -244,6 +244,7 @@ class MultiDimensionalDecisionTree:
         Returns:
         - numpy.ndarray: An array of RMS values for each channel.
         """
+        emg_grid_compy = np.copy(emg_grid)
 
         num_rows, num_cols, _ = emg_grid.shape
         rms_values = np.zeros((num_rows, num_cols))
@@ -258,6 +259,32 @@ class MultiDimensionalDecisionTree:
                     channel_data = emg_grid[row_idx][col_idx][
                         position - interval_in_samples : position
                     ]
+                # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
+                rms_values[row_idx, col_idx] = np.sqrt(
+                    np.mean(np.array(channel_data) ** 2)
+                )
+        return rms_values
+
+    def calculate_heatmap_on_whole_samples(self, emg_grid):
+        """
+        Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
+
+        Parameters:
+        - emg_grid (numpy.ndarray): The 3D EMG data grid where the first two dimensions represent rows and columns of channels,
+                                   and the third dimension represents the values within each channel.
+        - position (int): The position of the EMG grid in the time series.
+        -interval_in_samples (int): The number of samples to include in the RMS calculation.
+
+        Returns:
+        - numpy.ndarray: An array of RMS values for each channel.
+        """
+
+        num_rows, num_cols, _ = emg_grid.shape
+        rms_values = np.zeros((num_rows, num_cols))
+
+        for row_idx in range(num_rows):
+            for col_idx in range(num_cols):
+                channel_data = emg_grid[row_idx][col_idx][:]
                 # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
                 rms_values[row_idx, col_idx] = np.sqrt(
                     np.mean(np.array(channel_data) ** 2)
@@ -317,8 +344,7 @@ class MultiDimensionalDecisionTree:
 
             if self.use_bandpass_filter:
                 emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
-            if self.use_spatial_filter:
-                emg_data = self.filter.spatial_filtering(emg_data, "NDD")
+
 
             for i in range(
                 0, emg_data.shape[2] - window_size + 1, self.sample_difference_overlap
@@ -327,11 +353,24 @@ class MultiDimensionalDecisionTree:
                     # segment = calculate_emg_rms_row(
                     #     emg_data, i, self.window_size_in_samples
                     # )
-                    segment = self.calculate_heatmap(
-                        emg_data, i, self.window_size_in_samples
+                    if (i - self.window_size_in_samples < 0) or (
+                            emg_data.shape[2] < (self.window_size_in_samples)
+                    ):
+                        emg_to_use =  emg_data[:,:,: i + 1]
+                    else:
+                        emg_to_use = emg_data[:,:,
+                                       i - self.window_size_in_samples: i
+                                       ]
+                    if self.use_spatial_filter:
+                        emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
+
+
+                    segment = self.calculate_heatmap_on_whole_samples(
+                        emg_to_use,
                     )
                     if self.mean_rest is not None:
                         segment = np.subtract(segment, self.mean_rest)
+
                     segment = self.normalizer.normalize_chunk(segment)
                     # feature = calculate_rms(segment)
                     # segments.append
@@ -410,8 +449,7 @@ class MultiDimensionalDecisionTree:
                     emg_data = self.emg_data[movement]
                     if self.use_bandpass_filter:
                         emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
-                    if self.use_spatial_filter:
-                        emg_data = self.filter.spatial_filtering(emg_data, "NDD")
+
 
                     for i in range(
                         0,
@@ -422,15 +460,41 @@ class MultiDimensionalDecisionTree:
                             # heatmap = calculate_emg_rms_row(
                             #     emg_data, i, self.window_size_in_samples
                             # )
-                            heatmap = self.calculate_heatmap(
-                                emg_data, i, self.window_size_in_samples
+                            # data for normal heatmap
+                            if (i - self.window_size_in_samples < 0) or (
+                                    emg_data.shape[2] < (self.window_size_in_samples)
+                            ):
+                                emg_to_use = emg_data[:,:,: i + 1]
+                            else:
+                                emg_to_use = emg_data[:,:,
+                                             i - self.window_size_in_samples: i
+                                             ]
+
+                            # data for difference heatmap
+                            if (i - int(self.window_size_in_samples*2.5) < 0) or (
+                                    emg_data.shape[2] < (self.window_size_in_samples)
+                            ):
+                                emg_to_use_difference = emg_data[:,:,: i + 1]
+                            else:
+                                emg_to_use_difference = emg_data[:,:,
+                                             i - self.window_size_in_samples: i
+                                             ]
+
+
+                            if self.use_spatial_filter:
+                                emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
+                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
+
+                            heatmap = self.calculate_heatmap_on_whole_samples(
+                                emg_to_use,
                             )
+
                             if self.mean_rest is not None:
                                 heatmap = np.subtract(heatmap, self.mean_rest)
                             heatmap = self.normalizer.normalize_chunk(heatmap)
 
-                            previous_heatmap = self.calculate_heatmap(
-                                emg_data, i, int(self.window_size_in_samples*3.5)
+                            previous_heatmap = self.calculate_heatmap_on_whole_samples(
+                                emg_to_use_difference,
                             )
 
                             if self.mean_rest is not None:

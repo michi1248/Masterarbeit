@@ -1,6 +1,7 @@
 import numpy as np
 from exo_controller import helpers
 from exo_controller.grid_arrangement import Grid_Arrangement
+from exo_controller.spatial_filters import Filters
 import os
 
 
@@ -12,6 +13,7 @@ class Normalization:
         important_channels=None,
         sampling_frequency=2048,
         frame_duration=150,
+        use_spatial_filter=False,
     ):
         """
         :param movements: list of movements that should be used for normalization
@@ -39,6 +41,9 @@ class Normalization:
         self.grid_aranger.make_grid()
         self.sampling_frequency = sampling_frequency
         self.frame_duration = frame_duration
+        self.use_spatial_filter = use_spatial_filter
+        if self.use_spatial_filter:
+            self.spatial_filter = Filters()
 
     def robust_scaling(self, data):
         """
@@ -193,6 +198,32 @@ class Normalization:
                 )
         return rms_values
 
+    def calculate_heatmap_on_whole_samples(self, emg_grid):
+        """
+        Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
+
+        Parameters:
+        - emg_grid (numpy.ndarray): The 3D EMG data grid where the first two dimensions represent rows and columns of channels,
+                                   and the third dimension represents the values within each channel.
+        - position (int): The position of the EMG grid in the time series.
+        -interval_in_samples (int): The number of samples to include in the RMS calculation.
+
+        Returns:
+        - numpy.ndarray: An array of RMS values for each channel.
+        """
+
+        num_rows, num_cols, _ = emg_grid.shape
+        rms_values = np.zeros((num_rows, num_cols))
+
+        for row_idx in range(num_rows):
+            for col_idx in range(num_cols):
+                channel_data = emg_grid[row_idx][col_idx][:]
+                # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
+                rms_values[row_idx, col_idx] = np.sqrt(
+                    np.mean(np.array(channel_data) ** 2)
+                )
+        return rms_values
+
     def set_method(self, method):
         """
         sets the method that should be used to normalize the data
@@ -255,9 +286,24 @@ class Normalization:
             self.samples =[i for i in range(0, sample_length, 64)]
 
             for frame in self.samples:
-                heatmap = self.calculate_heatmap(
-                    self.all_emg_data[movement], frame, number_observation_samples
+                if (frame - number_observation_samples < 0) or (
+                        self.all_emg_data[movement].shape[2] < (number_observation_samples)
+                ):
+                    emg_data_to_use = self.all_emg_data[movement][:,:,: frame + 1]
+                else:
+                    emg_data_to_use = self.all_emg_data[movement][:,:,
+                                   frame - number_observation_samples: frame
+                                   ]
+
+                if self.use_spatial_filter:
+                    emg_data_to_use = self.spatial_filter.spatial_filtering(emg_data_to_use,  filter_name="IR")
+
+                heatmap = self.calculate_heatmap_on_whole_samples(
+                    emg_data_to_use
                 )
+
+
+
                 if (self.mean is not None) and (self.mean is not None):
                     heatmap = heatmap - self.mean
 

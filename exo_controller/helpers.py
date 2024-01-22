@@ -318,7 +318,7 @@ def calculate_difference_heatmap_realtime( emg_grid, position, interval_in_sampl
                 np.mean(np.array(channel_data) ** 2)
             )
     return rms_values
-def calculate_local_heatmap_realtime( emg_grid , interval_in_samples):
+def calculate_local_heatmap_realtime( emg_grid ):
     """
     Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
 
@@ -336,12 +336,7 @@ def calculate_local_heatmap_realtime( emg_grid , interval_in_samples):
 
     for row_idx in range(num_rows):
         for col_idx in range(num_cols):
-            if ((signal_length - interval_in_samples) < 0 ):
-                channel_data = emg_grid[row_idx][col_idx][:]
-            else:
-                channel_data = emg_grid[row_idx][col_idx][
-                               (signal_length-1) - interval_in_samples: -1
-                ]
+            channel_data = emg_grid[row_idx][col_idx][:]
             # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
             rms_values[row_idx, col_idx] = np.sqrt(
                 np.mean(np.array(channel_data) ** 2)

@@ -131,8 +131,8 @@ class EMGProcessor:
             # Generate Gaussian noise for each column
             mean_1 = 0
             mean_2 = 0
-            std_1 = np.divide(np.std(ref_data[movement][:, 0]),8)
-            std_2 = np.divide(np.std(ref_data[movement][:, 1]),8)
+            std_1 = np.divide(np.std(ref_data[movement][:, 0]),10)
+            std_2 = np.divide(np.std(ref_data[movement][:, 1]),10)
 
             noise1 = np.random.normal(mean_1, std_1, ref_data[movement].shape[0])
             noise2 = np.random.normal(mean_2, std_2, ref_data[movement].shape[0])
@@ -171,7 +171,7 @@ class EMGProcessor:
                 shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction)
                 shallow_model.apply(shallow_model._initialize_weights)
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=20) # 7
+                shallow_model.train_model(train_loader, epochs=150) # 7
                 shallow_model.evaluate(test_loader)
 
             else:
@@ -248,6 +248,7 @@ class EMGProcessor:
             grid_order=self.grid_order,
             important_channels=self.channels,
             frame_duration=self.window_size,
+            use_spatial_filter=self.use_spatial_filter,
         )
 
         #shape should be 320 x #samples
@@ -411,12 +412,32 @@ class EMGProcessor:
                         ):  # check if now too many sampels are in the buffer and i can delete old one
                             emg_buffer.pop(0)
                         data = np.concatenate(emg_buffer, axis=-1)
+                        if ((data.shape[2] - self.window_size_in_samples) < 0):
+                            emg_to_use = data[:,:,:]
+                        else:
+                            emg_to_use = data[:,:,
+                                         (data.shape[2] - 1) - self.window_size_in_samples: -1
+                                         ]
+                        if self.use_difference_heatmap:
+                            # data for difference heatmap
+                            if ((data.shape[2] - (self.window_size_in_samples * 2.5)) < 0):
+                                emg_to_use_difference = data[:,:,:]
+                            else:
+                                emg_to_use_difference = data[:,:,
+                                                        (data.shape[2] - 1) - self.window_size_in_samples: -1
+                                                        ]
+
+                        if self.use_spatial_filter:
+                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
+                            if self.use_difference_heatmap:
+                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
+
                         heatmap_local = calculate_local_heatmap_realtime(
-                            data, self.window_size_in_samples
+                            emg_to_use
                         )
                         if self.use_difference_heatmap:
                             previous_heatmap = calculate_local_heatmap_realtime(
-                                data, int(self.window_size_in_samples * 2)
+                                emg_to_use_difference
                             )
 
                         if self.use_mean_subtraction:
@@ -647,7 +668,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_18_01_2024_normal1",
+        patient_id="Michi_18_01_2024_normal2",
         movements=[
             "rest",
             "thumb",
@@ -667,7 +688,7 @@ if __name__ == "__main__":
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=False,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal2/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
