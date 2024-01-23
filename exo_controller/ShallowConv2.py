@@ -437,11 +437,11 @@ class ShallowConvNetWithAttention(nn.Module):
         torch.save(self.state_dict(), path)
 
     @staticmethod
-    def load_model(file_path):
-        model = ShallowConvNetWithAttention()
-        model.load_state_dict(torch.load(file_path))
-        model.eval()
-        return model
+    def load_model(cls,file_path):
+        #model = ShallowConvNetWithAttention()
+        cls.load_state_dict(torch.load(file_path))
+        cls.eval()
+        return cls
 
     @classmethod
     def load_and_further_train(cls, file_path, train_loader, additional_epochs=10, new_learning_rate=0.000001):

@@ -14,8 +14,8 @@ from exo_controller import ExtractImportantChannels
 from exo_controller import normalizations
 from exo_controller.helpers import *
 from exo_controller.spatial_filters import Filters
-from exo_controller.ShallowConv import ShallowConvNetWithAttention
-#from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
+#from exo_controller.ShallowConv import ShallowConvNetWithAttention
+from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
 import time
 import keyboard
 
@@ -169,28 +169,22 @@ class EMGProcessor:
             model.train()
             model.evaluate()
         else:
-            shallow_model1 = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,finger=0)
-            shallow_model2 = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,finger=1)
-
-            shallow_model1.apply(shallow_model1._initialize_weights)
-            shallow_model2.apply(shallow_model1._initialize_weights)
-            train_loader,test_loader = shallow_model1.load_trainings_data(self.patient_id)
-            shallow_model1.train_model(train_loader, epochs=self.epochs)
-            shallow_model1.evaluate(test_loader)
-            shallow_model2.train_model(train_loader, epochs=self.epochs)
-            shallow_model2.evaluate(test_loader)
-
+            shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction)
+            shallow_model.apply(shallow_model._initialize_weights)
+            train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
+            shallow_model.train_model(train_loader, epochs=self.epochs)
+            shallow_model.evaluate(test_loader)
             self.train_loader = train_loader
         if self.save_trained_model:
             if not self.use_shallow_conv:
                 model.save_model(subject=self.patient_id )
                 print("Model saved")
             else:
-                shallow_model1.save_model(path=self.patient_id + "_shallow.pt")
+                shallow_model.save_model(path=self.patient_id + "_shallow.pt")
             print("Shallow model saved")
 
         if self.use_shallow_conv:
-            return shallow_model1,shallow_model2
+            return shallow_model
         else:
             return model
 
@@ -331,7 +325,7 @@ class EMGProcessor:
             # Print the prediction results to the console
             print("Prediction: ", results)
 
-    def run_prediction_loop_recorded_data(self, model1,model2):
+    def run_prediction_loop_recorded_data(self, model):
         predictions = []
         ground_truth = []
         # Main prediction loop
@@ -367,10 +361,6 @@ class EMGProcessor:
             for i in emg_data.keys():
                 emg_data[i] = self.filter.bandpass_filter_emg_data(emg_data[i], fs=2048)
 
-
-        if self.use_spatial_filter:
-            for i in emg_data.keys():
-                emg_data[i] = self.filter.spatial_filtering(emg_data[i], "NDD")
 
 
         for movement in ref_data.keys():
@@ -446,19 +436,17 @@ class EMGProcessor:
 
                         if self.use_shallow_conv:
                             if not self.use_difference_heatmap:
-                                res_local1 = model1.predict(heatmap_local)
-                                res_local2 = model2.predict(heatmap_local)
-                                res_local = np.array([res_local1[0],res_local2[0]]).reshape(2)
+                                res_local = model.predict(heatmap_local)
                                 if self.filter_output:
                                     res_local = self.filter_local.filter(
                                         np.array(res_local[0])
                                     )  # filter the predcition with my filter from my Bachelor thesis
 
                                 else:
-                                    res_local = np.array(res_local)
+                                    res_local = np.array(res_local[0])
 
                         else:
-                            res_local = model1.trees[0].predict(
+                            res_local = model.trees[0].predict(
                                 [heatmap_local]
                             )  # result has shape 1,2
 
@@ -475,9 +463,9 @@ class EMGProcessor:
                                 res_time = np.array([-1, -1])
                             else:
                                 if self.use_shallow_conv:
-                                    res_time = model1.predict(heatmap_local,difference_heatmap)
+                                    res_time = model.predict(heatmap_local,difference_heatmap)
                                 else:
-                                    res_time = model1.trees[self.best_time_tree].predict(
+                                    res_time = model.trees[self.best_time_tree].predict(
                                         [difference_heatmap]
                                     )
 
@@ -517,14 +505,13 @@ class EMGProcessor:
             if self.only_record_data:
                 return
             self.process_data(emg_data, ref_data)
-            model1,model2 = self.train_model(emg_data, ref_data,already_build=already_build)
+            model = self.train_model(emg_data, ref_data,already_build=already_build)
         else:
-            model1,model2 = self.train_model(None, None, already_build=already_build)
+            model = self.train_model(None, None, already_build=already_build)
 
-        results,ground_truth = self.run_prediction_loop_recorded_data(model1,model2)
+        results,ground_truth = self.run_prediction_loop_recorded_data(model)
         #print("difference: ", np.subtract(np.array([target for _, target in self.train_loader]).squeeze()[0],ground_truth))
-
-        avg_loss,mse_loss = model1.evaluate_best(predictions=results,ground_truth=ground_truth)
+        avg_loss,mse_loss = model.evaluate_best(predictions=results,ground_truth=ground_truth)
         return avg_loss,mse_loss
 
 
@@ -590,7 +577,7 @@ if __name__ == "__main__":
                     use_spatial_filter=False,
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
-                    use_gauss_filter=False,
+                    use_gauss_filter=True,
                     use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_remapped3_control/",  # False
                     window_size=150,
                     scaling_method=method,

@@ -114,7 +114,7 @@ class EMGProcessor:
 
     def load_data(self):
         # Load and preprocess data
-        if not self.use_recorded_data:
+        if not self.use_recorded_data and not self.load_trained_model:
             self.run_video_data_generation()
 
         resulting_file = f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl"
@@ -183,8 +183,8 @@ class EMGProcessor:
 
         else:
             if self.use_shallow_conv:
-                model = ShallowConvNetWithAttention(number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction)
-                model.load_model(path=self.patient_id + "_shallow.pt")
+                model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=2, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction)
+                model.load_model(cls = model,file_path=self.patient_id + "_shallow.pt")
                 print("Shallow model loaded")
                 self.best_time_tree = 3
                 # Loading an existing model
@@ -374,11 +374,6 @@ class EMGProcessor:
                 emg_data[i] = self.filter.bandpass_filter_emg_data(emg_data[i], fs=2048)
 
 
-        if self.use_spatial_filter:
-            for i in emg_data.keys():
-                emg_data[i] = self.filter.spatial_filtering(emg_data[i], "NDD")
-
-
         for movement in ref_data.keys():
             buffer_pred = []
             buffer_control = []
@@ -543,9 +538,16 @@ class EMGProcessor:
     def run_prediction_loop(self, model):
 
         self.emg_interface.initialize_all()
-        max_chunk_number = np.ceil(
-            max(self.num_previous_samples) / 64
-        )  # calculate number of how many chunks we have to store till we delete old
+        self.exo_controller = Exo_Control()
+        self.exo_controller.initialize_all()
+
+        if not self.load_trained_model:
+            max_chunk_number = np.ceil(
+                max(self.num_previous_samples) / 64
+            )  # calculate number of how many chunks we have to store till we delete old
+        else:
+            max_chunk_number = 15
+            self.window_size_in_samples = int((self.window_size / 1000) * 2048)
         emg_buffer = []
 
         while True:
@@ -557,25 +559,36 @@ class EMGProcessor:
             ):  # check if now too many sampels are in the buffer and i can delete old one
                 emg_buffer.pop(0)
             data = np.concatenate(emg_buffer, axis=-1)
-
-
-            data = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(data)
-
             if self.use_bandpass_filter:
                 data = self.filter.bandpass_filter_emg_data(data, fs=2048)
+            data = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(data)
+
+            if ((data.shape[2] - self.window_size_in_samples) < 0):
+                emg_to_use = data[:, :, :]
+            else:
+                emg_to_use = data[:, :,
+                             (data.shape[2] - 1) - self.window_size_in_samples: -1
+                             ]
+            if self.use_difference_heatmap:
+                # data for difference heatmap
+                if ((data.shape[2] - (self.window_size_in_samples * 2.5)) < 0):
+                    emg_to_use_difference = data[:, :, :]
+                else:
+                    emg_to_use_difference = data[:, :,
+                                            (data.shape[2] - 1) - self.window_size_in_samples: -1
+                                            ]
 
             if self.use_spatial_filter:
-                data = self.filter.spatial_filtering(data, "IB2")
+                emg_to_use = self.filter.spatial_filtering(emg_to_use, "LSD")
+                if self.use_difference_heatmap:
+                    emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "LSD")
 
             heatmap_local = calculate_local_heatmap_realtime(
-                data, self.window_size_in_samples
+                emg_to_use
             )
             if self.use_difference_heatmap:
-                previous_heatmap = calculate_difference_heatmap_realtime(
-                    data,
-                    data.shape[2]
-                    - self.num_previous_samples[self.best_time_tree - 1],
-                    self.window_size_in_samples,
+                previous_heatmap = calculate_local_heatmap_realtime(
+                    emg_to_use_difference
                 )
 
             if self.use_mean_subtraction:
@@ -596,44 +609,49 @@ class EMGProcessor:
                         previous_heatmap, self.gauss_filter
                     )
             if self.use_difference_heatmap:
-                difference_heatmap = np.subtract(heatmap_local, previous_heatmap)
+                difference_heatmap = previous_heatmap
                 if not self.use_shallow_conv:
                     difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
                         np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
-            # TODO hier muss noch die heatmap in die richtige form gebracht werden
-            #TODO hier müsste eigentlich grid shape dann gemacht werden
             if not self.use_shallow_conv:
                 heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
                     np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
 
             if self.use_shallow_conv:
-                res_local = model.predict(heatmap_local)
+                if not self.use_difference_heatmap:
+                    res_local = model.predict(heatmap_local)
+                    if self.filter_output:
+                        res_local = self.filter_local.filter(
+                            np.array(res_local[0])
+                        )  # filter the predcition with my filter from my Bachelor thesis
+
+                    else:
+                        res_local = np.array(res_local[0])
 
             else:
                 res_local = model.trees[0].predict(
                     [heatmap_local]
                 )  # result has shape 1,2
 
+                if self.filter_output:
+                    res_local = self.filter_local.filter(
+                        np.array(res_local[0])
+                    )  # filter the predcition with my filter from my Bachelor thesis
 
-            if self.filter_output:
-                res_local = self.filter_local.filter(
-                    np.array(res_local[0])
-                )  # filter the predcition with my filter from my Bachelor thesis
-
-            else:
-                res_local = np.array(res_local[0])
+                else:
+                    res_local = np.array(res_local[0])
 
             if self.use_difference_heatmap:
                 if np.isnan(difference_heatmap).any():
                     res_time = np.array([-1, -1])
                 else:
                     if self.use_shallow_conv:
-                        res_time = model.predict(heatmap_local,difference_heatmap)
-
+                        res_time = model.predict(heatmap_local, difference_heatmap)
                     else:
                         res_time = model.trees[self.best_time_tree].predict(
                             [difference_heatmap]
                         )
+
                     if self.filter_output:
                         res_time = self.filter_time.filter(
                             np.array(res_time[0])
@@ -643,19 +661,21 @@ class EMGProcessor:
 
 
             if self.use_local:
-                print(res_local)
                 self.output_results(res_local)
             else:
                 self.output_results(res_time)
 
     def run(self):
         # Main loop for predictions
-
         emg_data, ref_data = self.load_data()
         if self.only_record_data:
             return
-
         self.process_data(emg_data, ref_data)
+
+
+
+
+
         model = self.train_model(emg_data, ref_data)
         if self.use_recorded_data:
             self.run_prediction_loop_recorded_data(model)
@@ -670,31 +690,31 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_11_01_2024_normal2",
+        patient_id="Test1",
         movements=[
             "rest",
             "thumb",
             "index",
             "2pinch",
         ],
-        grid_order=[1,2],
+        grid_order=[1,2,3,4,5],
         use_difference_heatmap=False,
         use_important_channels=False,
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=30,
-        load_trained_model=False,
+        time_for_each_movement_recording=3,
+        load_trained_model=True,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=False,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
+        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
-        use_control_stream=True,
+        use_control_stream=False,
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True
     )

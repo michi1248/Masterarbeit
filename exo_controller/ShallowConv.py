@@ -12,7 +12,7 @@ import torch.nn.init as init
 
 
 class ShallowConvNetWithAttention(nn.Module):
-    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None, finger = 0):
+    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None, number_of_grids=2,use_mean = None, finger = 0):
         super(ShallowConvNetWithAttention, self).__init__()
         self.use_mean = use_mean
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
