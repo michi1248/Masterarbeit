@@ -88,11 +88,9 @@ class EMG_Interface:
     def clear_socket_buffer(self):
         # Make the socket non-blocking
         self.emgSocket.setblocking(0)
-        count = 0
         while True:
             try:
-                count +=1
-                print(count, " number of items deleted")
+
                 data = self.emgSocket.recv(self.BufferSize)  # Non-blocking receive
                 if not data:
                     self.emgSocket.setblocking(1)
