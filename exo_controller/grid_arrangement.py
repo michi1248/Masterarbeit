@@ -126,18 +126,18 @@ class Grid_Arrangement:
         elif self.num_grids == 5:
             upper_grid = np.zeros((8, 8 * 3, min(len(row) for row in input)))
             lower_grid = np.zeros((8, 8 * 2, min(len(row) for row in input)))
-            for row in range(64, 256):  # TODO CHANGE THIS BACK TO input.shape[0] !!!!
+            for row in range(input.shape[0]):  # TODO CHANGE THIS BACK TO input.shape[0] !!!!
                 res_row, res_col, res_grid = self.get_channel_position_and_grid_number(
                     row + 1
                 )
                 if res_grid < 4:
                     upper_grid[res_row, res_col, :] = input[
-                        row - 64
-                    ]  # TODO remove -64 !!!!
+                        row
+                    ]
                 else:
                     lower_grid[res_row, res_col, :] = input[
-                        row - 64
-                    ]  # TODO remove -64 !!!!
+                        row
+                    ]
             return upper_grid, lower_grid
 
     def transfer_320_into_grid_arangement(self, input):
@@ -212,9 +212,14 @@ class Grid_Arrangement:
         :return:
         """
         if self.num_grids == 5:
-            lower = np.concatenate(
-                (lower_grid, np.zeros((8, 8, upper_grid.shape[2]))), axis=1
-            )
+            if np.ndim(upper_grid) == 2:
+                lower = np.concatenate(
+                    (lower_grid, np.zeros((8, 8))), axis=1
+                )
+            else:
+                lower = np.concatenate(
+                    (lower_grid, np.zeros((8, 8, upper_grid.shape[2]))), axis=1
+                )
             return np.concatenate((upper_grid, lower), axis=0)
         else:
             raise ValueError("Number of grids not supported")

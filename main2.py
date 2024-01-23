@@ -428,9 +428,9 @@ class EMGProcessor:
                                                         ]
 
                         if self.use_spatial_filter:
-                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
+                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "LSD")
                             if self.use_difference_heatmap:
-                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
+                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "LSD")
 
                         heatmap_local = calculate_local_heatmap_realtime(
                             emg_to_use

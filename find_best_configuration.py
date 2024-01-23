@@ -134,19 +134,7 @@ class EMGProcessor:
         )
         print("shape ref data: ", ref_data["rest"].shape)
 
-        # add gaussian noise to the ground truth data so that the model can learn to deal with noise
-        for movement in self.movements:
-            # Generate Gaussian noise for each column
-            mean_1 = 0
-            mean_2 = 0
-            std_1 = np.divide(np.std(ref_data[movement][:, 0]), 10)
-            std_2 = np.divide(np.std(ref_data[movement][:, 1]), 10)
 
-            noise1 = np.random.normal(mean_1, std_1, ref_data[movement].shape[0])
-
-            noise2 = np.random.normal(mean_2, std_2, ref_data[movement].shape[0])
-            ref_data[movement][:, 0] = np.add(ref_data[movement][:, 0], noise1)
-            ref_data[movement][:, 1] = np.add(ref_data[movement][:, 1], noise2)
 
         return emg_data, ref_data
 
@@ -235,7 +223,7 @@ class EMGProcessor:
         )
 
         #shape should be 320 x #samples
-        ref_data = resample_reference_data(ref_data, emg_data)
+        #ref_data = resample_reference_data(ref_data, emg_data)
         ref_data = self.remove_nan_values(ref_data)
         emg_data = self.remove_nan_values(emg_data)
         print("length of emg data: ", len(emg_data["rest"][0]))
@@ -252,6 +240,19 @@ class EMGProcessor:
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
             self.normalizer.set_mean(mean=self.mean_rest)
 
+        # add gaussian noise to the ground truth data so that the model can learn to deal with noise
+        for movement in self.movements:
+            # Generate Gaussian noise for each column
+            mean_1 = 0
+            mean_2 = 0
+            std_1 = np.divide(np.std(ref_data[movement][:, 0]), 10)
+            std_2 = np.divide(np.std(ref_data[movement][:, 1]), 10)
+
+            noise1 = np.random.normal(mean_1, std_1, ref_data[movement].shape[0])
+
+            noise2 = np.random.normal(mean_2, std_2, ref_data[movement].shape[0])
+            ref_data[movement][:, 0] = np.add(ref_data[movement][:, 0], noise1)
+            ref_data[movement][:, 1] = np.add(ref_data[movement][:, 1], noise2)
 
 
         # Calculate normalization values
@@ -399,9 +400,9 @@ class EMGProcessor:
                                                         ]
 
                         if self.use_spatial_filter:
-                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
+                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "LSD")
                             if self.use_difference_heatmap:
-                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
+                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "LSD")
 
                         heatmap_local = calculate_local_heatmap_realtime(
                             emg_to_use
@@ -562,14 +563,14 @@ if __name__ == "__main__":
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_18_01_2024_remapped3",
+                    patient_id="Michi_11_01_2024_normal2",
                     movements=[
                         "rest",
                         "thumb",
                         "index",
                         "2pinch",
                     ],
-                    grid_order=[1,2,3,4,5],
+                    grid_order=[1,2],
                     use_difference_heatmap=False,
                     use_important_channels=False,
                     use_local=True,  # set this to false if you want to use prediction with difference heatmap
@@ -581,8 +582,8 @@ if __name__ == "__main__":
                     use_spatial_filter=False,
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
-                    use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_remapped3_control/",  # False
+                    use_gauss_filter=False,
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,

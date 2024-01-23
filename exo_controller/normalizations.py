@@ -119,6 +119,7 @@ class Normalization:
         for movement in movements:
             emg_data_one_movement = a[movement]#.transpose(1, 0, 2).reshape(64*len(self.grid_order), -1)
 
+
             if (self.mean is not None) and (self.mean is not None):
                 # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
                 emg_data_one_movement = (
@@ -133,6 +134,16 @@ class Normalization:
                         emg_data_one_movement
                     )
                 )
+
+            # only take important channels and set all others to 0s
+            if np.ndim(self.important_channels) == 2:
+                emg_data_new = np.zeros((emg_data_one_movement.shape[0], emg_data_one_movement.shape[1],
+                                         emg_data_one_movement.shape[2]))
+                for important_channel in self.important_channels:
+                    emg_data_new[important_channel[0], important_channel[1], :] = emg_data_one_movement[
+                                                                                  important_channel[0],
+                                                                                  important_channel[1], :]
+                emg_data_one_movement = emg_data_new
             all_emg_data.append(emg_data_one_movement)
 
         self.all_emg_data = all_emg_data
@@ -275,6 +286,8 @@ class Normalization:
         all_heatmaps = []
 
         for movement in range(len(self.all_emg_data)):
+
+
             sample_length = self.all_emg_data[movement][1][1].shape[0]
             num_samples = int(
                 sample_length / (self.sampling_frequency * (self.frame_duration / 1000))
@@ -296,7 +309,7 @@ class Normalization:
                                    ]
 
                 if self.use_spatial_filter:
-                    emg_data_to_use = self.spatial_filter.spatial_filtering(emg_data_to_use,  filter_name="IR")
+                    emg_data_to_use = self.spatial_filter.spatial_filtering(emg_data_to_use,  filter_name="LSD")
 
                 heatmap = self.calculate_heatmap_on_whole_samples(
                     emg_data_to_use
