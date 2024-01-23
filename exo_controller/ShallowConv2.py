@@ -59,8 +59,8 @@ class ShallowConvNetWithAttention(nn.Module):
             self.in2_2 = nn.InstanceNorm2d(32)
             self.fc2_2 = nn.Linear(60, 2)
 
-            self.output = nn.Linear(4,2)
-            self.merge_layer = nn.Linear(number_of_grids*2 + 4, 2)
+            self.merge_layer = nn.Linear(2*number_of_grids+ 4, 2)
+
 
         else:
             # Global Activity Path
@@ -79,13 +79,11 @@ class ShallowConvNetWithAttention(nn.Module):
             #Instance Normalization
             self.in1 = nn.InstanceNorm2d(64*number_of_grids)
             self.in2 = nn.InstanceNorm2d(32)
-
-            # Dropout rate
-            self.dropout_rate = 0.2
-
             self.fc2 = nn.Linear(60  ,2)
-
             self.merge_layer = nn.Linear(number_of_grids + 2 ,2)
+
+        # Dropout rate
+        self.dropout_rate = 0.2
         self.to(self.device)
 
     def _initialize_weights(self,m,seed=42):
@@ -129,7 +127,6 @@ class ShallowConvNetWithAttention(nn.Module):
 
             global_path2 = self.global_pool2(stacked_input2)
             global_path2 = global_path2.view(global_path2.size(0), -1)  # Flatten
-            global_path2 = torch.mean(global_path2, dim=1, keepdim=True)  # Average over the channels
             global_path2 = torch.square(global_path2)  # Average over the channels
 
             # Spatial Activity Path
@@ -146,7 +143,7 @@ class ShallowConvNetWithAttention(nn.Module):
             spatial_path1 = torch.nn.GELU(approximate='tanh')(spatial_path1)
             # spatial_path = self.pool(spatial_path)
 
-            spatial_path1 = spatial_path1.view(spatial_path1.size(0), -1) * global_path1
+            spatial_path1 = spatial_path1.view(spatial_path1.size(0), -1)
             spatial_path1 = F.dropout(spatial_path1, p=self.dropout_rate, training=self.training)  # Dropout after conv2
             spatial_path1 = self.fc1_1(spatial_path1)
             spatial_path1 = F.dropout(spatial_path1, p=self.dropout_rate, training=self.training)  # Dropout after fc1
@@ -166,14 +163,14 @@ class ShallowConvNetWithAttention(nn.Module):
             spatial_path2 = torch.nn.GELU(approximate='tanh')(spatial_path2)
             # spatial_path = self.pool(spatial_path)
 
-            spatial_path2 = spatial_path2.view(spatial_path2.size(0), -1) * global_path2
+            spatial_path2 = spatial_path2.view(spatial_path2.size(0), -1)
             spatial_path2 = F.dropout(spatial_path2, p=self.dropout_rate, training=self.training)  # Dropout after conv2
             spatial_path2 = self.fc1_2(spatial_path2)
             spatial_path2 = F.dropout(spatial_path2, p=self.dropout_rate, training=self.training)  # Dropout after fc1
             spatial_path2 = self.fc2_2(spatial_path2)
 
             merged_spatial_path = torch.cat((spatial_path1, spatial_path2), dim=1)
-            merged_spatial_path = self.output(merged_spatial_path)
+
 
             global_path1 = global_path1.view(global_path1.size(0), -1)
             global_path2 = global_path2.view(global_path2.size(0), -1)
@@ -534,8 +531,8 @@ class ShallowConvNetWithAttention(nn.Module):
             # Create the data loaders
             train_dataset = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
             test_dataset = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
-            train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-            test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
+            train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
             self.train_loader = train_loader
             self.test_loader = test_loader
             return train_loader, test_loader
@@ -565,8 +562,8 @@ class ShallowConvNetWithAttention(nn.Module):
             test_dataset_time = TensorDataset(torch.from_numpy(np.stack((X_test,X_test_time),axis=0)), torch.from_numpy(np.stack((y_test,y_test_time),axis=0)))
 
 
-            train_loader_time = DataLoader(train_dataset_time, batch_size=32, shuffle=True)
-            test_loader_time = DataLoader(test_dataset_time, batch_size=32, shuffle=True)
+            train_loader_time = DataLoader(train_dataset_time, batch_size=64, shuffle=True)
+            test_loader_time = DataLoader(test_dataset_time, batch_size=64, shuffle=True)
             self.train_loader = train_loader_time
             self.test_loader  = test_loader_time
             return train_loader_time, test_loader_time

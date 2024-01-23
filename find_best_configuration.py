@@ -398,7 +398,6 @@ class EMGProcessor:
                                 emg_to_use_difference = data[:,:,
                                                         (data.shape[2] - 1) - self.window_size_in_samples: -1
                                                         ]
-
                         if self.use_spatial_filter:
                             emg_to_use = self.filter.spatial_filtering(emg_to_use, "LSD")
                             if self.use_difference_heatmap:
@@ -556,21 +555,21 @@ if __name__ == "__main__":
         best_mse_no_mean = None
 
 
-        for epochs in [1,3,5,7,10,20,25,35,50,100,125,150,175,200,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [1,5,10,20,35,50,100,125,150,175,200,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_11_01_2024_normal2",
+                    patient_id="Michi_18_01_2024_remapped3",
                     movements=[
                         "rest",
                         "thumb",
                         "index",
                         "2pinch",
                     ],
-                    grid_order=[1,2],
+                    grid_order=[1,2,3,4,5],
                     use_difference_heatmap=False,
                     use_important_channels=False,
                     use_local=True,  # set this to false if you want to use prediction with difference heatmap
@@ -583,7 +582,7 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=False,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_remapped3_control/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
@@ -661,7 +660,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [1,3,5,7,10,20,25,35,50,100,125,150,175,200,250,500]
+                x = [1,5,10,20,35,50,100,125,150,175,200,250,500]
                 x = x[:x.index(epochs)+1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
