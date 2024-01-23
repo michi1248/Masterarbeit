@@ -395,9 +395,9 @@ class EMGProcessor:
                                                         (data.shape[2] - 1) - self.window_size_in_samples: -1
                                                         ]
                         if self.use_spatial_filter:
-                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "LSD")
+                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
                             if self.use_difference_heatmap:
-                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "LSD")
+                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
 
                         heatmap_local = calculate_local_heatmap_realtime(
                             emg_to_use
@@ -574,7 +574,7 @@ if __name__ == "__main__":
                     time_for_each_movement_recording=25,
                     load_trained_model=False,
                     save_trained_model=True,
-                    use_spatial_filter=False,
+                    use_spatial_filter=True,
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,

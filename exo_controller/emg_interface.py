@@ -85,6 +85,22 @@ class EMG_Interface:
         self.filter_sos = butter(4, 20, "lowpass", output="sos", fs=2048)
         self.notch_filter = iirnotch(w0=50, Q=75, fs=2044)
 
+    def clear_socket_buffer(self):
+        # Make the socket non-blocking
+        self.emgSocket.setblocking(0)
+        count = 0
+        while True:
+            try:
+                count +=1
+                print(count, " number of items deleted")
+                data = self.emgSocket.recv(self.BufferSize)  # Non-blocking receive
+                if not data:
+                    self.emgSocket.setblocking(1)
+                    break  # Break if no more data is in the buffer
+            except BlockingIOError:
+                self.emgSocket.setblocking(1)
+                break  # No more data to read
+
     def get_EMG_chunk(self):
         "this method receives one emg chunk from the EMG device and returns it"
         try:

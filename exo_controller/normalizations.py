@@ -309,7 +309,7 @@ class Normalization:
                                    ]
 
                 if self.use_spatial_filter:
-                    emg_data_to_use = self.spatial_filter.spatial_filtering(emg_data_to_use,  filter_name="LSD")
+                    emg_data_to_use = self.spatial_filter.spatial_filtering(emg_data_to_use,  filter_name="IR")
 
                 heatmap = self.calculate_heatmap_on_whole_samples(
                     emg_data_to_use

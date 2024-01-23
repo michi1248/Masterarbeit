@@ -425,9 +425,9 @@ class EMGProcessor:
                                                         ]
 
                         if self.use_spatial_filter:
-                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "LSD")
+                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
                             if self.use_difference_heatmap:
-                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "LSD")
+                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
 
                         heatmap_local = calculate_local_heatmap_realtime(
                             emg_to_use
@@ -552,6 +552,8 @@ class EMGProcessor:
 
         while True:
             # try:
+            # clear all data that came into the buffer since last time (do not want to process old data)
+            self.emg_interface.clear_socket_buffer()
             chunk = self.emg_interface.get_EMG_chunk()
             emg_buffer.append(chunk)
             if (
@@ -579,9 +581,9 @@ class EMGProcessor:
                                             ]
 
             if self.use_spatial_filter:
-                emg_to_use = self.filter.spatial_filtering(emg_to_use, "LSD")
+                emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
                 if self.use_difference_heatmap:
-                    emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "LSD")
+                    emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
 
             heatmap_local = calculate_local_heatmap_realtime(
                 emg_to_use

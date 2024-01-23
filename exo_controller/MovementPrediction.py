@@ -362,7 +362,7 @@ class MultiDimensionalDecisionTree:
                                        i - self.window_size_in_samples: i
                                        ]
                     if self.use_spatial_filter:
-                        emg_to_use = self.filter.spatial_filtering(emg_to_use, "LSD")
+                        emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
 
 
                     segment = self.calculate_heatmap_on_whole_samples(
@@ -482,8 +482,8 @@ class MultiDimensionalDecisionTree:
 
 
                             if self.use_spatial_filter:
-                                emg_to_use = self.filter.spatial_filtering(emg_to_use, "LSD")
-                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "LSD")
+                                emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
+                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
 
                             heatmap = self.calculate_heatmap_on_whole_samples(
                                 emg_to_use,
