@@ -12,7 +12,7 @@ import torch.nn.init as init
 
 
 class ShallowConvNetWithAttention(nn.Module):
-    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None):
+    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None, finger = 0):
         super(ShallowConvNetWithAttention, self).__init__()
         self.use_mean = use_mean
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -23,6 +23,8 @@ class ShallowConvNetWithAttention(nn.Module):
         self.grid_aranger = grid_aranger
         # Dropout rate
         self.dropout_rate = 0.2
+
+        self.finger = finger
 
         if self.use_difference_heatmap:
             # Global Activity Path
@@ -59,14 +61,18 @@ class ShallowConvNetWithAttention(nn.Module):
             self.in2_2 = nn.InstanceNorm2d(32)
             self.fc2_2 = nn.Linear(60, 2)
 
-            self.output = nn.Linear(4,2)
-            self.merge_layer = nn.Linear(number_of_grids*2 + 4, 2)
+            self.merge_layer = nn.Linear(2*number_of_grids+ 4, 2)
+
 
         else:
-            #
-            self.fc1 = nn.Linear(64 * number_of_grids, 64)
-            self.fc2 = nn.Linear(64, 32)
-            self.output = nn.Linear(32 , 2)
+            # Global Activity Path
+            self.global_pool = nn.AdaptiveAvgPool2d(1)
+
+            # Spatial Activity Path
+            self.conv1 = nn.Conv2d(number_of_grids, 64* number_of_grids, groups=number_of_grids, kernel_size=5, padding=1)
+            self.pool = nn.MaxPool2d(2, 2)
+            self.conv2 = nn.Conv2d(64* number_of_grids, 32, kernel_size=5, padding=1)
+            self.fc1 = nn.Linear(512, 60)
 
             # Add Batch Normalization after convolutional layers
             self.bn1 = nn.BatchNorm2d(64*number_of_grids)
@@ -75,13 +81,11 @@ class ShallowConvNetWithAttention(nn.Module):
             #Instance Normalization
             self.in1 = nn.InstanceNorm2d(64*number_of_grids)
             self.in2 = nn.InstanceNorm2d(32)
+            self.fc2 = nn.Linear(60  ,1)
+            self.merge_layer = nn.Linear(number_of_grids + 1 ,1)
 
-            # Dropout rate
-            self.dropout_rate = 0.2
-
-
-
-
+        # Dropout rate
+        self.dropout_rate = 0.2
         self.to(self.device)
 
     def _initialize_weights(self,m,seed=42):
@@ -125,7 +129,6 @@ class ShallowConvNetWithAttention(nn.Module):
 
             global_path2 = self.global_pool2(stacked_input2)
             global_path2 = global_path2.view(global_path2.size(0), -1)  # Flatten
-            global_path2 = torch.mean(global_path2, dim=1, keepdim=True)  # Average over the channels
             global_path2 = torch.square(global_path2)  # Average over the channels
 
             # Spatial Activity Path
@@ -142,7 +145,7 @@ class ShallowConvNetWithAttention(nn.Module):
             spatial_path1 = torch.nn.GELU(approximate='tanh')(spatial_path1)
             # spatial_path = self.pool(spatial_path)
 
-            spatial_path1 = spatial_path1.view(spatial_path1.size(0), -1) * global_path1
+            spatial_path1 = spatial_path1.view(spatial_path1.size(0), -1)
             spatial_path1 = F.dropout(spatial_path1, p=self.dropout_rate, training=self.training)  # Dropout after conv2
             spatial_path1 = self.fc1_1(spatial_path1)
             spatial_path1 = F.dropout(spatial_path1, p=self.dropout_rate, training=self.training)  # Dropout after fc1
@@ -162,14 +165,14 @@ class ShallowConvNetWithAttention(nn.Module):
             spatial_path2 = torch.nn.GELU(approximate='tanh')(spatial_path2)
             # spatial_path = self.pool(spatial_path)
 
-            spatial_path2 = spatial_path2.view(spatial_path2.size(0), -1) * global_path2
+            spatial_path2 = spatial_path2.view(spatial_path2.size(0), -1)
             spatial_path2 = F.dropout(spatial_path2, p=self.dropout_rate, training=self.training)  # Dropout after conv2
             spatial_path2 = self.fc1_2(spatial_path2)
             spatial_path2 = F.dropout(spatial_path2, p=self.dropout_rate, training=self.training)  # Dropout after fc1
             spatial_path2 = self.fc2_2(spatial_path2)
 
             merged_spatial_path = torch.cat((spatial_path1, spatial_path2), dim=1)
-            merged_spatial_path = self.output(merged_spatial_path)
+
 
             global_path1 = global_path1.view(global_path1.size(0), -1)
             global_path2 = global_path2.view(global_path2.size(0), -1)
@@ -193,13 +196,34 @@ class ShallowConvNetWithAttention(nn.Module):
                 split_images = torch.chunk(heatmap1, self.number_of_grids, dim=3)  # This will create two tensors of shape [batch_size, 1, 8, 8]
                 stacked_input = torch.cat(split_images, dim=1)  # New shape will be [batch_size, 2, 8, 8]
 
+            # Global Activity Path
+            global_path = self.global_pool(stacked_input)
+            global_path = global_path.view(global_path.size(0), -1)  # Flatten
+            global_path = torch.square(global_path)  # Average over the channels
 
+            # Spatial Activity Path
+            gelu = torch.nn.GELU(approximate='tanh')
+            spatial_path = self.conv1(stacked_input)
+            spatial_path = self.bn1(spatial_path)
+            spatial_path = self.in1(spatial_path)  # Uncomment if using instance normalization
+            spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
+            #spatial_path = self.pool(spatial_path)
 
-            heatmap1 = stacked_input.view(stacked_input.size(0), -1)
-            spatial_path = self.fc1(heatmap1)
+            spatial_path = self.conv2(spatial_path)
+            spatial_path = self.bn2(spatial_path)
+            spatial_path = self.in2(spatial_path)  # Uncomment if using instance normalization
+            spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
+            #spatial_path = self.pool(spatial_path)
+
+            spatial_path = spatial_path.view(spatial_path.size(0), -1)
+            spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after conv2
+            spatial_path = self.fc1(spatial_path)
             spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after fc1
             spatial_path = self.fc2(spatial_path)
-            merged_spatial_path = self.output(spatial_path)
+
+            gobal_path = global_path.view(global_path.size(0), -1)
+            merged_spatial_path = torch.cat((spatial_path, gobal_path), dim=1)
+            merged_spatial_path = self.merge_layer(merged_spatial_path)
 
 
             return merged_spatial_path
@@ -252,17 +276,18 @@ class ShallowConvNetWithAttention(nn.Module):
                 else:
                     output = self(heatmap1)
 
-                output1 = output[:,0]
-                output2 = output[:,1]
-                loss1 = criterion(output1, targets[:,0])
-                loss2 = criterion(output2, targets[:,1])
-                total_loss = (loss1 + loss2) #* 100
+                if self.finger == 0:
+                    loss = criterion(output, targets[:,0])
+                else:
+                    loss = criterion(output, targets[:,1])
+
+
 
                 optimizer.zero_grad()
-                total_loss.backward()
+                loss.backward()
                 optimizer.step()
 
-                epoch_loss += total_loss.item()
+                epoch_loss += loss.item()
 
                 scheduler.step()
 
@@ -378,6 +403,10 @@ class ShallowConvNetWithAttention(nn.Module):
                         heatmap1 = inputs.view(-1, 1, 8, 8*self.number_of_grids)
                     heatmap1 = heatmap1.to(self.device)
 
+                if self.finger == 0:
+                    targets = targets[:,0]
+                else:
+                    targets = targets[:,1]
                 targets = targets.to(self.device)
                 if self.use_difference_heatmap:
                     outputs = self(heatmap1, heatmap2)
@@ -509,8 +538,8 @@ class ShallowConvNetWithAttention(nn.Module):
             # Create the data loaders
             train_dataset = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
             test_dataset = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
-            train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-            test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
+            train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
             self.train_loader = train_loader
             self.test_loader = test_loader
             return train_loader, test_loader
@@ -540,8 +569,8 @@ class ShallowConvNetWithAttention(nn.Module):
             test_dataset_time = TensorDataset(torch.from_numpy(np.stack((X_test,X_test_time),axis=0)), torch.from_numpy(np.stack((y_test,y_test_time),axis=0)))
 
 
-            train_loader_time = DataLoader(train_dataset_time, batch_size=32, shuffle=True)
-            test_loader_time = DataLoader(test_dataset_time, batch_size=32, shuffle=True)
+            train_loader_time = DataLoader(train_dataset_time, batch_size=64, shuffle=True)
+            test_loader_time = DataLoader(test_dataset_time, batch_size=64, shuffle=True)
             self.train_loader = train_loader_time
             self.test_loader  = test_loader_time
             return train_loader_time, test_loader_time
