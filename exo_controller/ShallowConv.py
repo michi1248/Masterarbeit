@@ -274,7 +274,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 if self.use_difference_heatmap:
                     output  = self(heatmap1, heatmap2)
                 else:
-                    output = self(heatmap1)
+                    output = self(heatmap1)[:,0]
 
                 if self.finger == 0:
                     loss = criterion(output, targets[:,0])
@@ -340,6 +340,7 @@ class ShallowConvNetWithAttention(nn.Module):
 
     def evaluate_best(self,predictions,ground_truth):
         self.eval()
+
 
         if isinstance(predictions, list):
             predictions = torch.tensor(np.array(predictions), dtype=torch.float32)
@@ -411,7 +412,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 if self.use_difference_heatmap:
                     outputs = self(heatmap1, heatmap2)
                 else:
-                    outputs = self(heatmap1)
+                    outputs = self(heatmap1)[:,0]
                 loss = criterion(outputs, targets)
                 total_loss += loss.item()
 
@@ -429,14 +430,14 @@ class ShallowConvNetWithAttention(nn.Module):
         # Plotting
         plt.figure(figsize=(12, 6))
 
-        for i in range(2):
-            plt.subplot(1, 2, i + 1)
-            plt.scatter(np.arange(len(all_targets)), all_targets[:, i], color='blue', label='True Values')
-            plt.scatter(np.arange(len(all_predictions)), all_predictions[:, i], color='red', label='Predictions')
-            for j in range(len(all_targets)):
-                plt.plot([j, j], [all_targets[j, i], all_predictions[j, i]], color='gray', linestyle='--')
-            plt.title(f'Comparison of True Values and Predictions (Output {i + 1})')
-            plt.legend()
+
+        plt.subplot(1, 2, 1)
+        plt.scatter(np.arange(len(all_targets)), all_targets[:], color='blue', label='True Values')
+        plt.scatter(np.arange(len(all_predictions)), all_predictions[:], color='red', label='Predictions')
+        for j in range(len(all_targets)):
+            plt.plot([j,j], [all_targets[j], all_predictions[j]], color='gray', linestyle='--')
+        plt.title(f'Comparison of True Values and Predictions (Output {1})')
+        plt.legend()
 
         plt.show()
 
