@@ -12,7 +12,7 @@ import torch.nn.init as init
 
 
 class ShallowConvNetWithAttention(nn.Module):
-    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None):
+    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None,retrain=False,retrain_number = None):
         super(ShallowConvNetWithAttention, self).__init__()
         self.use_mean = use_mean
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -23,6 +23,8 @@ class ShallowConvNetWithAttention(nn.Module):
         self.grid_aranger = grid_aranger
         # Dropout rate
         self.dropout_rate = 0.2
+        self.retrain = retrain
+        self.retrain_number = retrain_number
 
         if self.use_difference_heatmap:
             # Global Activity Path
@@ -443,8 +445,8 @@ class ShallowConvNetWithAttention(nn.Module):
         cls.eval()
         return cls
 
-    @classmethod
-    def load_and_further_train(cls, file_path, train_loader, additional_epochs=10, new_learning_rate=0.000001):
+
+    def load_and_further_train(self, file_path, train_loader, additional_epochs=10, new_learning_rate=0.000001):
         """
         Load a pre-trained model and further train it with given data.
 
@@ -454,39 +456,41 @@ class ShallowConvNetWithAttention(nn.Module):
         :param new_learning_rate: Learning rate for further training.
         :return: Trained model.
         """
-        model = cls.load_model(file_path)
-        model.train_model(train_loader, learning_rate=new_learning_rate, epochs=additional_epochs)
-        return model
+        self.train_model(train_loader, learning_rate=new_learning_rate, epochs=additional_epochs)
+        return self
 
     def load_trainings_data(self,patient_number):
+        adding = ""
+        if self.retrain:
+            adding = "_retrain"+str(self.retrain_number)
         if not self.use_mean :
             print("not using mean in Shallow Conv")
             X_test = np.array(
                 helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(patient_number)
-                    + "/X_test_local.pkl"
+                    + "/X_test_local" + adding + ".pkl"
                 )
             )
             y_test = np.array(
                 helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(patient_number)
-                    + "/y_test_local.pkl"
+                    + "/y_test_local" + adding + ".pkl"
                 )
             )
             X_train = np.array(
                 helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(patient_number)
-                    + "/X_train_local.pkl"
+                    + "/X_train_local" + adding + ".pkl"
                 )
             )
             y_train = np.array(
                 helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(patient_number)
-                    + "/y_train_local.pkl"
+                    + "/y_train_local" + adding + ".pkl"
                 )
             )
         else:
@@ -495,28 +499,28 @@ class ShallowConvNetWithAttention(nn.Module):
                 helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(patient_number)
-                    + "/X_test_local_mean.pkl"
+                    + "/X_test_local_mean" + adding + ".pkl"
                 )
             )
             y_test = np.array(
                 helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(patient_number)
-                    + "/y_test_local_mean.pkl"
+                    + "/y_test_local_mean" + adding + ".pkl"
                 )
             )
             X_train = np.array(
                 helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(patient_number)
-                    + "/X_train_local_mean.pkl"
+                    + "/X_train_local_mean" + adding + ".pkl"
                 )
             )
             y_train = np.array(
                 helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(patient_number)
-                    + "/y_train_local_mean.pkl"
+                    + "/y_train_local_mean" + adding + ".pkl"
                 )
             )
 
@@ -542,13 +546,13 @@ class ShallowConvNetWithAttention(nn.Module):
                 self.training_data_time = helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(patient_number)
-                    + "/training_data_time.pkl"
+                    + "/training_data_time" + adding + ".pkl"
                 )[self.best_time_index]
             else:
                 self.training_data_time = helpers.load_pickle_file(
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(patient_number)
-                    + "/training_data_time_mean.pkl"
+                    + "/training_data_time_mean" + adding + ".pkl"
                 )[self.best_time_index]
             #X_train, X_test, y_train, y_test is order in time data
             X_train_time = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement_all_samples(self.training_data_time[0]).transpose(2,0,1)

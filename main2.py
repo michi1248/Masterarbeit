@@ -13,6 +13,7 @@ from exo_controller.helpers import *
 from exo_controller.spatial_filters import Filters
 from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
 import time
+import threading
 import keyboard
 
 
@@ -41,7 +42,8 @@ class EMGProcessor:
         only_record_data,
         use_control_stream,
         use_shallow_conv,
-        use_virtual_hand_interface_for_coord_generation
+        use_virtual_hand_interface_for_coord_generation,
+
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -65,6 +67,8 @@ class EMGProcessor:
         self.use_control_stream = use_control_stream
         self.use_shallow_conv = use_shallow_conv
         self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
+        self.retrain = False
+        self.retrain_counter = 0
 
         self.mean_rest = None
         self.model = None
@@ -114,16 +118,29 @@ class EMGProcessor:
 
     def load_data(self):
         # Load and preprocess data
-        if not self.use_recorded_data and not self.load_trained_model:
+        if (not self.use_recorded_data) and (not self.load_trained_model):
             self.run_video_data_generation()
 
-        resulting_file = f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl"
-        emg_data = load_pickle_file(resulting_file)
-        print("shape emg data: " ,emg_data["rest"].shape)
-        ref_data = load_pickle_file(
-            f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/3d_data.pkl"
-        )
-        print("shape ref data: ", ref_data["rest"].shape)
+        if self.retrain:
+            self.run_video_data_generation()
+
+            resulting_file = f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data_retrain{self.retrain_counter}.pkl"
+            emg_data = load_pickle_file(resulting_file)
+            print("shape emg data: " ,emg_data["rest"].shape)
+            ref_data = load_pickle_file(
+                f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/3d_data_retrain{self.retrain_counter}.pkl"
+            )
+            self.retrain_counter += 1
+            print("shape ref data: ", ref_data["rest"].shape)
+
+        else:
+            resulting_file = f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl"
+            emg_data = load_pickle_file(resulting_file)
+            print("shape emg data: ", emg_data["rest"].shape)
+            ref_data = load_pickle_file(
+                f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/3d_data.pkl"
+            )
+            print("shape ref data: ", ref_data["rest"].shape)
 
 
 
@@ -132,23 +149,43 @@ class EMGProcessor:
 
     def train_model(self, emg_data, ref_data):
         # Train or load the model
-        if not self.load_trained_model:
+        if (self.load_trained_model is False) or (self.retrain is True):
             # Training a new model
-            model = MultiDimensionalDecisionTree(
-                important_channels=self.channels,
-                movements=self.movements.copy(),
-                emg=emg_data,
-                ref=ref_data,
-                patient_number=self.patient_id,
-                grid_order=self.grid_order,
-                mean_rest=self.mean_rest,
-                normalizer=self.normalizer,
-                use_gauss_filter=self.use_gauss_filter,
-                use_bandpass_filter=self.use_bandpass_filter,
-                filter_=self.filter,
-                use_difference_heatmap=self.use_difference_heatmap,
-                collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation
-            )
+            if self.retrain:
+                model = MultiDimensionalDecisionTree(
+                    important_channels=self.channels,
+                    movements=self.movements.copy(),
+                    emg=emg_data,
+                    ref=ref_data,
+                    patient_number=self.patient_id,
+                    grid_order=self.grid_order,
+                    mean_rest=self.mean_rest,
+                    normalizer=self.normalizer,
+                    use_gauss_filter=self.use_gauss_filter,
+                    use_bandpass_filter=self.use_bandpass_filter,
+                    filter_=self.filter,
+                    use_difference_heatmap=self.use_difference_heatmap,
+                    collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
+                    retrain=True,
+                    retrain_number = self.retrain_counter
+                )
+
+            else:
+                model = MultiDimensionalDecisionTree(
+                    important_channels=self.channels,
+                    movements=self.movements.copy(),
+                    emg=emg_data,
+                    ref=ref_data,
+                    patient_number=self.patient_id,
+                    grid_order=self.grid_order,
+                    mean_rest=self.mean_rest,
+                    normalizer=self.normalizer,
+                    use_gauss_filter=self.use_gauss_filter,
+                    use_bandpass_filter=self.use_bandpass_filter,
+                    filter_=self.filter,
+                    use_difference_heatmap=self.use_difference_heatmap,
+                    collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation
+                )
             model.build_training_data(model.movements)
             model.save_trainings_data()
             self.num_previous_samples = model.num_previous_samples
@@ -157,11 +194,19 @@ class EMGProcessor:
             self.best_time_tree = 2
 
             if self.use_shallow_conv:
-                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction)
-                shallow_model.apply(shallow_model._initialize_weights)
+                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,retrain=True,retrain_number= self.retrain_counter)
+                if self.retrain:
+                    shallow_model.load_model(cls=model, file_path=self.patient_id + "_shallow.pt")
+                else:
+                    shallow_model.apply(shallow_model._initialize_weights)
+
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
-                shallow_model.train_model(train_loader, epochs=150) # 7
-                shallow_model.evaluate(test_loader)
+
+                if self.retrain:
+                    shallow_model.train_model(train_loader, epochs=50)
+                else:
+                    shallow_model.train_model(train_loader, epochs=150) # 7
+                    shallow_model.evaluate(test_loader)
 
             else:
                 model.train()
@@ -550,7 +595,14 @@ class EMGProcessor:
             self.window_size_in_samples = int((self.window_size / 1000) * 2048)
         emg_buffer = []
 
+
+        self.retrain = False
+        retrain_input_thread = threading.Thread(target=self.check_input)
+        retrain_input_thread.start()
+
         while True:
+            if self.retrain:
+                break
             # try:
             # clear all data that came into the buffer since last time (do not want to process old data)
             self.emg_interface.clear_socket_buffer()
@@ -666,6 +718,24 @@ class EMGProcessor:
                 self.output_results(res_local)
             else:
                 self.output_results(res_time)
+        if self.retrain:
+            self.retrain = False
+            self.retrain_model()
+
+    def check_input(self):
+        while True:
+            user_input = input("Press r for retrain!! ")
+            if user_input == "r":  # replace 'certain_input' with your specific condition
+                print("Retraining will be started")
+                # Do something when the specific input is received
+                self.retrain = True
+
+
+    def retrain_model(self):
+        self.load_trained_model = True
+        self.time_for_each_movement_recording = 6
+        self.run()
+
 
     def run(self):
         # Main loop for predictions
@@ -673,10 +743,6 @@ class EMGProcessor:
         if self.only_record_data:
             return
         self.process_data(emg_data, ref_data)
-
-
-
-
 
         model = self.train_model(emg_data, ref_data)
         if self.use_recorded_data:
@@ -718,7 +784,8 @@ if __name__ == "__main__":
         only_record_data=False,
         use_control_stream=False,
         use_shallow_conv=True,
-        use_virtual_hand_interface_for_coord_generation = True
+        use_virtual_hand_interface_for_coord_generation = True,
+
     )
     emg_processor.run()
 

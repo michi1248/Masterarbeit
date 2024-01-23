@@ -34,7 +34,9 @@ class MultiDimensionalDecisionTree:
         use_difference_heatmap=False,
         neuromuscular_delay=20,
         delay_to_movement=20,
-        collected_with_virtual_hand = False
+        collected_with_virtual_hand = False,
+        retrain = False,
+        retrain_number = None
 
     ):
         self.normalizer = normalizer
@@ -49,6 +51,8 @@ class MultiDimensionalDecisionTree:
         self.grid_aranger.make_grid()
         self.use_difference_heatmap = use_difference_heatmap
         self.collected_with_virtual_hand = collected_with_virtual_hand
+        self.retrain = retrain
+        self.retrain_number = retrain_number
 
         if self.use_gauss_filter == True:
             self.gauss_filter = self.filter.create_gaussian_filter(size_filter=3)
@@ -698,38 +702,41 @@ class MultiDimensionalDecisionTree:
             return best_time_tree
 
     def save_trainings_data(self):
+        adding = ""
+        if self.retrain:
+            adding = "_retrain" + str(self.retrain_number)
         if self.mean_rest is None:
             print("not using mean in MovementPrediction.py")
             save_as_pickle(
                 self.X_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/X_test_local.pkl",
+                + "/X_test_local" + adding + ".pkl",
             )
             save_as_pickle(
                 self.y_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/y_test_local.pkl",
+                + "/y_test_local" + adding + ".pkl",
             )
             save_as_pickle(
                 self.X_train_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/X_train_local.pkl",
+                + "/X_train_local" + adding + ".pkl",
             )
             save_as_pickle(
                 self.y_train_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/y_train_local.pkl",
+                + "/y_train_local" + adding + ".pkl",
             )
             if self.use_difference_heatmap:
                 save_as_pickle(
                     self.training_data_time,
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(self.patient_number)
-                    + "/training_data_time.pkl",
+                    + "/training_data_time" + adding + ".pkl",
                 )
         else:
             print("using mean in MovementPrediction.py")
@@ -737,32 +744,32 @@ class MultiDimensionalDecisionTree:
                 self.X_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/X_test_local_mean.pkl",
+                + "/X_test_local_mean" + adding + ".pkl",
             )
             save_as_pickle(
                 self.y_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/y_test_local_mean.pkl",
+                + "/y_test_local_mean" + adding + ".pkl",
             )
             save_as_pickle(
                 self.X_train_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/X_train_local_mean.pkl",
+                + "/X_train_local_mean" + adding + ".pkl",
             )
             save_as_pickle(
                 self.y_train_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/y_train_local_mean.pkl",
+                + "/y_train_local_mean" + adding + ".pkl",
             )
             if self.use_difference_heatmap:
                 save_as_pickle(
                     self.training_data_time,
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(self.patient_number)
-                    + "/training_data_time_mean.pkl",
+                    + "/training_data_time_mean" + adding + ".pkl",
                 )
 
 
