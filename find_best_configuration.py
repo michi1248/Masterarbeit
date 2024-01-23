@@ -551,7 +551,7 @@ if __name__ == "__main__":
         best_mse_no_mean = None
 
 
-        for epochs in [1,5,10,20,35,50,100,125,150,175,200,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [10,50,100,125,150,175,200,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
@@ -566,9 +566,9 @@ if __name__ == "__main__":
                         "2pinch",
                     ],
                     grid_order=[1,2,3,4,5],
-                    use_difference_heatmap=False,
-                    use_important_channels=False,
-                    use_local=True,  # set this to false if you want to use prediction with difference heatmap
+                    use_difference_heatmap=True,
+                    use_important_channels=True,
+                    use_local=False,  # set this to false if you want to use prediction with difference heatmap
                     output_on_exo=True,
                     filter_output=False,
                     time_for_each_movement_recording=25,
@@ -656,7 +656,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [1,5,10,20,35,50,100,125,150,175,200,250,500]
+                x = [10,50,100,125,150,175,200,250,500]
                 x = x[:x.index(epochs)+1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
