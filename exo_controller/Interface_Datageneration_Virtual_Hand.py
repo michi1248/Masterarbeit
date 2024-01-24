@@ -110,8 +110,6 @@ class Interface(tk.Frame):
         self.container.delete_window()
 
 
-
-
     def start_capturing(self):
         # self.time is the time when the video started
         # itme_now is the time in the video when the recodring started
@@ -143,14 +141,16 @@ class Interface(tk.Frame):
 
 
         if len(self.media_list) == 0:
+            self.outer_Instance.stop_emg_stream = True
+            self.outer_Instance.stop_coordinate_stream = True
             self.outer_Instance.escape_loop = True
             self.outer_Instance.escape_loop_virtual_hand = True
             self.close()
 
-        self.outer_Instance.stop_emg_stream = True
-        self.outer_Instance.stop_coordinate_stream = True
-
-        self.open()
+        else:
+            self.outer_Instance.stop_emg_stream = True
+            self.outer_Instance.stop_coordinate_stream = True
+            self.open()
 
     def open(self):
         try:
@@ -158,6 +158,7 @@ class Interface(tk.Frame):
             self.play_film(self.media_list[0])
         # self.close()
         except Exception as e:
+            print("error in Interface_Datageneration_Virtual_Hand.py in open function")
             print(e)
             pass
 
@@ -189,10 +190,11 @@ class Container:
         self.theme.theme_use("alt")
 
     def delete_window(self):
+        print("deleting window")
         tk_instance = self.tk_instance
         tk_instance.quit()
         tk_instance.destroy()
-        # os._exit(1)
+        #os.exit(1)
 
     def __repr__(self):
         return "Base tk Container"

@@ -29,7 +29,9 @@ class Realtime_Datagenerator:
         debug=False,
         movements=None,
         grid_order=None,
-        use_virtual_hand_interface_for_coord_generation = True
+        use_virtual_hand_interface_for_coord_generation = True,
+        retrain=False,
+        retrain_number=0
     ):
         if grid_order is None:
             grid_order = [1,2,3,4,5]
@@ -64,6 +66,9 @@ class Realtime_Datagenerator:
         self.BufferSize = 408 * 64 * 2  # ch, samples, int16 -> 2 bytes
         # size of one chunk in sample
         self.chunk_size = 64
+
+        self.retrain = retrain
+        self.retrain_number = retrain_number
 
         self.coords_list_virtual_hand = {}
         self.movement_name_virtual_hand = []
@@ -142,15 +147,19 @@ class Realtime_Datagenerator:
         # wait till both finishes before continuing main process
         t1.join()
 
-        if not self.debug:
-            self.emgSocket.send("stopTX".encode("utf-8"))
-            self.emgSocket.close()
+
+
 
         t2.join()
 
 
         if self.use_virtual_hand_interface_for_coord_generation:
             t3.join()
+
+        if not self.debug:
+            self.emgSocket.send("stopTX".encode("utf-8"))
+            self.emgSocket.close()
+            self.interface.close_connection()
 
         # get 3d points
         print("movie start values:", self.values_movie_start_emg)
@@ -333,10 +342,13 @@ class Realtime_Datagenerator:
 
         print("Step 3: \t Saving Kinematics Data")
         if not self.debug:
+            adding = ""
+            if self.retrain:
+                adding = "_retrain" + str(self.retrain_number)
             resulting_file = (
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(self.patient_id)
-                    + "/3d_data"
+                    + "/3d_data" + adding + ""
                     + ".pkl"
             )
             if not os.path.exists(
@@ -371,10 +383,13 @@ class Realtime_Datagenerator:
 
         print("Step 4: \t Saving EMG Data")
         if not self.debug:
+            adding = ""
+            if self.retrain:
+                adding = "_retrain" + str(self.retrain_number)
             resulting_file = (
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_id)
-                + "/emg_data"
+                + "/emg_data" + adding + ""
                 + ".pkl"
             )
             if not os.path.exists(
@@ -401,6 +416,7 @@ class Realtime_Datagenerator:
     def get_emg(self):
         while True:
             if self.escape_loop:
+                print("exiting outer emg loop")
                 break
             save_buffer = []
             time_difference_buffer = []
@@ -414,7 +430,7 @@ class Realtime_Datagenerator:
                 # exit loop and close emg
                 # print(self.stop_emg_stream)
                 if self.stop_emg_stream:
-                    # print("1212")
+                    print("exiting inner emg loop")
                     self.stop_emg_stream = False
                     break
                 # get emg data
@@ -457,13 +473,14 @@ class Realtime_Datagenerator:
             self.movement_count += 1
 
     def get_coords_virtual_hand_interface(self):
-        interface = Exo_Control()
-        interface.initialize_all()
+        print("in coords")
+        self.interface = Exo_Control()
+        self.interface.initialize_all()
 
         while True:
 
-
             if self.escape_loop_virtual_hand:
+                print("exiting outer coord loop")
                 break
             save_buffer = []
             time_difference_buffer = []
@@ -475,14 +492,14 @@ class Realtime_Datagenerator:
             while True:
                 # exit loop and close emg
                 if self.stop_coordinate_stream:
-
+                    print("exiting inner coord loop")
                     self.stop_coordinate_stream = False
                     break
                 # get emg data
 
                 try:
 
-                    data = interface.get_coords_exo()
+                    data = self.interface.get_coords_exo()
 
                     if self.recording_started_virtual_hand:
                         #print(f"fps: {1 / (time.time() - last_time)} Count: {count}")
@@ -502,6 +519,7 @@ class Realtime_Datagenerator:
                 except Exception as e:
                     print("error in get_coords_virtual_hand_interface")
                     print(e)
+                    self.interface.close_connection()
                     continue
             self.time_diffs_virtual_hand.update({self.movement_name_virtual_hand[self.movement_count_virtual_hand]: time_diff})
             # self.emg_list[self.movement_name[self.movement_count]] = save_buffer

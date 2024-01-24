@@ -100,7 +100,9 @@ class EMGProcessor:
             recording_time=self.time_for_each_movement_recording,
             movements = self.movements.copy(),
             grid_order = self.grid_order,
-            use_virtual_hand_interface_for_coord_generation = self.use_virtual_hand_interface_for_coord_generation
+            use_virtual_hand_interface_for_coord_generation = self.use_virtual_hand_interface_for_coord_generation,
+            retrain = self.retrain,
+            retrain_number = self.retrain_counter,
         )
         patient.run_parallel()
 
@@ -194,16 +196,16 @@ class EMGProcessor:
             self.best_time_tree = 2
 
             if self.use_shallow_conv:
-                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,retrain=True,retrain_number= self.retrain_counter)
+                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,retrain=self.retrain,retrain_number= self.retrain_counter)
                 if self.retrain:
-                    shallow_model.load_model(cls=model, file_path=self.patient_id + "_shallow.pt")
+                    shallow_model.load_model(cls=shallow_model, file_path=self.patient_id + "_shallow.pt")
                 else:
                     shallow_model.apply(shallow_model._initialize_weights)
 
                 train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
 
                 if self.retrain:
-                    shallow_model.train_model(train_loader, epochs=50)
+                    shallow_model.train_model(train_loader, epochs=50, learning_rate=0.000001)
                 else:
                     shallow_model.train_model(train_loader, epochs=150) # 7
                     shallow_model.evaluate(test_loader)
@@ -719,7 +721,6 @@ class EMGProcessor:
             else:
                 self.output_results(res_time)
         if self.retrain:
-            self.retrain = False
             self.retrain_model()
 
     def check_input(self):
@@ -729,11 +730,14 @@ class EMGProcessor:
                 print("Retraining will be started")
                 # Do something when the specific input is received
                 self.retrain = True
+                break
 
 
     def retrain_model(self):
         self.load_trained_model = True
         self.time_for_each_movement_recording = 6
+        self.emg_interface.close_connection()
+        self.exo_controller.close_connection()
         self.run()
 
 
@@ -772,7 +776,7 @@ if __name__ == "__main__":
         output_on_exo=True,
         filter_output=True,
         time_for_each_movement_recording=3,
-        load_trained_model=True,
+        load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,

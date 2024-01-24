@@ -81,6 +81,9 @@ class Exo_Control:
             print(e)
             pass
 
+    def close_connection(self):
+        self.exoSocket.close()
+
 
 if __name__ == "__main__":
     interface = Exo_Control()
