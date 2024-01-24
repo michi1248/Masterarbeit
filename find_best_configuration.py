@@ -155,7 +155,8 @@ class EMGProcessor:
                 use_bandpass_filter=self.use_bandpass_filter,
                 filter_=self.filter,
                 use_difference_heatmap=self.use_difference_heatmap,
-                collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation
+                collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
+                windom_size=self.window_size,
             )
             model.build_training_data(model.movements)
             model.save_trainings_data()
@@ -392,7 +393,7 @@ class EMGProcessor:
                                 emg_to_use_difference = data[:,:,:]
                             else:
                                 emg_to_use_difference = data[:,:,
-                                                        (data.shape[2] - 1) - self.window_size_in_samples: -1
+                                                        (data.shape[2] - 1) - self.window_size_in_samples*2.5: -1
                                                         ]
                         if self.use_spatial_filter:
                             emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
@@ -558,7 +559,7 @@ if __name__ == "__main__":
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_18_01_2024_remapped3",
+                    patient_id="Michi_18_01_2024_normal2",
                     movements=[
                         "rest",
                         "thumb",
@@ -578,7 +579,7 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_remapped3_control/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,

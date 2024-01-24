@@ -391,17 +391,15 @@ class MultiDimensionalDecisionTree:
 
                     # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
                     # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
-                    if (i + self.neuromuscular_delay_in_samples) < ref_erweitert[
-                        0
-                    ].shape[0]:
+                    if (i + self.neuromuscular_delay_in_samples) < self.ref_data[movement].shape[0]:
                         for skip in range(64, self.neuromuscular_delay_in_samples, 64):
-                            ref_in_the_future = ref_erweitert[:, i + skip]
+                            ref_in_the_future = self.ref_data[movement][i+skip, :]
                             segments.append(segment)
                             labels.append(ref_in_the_future)
 
                     if (i - self.delay_to_movement_in_samples) >= 0:
                         for skip in range(64, self.delay_to_movement_in_samples, 64):
-                            ref_in_the_past = ref_erweitert[:, i - skip]
+                            ref_in_the_past = ref_erweitert[i-skip, :]
                             segments.append(segment)
                             labels.append(ref_in_the_past)
                     segments.append(segment)
@@ -481,7 +479,7 @@ class MultiDimensionalDecisionTree:
                                 emg_to_use_difference = emg_data[:,:,: i + 1]
                             else:
                                 emg_to_use_difference = emg_data[:,:,
-                                             i - self.window_size_in_samples: i
+                                             i - self.window_size_in_samples*2.5: i
                                              ]
 
 
@@ -528,19 +526,17 @@ class MultiDimensionalDecisionTree:
 
                             # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
                             # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
-                            if (i + self.neuromuscular_delay_in_samples) < ref_erweitert[
-                                0
-                            ].shape[0]:
-                                for skip in range(
-                                    64, self.neuromuscular_delay_in_samples, 64
-                                ):
-                                    ref_in_the_future = ref_erweitert[:, i + skip]
+
+
+                            if (i + self.neuromuscular_delay_in_samples) < self.ref_data[movement].shape[0]:
+                                for skip in range(64, self.neuromuscular_delay_in_samples, 64):
+                                    ref_in_the_future = self.ref_data[movement][i + skip, :]
                                     combined_diffs.append(difference_heatmap)
                                     combined_ys.append(ref_in_the_future)
 
                             if (i - self.delay_to_movement_in_samples) >= 0:
                                 for skip in range(64, self.delay_to_movement_in_samples, 64):
-                                    ref_in_the_past = ref_erweitert[:, i - skip]
+                                    ref_in_the_past = ref_erweitert[i - skip, :]
                                     combined_diffs.append(difference_heatmap)
                                     combined_ys.append(ref_in_the_past)
 
