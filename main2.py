@@ -735,7 +735,7 @@ class EMGProcessor:
 
     def retrain_model(self):
         self.load_trained_model = True
-        self.time_for_each_movement_recording = 6
+        self.time_for_each_movement_recording =10
         self.emg_interface.close_connection()
         self.exo_controller.close_connection()
         self.run()
@@ -762,7 +762,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Test1",
+        patient_id="Michi_Test_24_1_normal1",
         movements=[
             "rest",
             "thumb",
@@ -775,7 +775,7 @@ if __name__ == "__main__":
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=3,
+        time_for_each_movement_recording=30,
         load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
