@@ -393,7 +393,7 @@ class EMGProcessor:
                                 emg_to_use_difference = data[:,:,:]
                             else:
                                 emg_to_use_difference = data[:,:,
-                                                        (data.shape[2] - 1) - self.window_size_in_samples*2.5: -1
+                                                        (data.shape[2] - 1) - int(self.window_size_in_samples*2.5): -1
                                                         ]
                         if self.use_spatial_filter:
                             emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
@@ -568,17 +568,17 @@ if __name__ == "__main__":
                     ],
                     grid_order=[1,2,3,4,5],
                     use_difference_heatmap=True,
-                    use_important_channels=True,
+                    use_important_channels=False,
                     use_local=False,  # set this to false if you want to use prediction with difference heatmap
                     output_on_exo=True,
                     filter_output=False,
                     time_for_each_movement_recording=25,
                     load_trained_model=False,
                     save_trained_model=True,
-                    use_spatial_filter=True,
+                    use_spatial_filter=False,
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
-                    use_gauss_filter=True,
+                    use_gauss_filter=False,
                     use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
                     window_size=150,
                     scaling_method=method,

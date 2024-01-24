@@ -479,7 +479,7 @@ class MultiDimensionalDecisionTree:
                                 emg_to_use_difference = emg_data[:,:,: i + 1]
                             else:
                                 emg_to_use_difference = emg_data[:,:,
-                                             i - self.window_size_in_samples*2.5: i
+                                             i - int(self.window_size_in_samples*2.5): i
                                              ]
 
 

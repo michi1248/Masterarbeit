@@ -631,7 +631,7 @@ class EMGProcessor:
                     emg_to_use_difference = data[:, :, :]
                 else:
                     emg_to_use_difference = data[:, :,
-                                            (data.shape[2] - 1) - self.window_size_in_samples*2.5: -1
+                                            (data.shape[2] - 1) - int(self.window_size_in_samples*2.5): -1
                                             ]
 
             if self.use_spatial_filter:
