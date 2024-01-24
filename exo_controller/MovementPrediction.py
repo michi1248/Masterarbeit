@@ -32,8 +32,8 @@ class MultiDimensionalDecisionTree:
         use_spatial_filter=False,
         filter_ = None,
         use_difference_heatmap=False,
-        neuromuscular_delay=20,
-        delay_to_movement=20,
+        neuromuscular_delay=50,
+        delay_to_movement=50,
         collected_with_virtual_hand = False,
         retrain = False,
         retrain_number = None
@@ -399,7 +399,7 @@ class MultiDimensionalDecisionTree:
 
                     if (i - self.delay_to_movement_in_samples) >= 0:
                         for skip in range(64, self.delay_to_movement_in_samples, 64):
-                            ref_in_the_past = ref_erweitert[i-skip, :]
+                            ref_in_the_past = self.ref_data[movement][i-skip, :]
                             segments.append(segment)
                             labels.append(ref_in_the_past)
                     segments.append(segment)
@@ -536,7 +536,7 @@ class MultiDimensionalDecisionTree:
 
                             if (i - self.delay_to_movement_in_samples) >= 0:
                                 for skip in range(64, self.delay_to_movement_in_samples, 64):
-                                    ref_in_the_past = ref_erweitert[i - skip, :]
+                                    ref_in_the_past = self.ref_data[movement][i - skip, :]
                                     combined_diffs.append(difference_heatmap)
                                     combined_ys.append(ref_in_the_past)
 
