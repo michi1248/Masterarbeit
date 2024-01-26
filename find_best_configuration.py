@@ -14,6 +14,7 @@ from exo_controller import ExtractImportantChannels
 from exo_controller import normalizations
 from exo_controller.helpers import *
 from exo_controller.spatial_filters import Filters
+from exo_controller.DTW import align_signals_dtw, make_rms_for_dtw
 #from exo_controller.ShallowConv import ShallowConvNetWithAttention
 from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
 import time
@@ -47,7 +48,8 @@ class EMGProcessor:
         use_shallow_conv,
         use_virtual_hand_interface_for_coord_generation,
         epochs,
-        split_index_if_same_dataset = None
+        split_index_if_same_dataset = None,
+        use_dtw = False
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -71,6 +73,7 @@ class EMGProcessor:
         self.use_control_stream = use_control_stream
         self.use_shallow_conv = use_shallow_conv
         self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
+        self.use_dtw = use_dtw
 
         self.mean_rest = None
         self.model = None
@@ -134,7 +137,22 @@ class EMGProcessor:
         )
         print("shape ref data: ", ref_data["rest"].shape)
 
+        if self.use_dtw:
+            for movement in ref_data.keys():
+                part_to_remove = 2048 * 1
+                emg_data[movement] = emg_data[movement][:, part_to_remove:-part_to_remove]
+                ref_data[movement] = ref_data[movement][part_to_remove:-part_to_remove,:]
+                if movement == "rest":
+                    continue
+                dtw_rms = make_rms_for_dtw(emg_data[movement])
+                emg_data[movement], ref_data[movement] = align_signals_dtw(
+                    dtw_rms, ref_data[movement],emg_data[movement]
+                )
 
+            print("shape emg rest data after dtw: ", emg_data["rest"].shape)
+            print("shape ref rest data after dtw: ", ref_data["rest"].shape)
+            print("shape emg thumb data after dtw: ", emg_data["thumb"].shape)
+            print("shape ref thumb data after dtw: ", ref_data["thumb"].shape)
 
         return emg_data, ref_data
 
@@ -335,6 +353,20 @@ class EMGProcessor:
         )  # calculate number of how many chunks we have to store till we delete old
 
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
+        ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
+
+
+        if self.use_dtw:
+            for movement in ref_data.keys():
+                part_to_remove = 2048 * 1
+                emg_data[movement] = emg_data[movement][:, part_to_remove:-part_to_remove]
+                ref_data[movement] = ref_data[movement][part_to_remove:-part_to_remove, :]
+                if movement == "rest":
+                    continue
+                dtw_rms = make_rms_for_dtw(emg_data[movement])
+                emg_data[movement], ref_data[movement] = align_signals_dtw(
+                    dtw_rms, ref_data[movement], emg_data[movement]
+                )
         for i in emg_data.keys():
             emg_data[i] = np.array(
                 emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
@@ -344,10 +376,9 @@ class EMGProcessor:
                 for channel in range(emg_data[i].shape[0]):
                     if channel not in self.channels_row_shape:
                         emg_data[i][channel,:] = 0
-        emg_data = self.remove_nan_values(emg_data)
 
-        ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
-        ref_data = self.remove_nan_values(ref_data)
+
+
         #ref_data = resample_reference_data(ref_data, emg_data)
 
 
@@ -357,6 +388,8 @@ class EMGProcessor:
                 emg_data[i]
             )
 
+        ref_data = self.remove_nan_values(ref_data)
+        emg_data = self.remove_nan_values(emg_data)
 
         if self.use_bandpass_filter:
             for i in emg_data.keys():
@@ -552,14 +585,14 @@ if __name__ == "__main__":
         best_mse_no_mean = None
 
 
-        for epochs in [10,50,100,125,150,175,200,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [10,50,100,150,200,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_18_01_2024_normal2",
+                    patient_id="Michi_18_01_2024_remapped3",
                     movements=[
                         "rest",
                         "thumb",
@@ -567,9 +600,9 @@ if __name__ == "__main__":
                         "2pinch",
                     ],
                     grid_order=[1,2,3,4,5],
-                    use_difference_heatmap=True,
+                    use_difference_heatmap=False,
                     use_important_channels=False,
-                    use_local=False,  # set this to false if you want to use prediction with difference heatmap
+                    use_local=True,  # set this to false if you want to use prediction with difference heatmap
                     output_on_exo=True,
                     filter_output=False,
                     time_for_each_movement_recording=25,
@@ -579,7 +612,7 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=False,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_remapped3_control/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
@@ -588,7 +621,8 @@ if __name__ == "__main__":
                     #set this to false if not recorded with virtual hand interface
                     use_virtual_hand_interface_for_coord_generation = True,
                     epochs = epochs,
-                    split_index_if_same_dataset = split_index_if_same_dataset
+                    split_index_if_same_dataset = split_index_if_same_dataset,
+                    use_dtw = True
 
                 )
                 if count <= 1:
@@ -657,7 +691,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [10,50,100,125,150,175,200,250,500]
+                x = [10,50,100,150,200,250,500]
                 x = x[:x.index(epochs)+1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")

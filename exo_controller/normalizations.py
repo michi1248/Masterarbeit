@@ -308,6 +308,7 @@ class Normalization:
                                    frame - number_observation_samples: frame
                                    ]
 
+
                 if self.use_spatial_filter:
                     emg_data_to_use = self.spatial_filter.spatial_filtering(emg_data_to_use,  filter_name="IR")
 
@@ -318,7 +319,7 @@ class Normalization:
 
 
                 if (self.mean is not None) and (self.mean is not None):
-                    heatmap = heatmap - self.mean
+                    heatmap = np.subtract(heatmap ,self.mean)
 
                 if self.method == "Min_Max_Scaling_all_channels":
                     if np.max(heatmap) > self.max_values:

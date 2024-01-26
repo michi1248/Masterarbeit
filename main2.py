@@ -8,6 +8,7 @@ from exo_controller.exo_controller import Exo_Control
 from exo_controller.filter import MichaelFilter
 from exo_controller.grid_arrangement import Grid_Arrangement
 from exo_controller import ExtractImportantChannels
+from exo_controller.DTW import *
 from exo_controller import normalizations
 from exo_controller.helpers import *
 from exo_controller.spatial_filters import Filters
@@ -43,6 +44,8 @@ class EMGProcessor:
         use_control_stream,
         use_shallow_conv,
         use_virtual_hand_interface_for_coord_generation,
+        epochs,
+        use_dtw
 
     ):
         self.patient_id = patient_id
@@ -69,6 +72,8 @@ class EMGProcessor:
         self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
         self.retrain = False
         self.retrain_counter = 0
+        self.epochs = epochs
+        self.use_dtw = use_dtw
 
         self.mean_rest = None
         self.model = None
@@ -135,6 +140,7 @@ class EMGProcessor:
             self.retrain_counter += 1
             print("shape ref data: ", ref_data["rest"].shape)
 
+
         else:
             resulting_file = f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl"
             emg_data = load_pickle_file(resulting_file)
@@ -144,7 +150,19 @@ class EMGProcessor:
             )
             print("shape ref data: ", ref_data["rest"].shape)
 
+        if self.use_dtw:
+            for movement in ref_data.keys():
+                if movement == "rest":
+                    continue
+                dtw_rms = make_rms_for_dtw(emg_data[movement])
+                emg_data[movement], ref_data[movement] = align_signals_dtw(
+                    dtw_rms, ref_data[movement],emg_data[movement]
+                )
 
+            print("shape emg rest data after dtw: ", emg_data["rest"].shape)
+            print("shape ref rest data after dtw: ", ref_data["rest"].shape)
+            print("shape emg thumb data after dtw: ", emg_data["thumb"].shape)
+            print("shape ref thumb data after dtw: ", ref_data["thumb"].shape)
 
 
         return emg_data, ref_data
@@ -207,7 +225,7 @@ class EMGProcessor:
                 if self.retrain:
                     shallow_model.train_model(train_loader, epochs=50, learning_rate=0.000001)
                 else:
-                    shallow_model.train_model(train_loader, epochs=150) # 7
+                    shallow_model.train_model(train_loader, epochs=self.epochs) # 7
                     shallow_model.evaluate(test_loader)
 
             else:
@@ -408,7 +426,19 @@ class EMGProcessor:
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
         ref_data = self.remove_nan_values(ref_data)
         #ref_data = resample_reference_data(ref_data, emg_data)
+        if self.use_dtw:
+            for movement in ref_data.keys():
+                if movement == "rest":
+                    continue
+                dtw_rms = make_rms_for_dtw(emg_data[movement])
+                emg_data[movement], ref_data[movement] = align_signals_dtw(
+                    dtw_rms, ref_data[movement],emg_data[movement]
+                )
 
+            print("shape emg rest data after dtw: ", emg_data["rest"].shape)
+            print("shape ref rest data after dtw: ", ref_data["rest"].shape)
+            print("shape emg thumb data after dtw: ", emg_data["thumb"].shape)
+            print("shape ref thumb data after dtw: ", ref_data["thumb"].shape)
 
         for i in emg_data.keys():
             emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
@@ -762,7 +792,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_Test_24_1_normal1",
+        patient_id="Michi_18_01_2024_normal2",
         movements=[
             "rest",
             "thumb",
@@ -782,13 +812,15 @@ if __name__ == "__main__":
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=False,
-        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Michi_11_01_2024_normal3/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
-        use_control_stream=False,
+        use_control_stream=True,
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True,
+        epochs=150,
+        use_dtw=True
 
     )
     emg_processor.run()

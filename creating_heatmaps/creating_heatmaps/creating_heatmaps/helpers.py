@@ -86,8 +86,6 @@ def create_heatmaps(
     )
 
     kinematics_frame_len = kinematics_data.shape[1] / frames
-
-
     buffer_for_rms = []
     buffer_for_x_rms = []
 
@@ -117,7 +115,6 @@ def create_heatmaps(
         ax2.imshow(flex_grid_data, cmap="hot", vmin=0, vmax=1)
         ax2.set_axis_off()
         ax2.set_title("Flexor")
-
 
         cbar_ax = fig.add_axes(
             [0.15, 0.05, 0.7, 0.02]

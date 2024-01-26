@@ -11,6 +11,7 @@ import torch.nn.init as init
 
 
 
+
 class ShallowConvNetWithAttention(nn.Module):
     def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None,retrain=False,retrain_number = None):
         super(ShallowConvNetWithAttention, self).__init__()
@@ -25,6 +26,7 @@ class ShallowConvNetWithAttention(nn.Module):
         self.dropout_rate = 0.2
         self.retrain = retrain
         self.retrain_number = retrain_number
+        self.batch_size = 64
 
         if self.use_difference_heatmap:
             # Global Activity Path
@@ -125,11 +127,11 @@ class ShallowConvNetWithAttention(nn.Module):
             # Global Activity Path
             global_path1 = self.global_pool1(stacked_input1)
             global_path1 = global_path1.view(global_path1.size(0), -1)  # Flatten
-            global_path1 = torch.square(global_path1)  # Average over the channels
+            global_path1 = torch.multiply(global_path1, torch.abs(global_path1))  # Average over the channels
 
             global_path2 = self.global_pool2(stacked_input2)
             global_path2 = global_path2.view(global_path2.size(0), -1)  # Flatten
-            global_path2 = torch.square(global_path2)  # Average over the channels
+            global_path2 = torch.multiply(global_path2, torch.abs(global_path2))  # Average over the channels
 
             # Spatial Activity Path
             gelu = torch.nn.GELU(approximate='tanh')
@@ -197,9 +199,10 @@ class ShallowConvNetWithAttention(nn.Module):
                 stacked_input = torch.cat(split_images, dim=1)  # New shape will be [batch_size, 2, 8, 8]
 
             # Global Activity Path
+
             global_path = self.global_pool(stacked_input)
             global_path = global_path.view(global_path.size(0), -1)  # Flatten
-            global_path = torch.square(global_path)  # Average over the channels
+            global_path = torch.multiply(global_path,torch.abs(global_path))  # Average over the channels
 
             # Spatial Activity Path
             gelu = torch.nn.GELU(approximate='tanh')
@@ -229,6 +232,8 @@ class ShallowConvNetWithAttention(nn.Module):
             return merged_spatial_path
 
     def train_model(self, train_loader, learning_rate=0.00001, epochs=10):
+        if self.use_difference_heatmap:
+            learning_rate = 0.0001
         self.train()
         criterion = nn.L1Loss()
         #criterion = nn.MSELoss()
@@ -535,8 +540,8 @@ class ShallowConvNetWithAttention(nn.Module):
             # Create the data loaders
             train_dataset = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
             test_dataset = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
-            train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-            test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
+            train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
             self.train_loader = train_loader
             self.test_loader = test_loader
             return train_loader, test_loader
@@ -566,8 +571,8 @@ class ShallowConvNetWithAttention(nn.Module):
             test_dataset_time = TensorDataset(torch.from_numpy(np.stack((X_test,X_test_time),axis=0)), torch.from_numpy(np.stack((y_test,y_test_time),axis=0)))
 
 
-            train_loader_time = DataLoader(train_dataset_time, batch_size=64, shuffle=True)
-            test_loader_time = DataLoader(test_dataset_time, batch_size=64, shuffle=True)
+            train_loader_time = DataLoader(train_dataset_time, batch_size=self.batch_size, shuffle=True)
+            test_loader_time = DataLoader(test_dataset_time, batch_size=self.batch_size, shuffle=True)
             self.train_loader = train_loader_time
             self.test_loader  = test_loader_time
             return train_loader_time, test_loader_time

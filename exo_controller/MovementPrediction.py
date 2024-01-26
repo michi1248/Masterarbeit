@@ -420,128 +420,108 @@ class MultiDimensionalDecisionTree:
         if self.use_difference_heatmap:
             results = []
 
-            for idx in tqdm.tqdm(
-                self.num_previous_samples,
-                desc="Building training data for time differences",
-            ):
-                combined_diffs = []
-                combined_ys = []
 
-                for movement in movement_names:
-                    ref_erweitert = np.zeros(
-                        (self.num_movements, len(self.ref_data[movement]))
-                    )  # [num_movements x num_samples]
-                    # if movement != "2pinch":
-                    #     ref_erweitert[ref_erweitert == 0.0] = 0.0
-                    # if movement != "rest":
-                    #     ref_data = normalize_2D_array(self.ref_data[movement], axis=0)
-                    # else:
-                    #     ref_data = self.ref_data[movement]
-                    #
-                    # if (movement != "2pinch") and (movement != "rest"):
-                    #     ref_erweitert[self.movment_dict[movement], :] = ref_data[
-                    #         :, 0
-                    #     ]  # jetzt werte für die bewegung an passenden index eintragen für anderen finger einträge auf 0.5 setzen
-                    # else:
-                    #     for k in range(2):
-                    #         ref_erweitert[k, :] = ref_data[
-                    #             :, k
-                    #         ]  # TODO maybe change back to k if do not want both values to be the same
-                    ref_data = self.ref_data[movement]
-                    emg_data = self.emg_data[movement]
-                    if self.use_bandpass_filter:
-                        emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
+            combined_diffs = []
+            combined_ys = []
+
+            for movement in movement_names:
+                ref_erweitert = np.zeros(
+                    (self.num_movements, len(self.ref_data[movement]))
+                )
+                ref_data = self.ref_data[movement]
+                emg_data = self.emg_data[movement]
+                if self.use_bandpass_filter:
+                    emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
 
 
-                    for i in range(
-                        0,
-                        emg_data.shape[2] - window_size + 1,
-                        self.sample_difference_overlap,
-                    ):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
-                        if (i <= ref_data.shape[0])and (i - max(self.num_previous_samples) >= 0):
-                            # heatmap = calculate_emg_rms_row(
-                            #     emg_data, i, self.window_size_in_samples
-                            # )
-                            # data for normal heatmap
-                            if (i - self.window_size_in_samples < 0) or (
-                                    emg_data.shape[2] < (self.window_size_in_samples)
-                            ):
-                                emg_to_use = emg_data[:,:,: i + 1]
-                            else:
-                                emg_to_use = emg_data[:,:,
-                                             i - self.window_size_in_samples: i
-                                             ]
+                for i in range(
+                    0,
+                    emg_data.shape[2] - window_size + 1,
+                    self.sample_difference_overlap,
+                ):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
+                    if (i <= ref_data.shape[0])and (i - max(self.num_previous_samples) >= 0):
+                        # heatmap = calculate_emg_rms_row(
+                        #     emg_data, i, self.window_size_in_samples
+                        # )
+                        # data for normal heatmap
+                        if (i - self.window_size_in_samples < 0) or (
+                                emg_data.shape[2] < (self.window_size_in_samples)
+                        ):
+                            emg_to_use = emg_data[:,:,: i + 1]
+                        else:
+                            emg_to_use = emg_data[:,:,
+                                         i - self.window_size_in_samples: i
+                                         ]
 
-                            # data for difference heatmap
-                            if (i - int(self.window_size_in_samples*2.5) < 0) or (
-                                    emg_data.shape[2] < (self.window_size_in_samples)
-                            ):
-                                emg_to_use_difference = emg_data[:,:,: i + 1]
-                            else:
-                                emg_to_use_difference = emg_data[:,:,
-                                             i - int(self.window_size_in_samples*2.5): i
-                                             ]
+                        # data for difference heatmap
+                        if (i - int(self.window_size_in_samples*2.5) < 0) or (
+                                emg_data.shape[2] < (self.window_size_in_samples)
+                        ):
+                            emg_to_use_difference = emg_data[:,:,: i + 1]
+                        else:
+                            emg_to_use_difference = emg_data[:,:,
+                                         i - int(self.window_size_in_samples*2.5): i
+                                         ]
 
+                        if self.use_spatial_filter:
+                            emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
+                            emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
 
-                            if self.use_spatial_filter:
-                                emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
-                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
+                        heatmap = self.calculate_heatmap_on_whole_samples(
+                            emg_to_use,
+                        )
 
-                            heatmap = self.calculate_heatmap_on_whole_samples(
-                                emg_to_use,
+                        if self.mean_rest is not None:
+                            heatmap = np.subtract(heatmap, self.mean_rest)
+                        heatmap = self.normalizer.normalize_chunk(heatmap)
+
+                        previous_heatmap = self.calculate_heatmap_on_whole_samples(
+                            emg_to_use_difference,
+                        )
+
+                        if self.mean_rest is not None:
+                            previous_heatmap = np.subtract(
+                                previous_heatmap, self.mean_rest
                             )
-
-                            if self.mean_rest is not None:
-                                heatmap = np.subtract(heatmap, self.mean_rest)
-                            heatmap = self.normalizer.normalize_chunk(heatmap)
-
-                            previous_heatmap = self.calculate_heatmap_on_whole_samples(
-                                emg_to_use_difference,
+                        previous_heatmap = self.normalizer.normalize_chunk(
+                            previous_heatmap
+                        )
+                        # difference_heatmap = normalize_2D_array(np.subtract(heatmap, previous_heatmap))  # TODO this needded ????
+                        if self.use_gauss_filter:
+                            heatmap = self.filter.apply_gaussian_filter(
+                                heatmap, self.gauss_filter
                             )
-
-                            if self.mean_rest is not None:
-                                previous_heatmap = np.subtract(
-                                    previous_heatmap, self.mean_rest
-                                )
-                            previous_heatmap = self.normalizer.normalize_chunk(
-                                previous_heatmap
+                            previous_heatmap = self.filter.apply_gaussian_filter(
+                                previous_heatmap, self.gauss_filter
                             )
-                            # difference_heatmap = normalize_2D_array(np.subtract(heatmap, previous_heatmap))  # TODO this needded ????
-                            if self.use_gauss_filter:
-                                heatmap = self.filter.apply_gaussian_filter(
-                                    heatmap, self.gauss_filter
-                                )
-                                previous_heatmap = self.filter.apply_gaussian_filter(
-                                    previous_heatmap, self.gauss_filter
-                                )
-                            difference_heatmap = previous_heatmap
-                            #difference_heatmap = np.squeeze(difference_heatmap)
+                        difference_heatmap = previous_heatmap
+                        #difference_heatmap = np.squeeze(difference_heatmap)
 
-                            difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                                np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
-                            if self.collected_with_virtual_hand:
-                                label = self.ref_data[movement][i, :]
-                            else:
-                                label = ref_erweitert[:, i]
+                        difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
+                            np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
+                        if self.collected_with_virtual_hand:
+                            label = self.ref_data[movement][i, :]
+                        else:
+                            label = ref_erweitert[:, i]
 
-                            # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
-                            # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
+                        # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
+                        # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
 
 
-                            if (i + self.neuromuscular_delay_in_samples) < self.ref_data[movement].shape[0]:
-                                for skip in range(64, self.neuromuscular_delay_in_samples, 64):
-                                    ref_in_the_future = self.ref_data[movement][i + skip, :]
-                                    combined_diffs.append(difference_heatmap)
-                                    combined_ys.append(ref_in_the_future)
+                        if (i + self.neuromuscular_delay_in_samples) < self.ref_data[movement].shape[0]:
+                            for skip in range(64, self.neuromuscular_delay_in_samples, 64):
+                                ref_in_the_future = self.ref_data[movement][i + skip, :]
+                                combined_diffs.append(difference_heatmap)
+                                combined_ys.append(ref_in_the_future)
 
-                            if (i - self.delay_to_movement_in_samples) >= 0:
-                                for skip in range(64, self.delay_to_movement_in_samples, 64):
-                                    ref_in_the_past = self.ref_data[movement][i - skip, :]
-                                    combined_diffs.append(difference_heatmap)
-                                    combined_ys.append(ref_in_the_past)
+                        if (i - self.delay_to_movement_in_samples) >= 0:
+                            for skip in range(64, self.delay_to_movement_in_samples, 64):
+                                ref_in_the_past = self.ref_data[movement][i - skip, :]
+                                combined_diffs.append(difference_heatmap)
+                                combined_ys.append(ref_in_the_past)
 
-                            combined_diffs.append(difference_heatmap)
-                            combined_ys.append(label)
+                        combined_diffs.append(difference_heatmap)
+                        combined_ys.append(label)
 
                 # Convert combined differences and y values to numpy arrays
                 combined_diffs = np.array(combined_diffs)
