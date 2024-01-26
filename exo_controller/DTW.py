@@ -78,11 +78,10 @@ def make_rms_for_dtw(emg_matrix):
     ----------
     emg_matrix : the EMG matrix (shape [#channels, #samples])
     """
-    for channel in range(emg_matrix.shape[0]):
-        emg_matrix[channel] = butter_lowpass_filter(emg_matrix[channel])
+
 
     rms = np.sqrt(np.median(emg_matrix**2, axis=0))
-    #rms = butter_lowpass_filter(rms,cutoff_freq=0.2)
+
 
 
     return rms

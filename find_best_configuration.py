@@ -139,9 +139,7 @@ class EMGProcessor:
 
         if self.use_dtw:
             for movement in ref_data.keys():
-                part_to_remove = 2048 * 1
-                emg_data[movement] = emg_data[movement][:, part_to_remove:-part_to_remove]
-                ref_data[movement] = ref_data[movement][part_to_remove:-part_to_remove,:]
+
                 if movement == "rest":
                     continue
                 dtw_rms = make_rms_for_dtw(emg_data[movement])
@@ -358,9 +356,7 @@ class EMGProcessor:
 
         if self.use_dtw:
             for movement in ref_data.keys():
-                part_to_remove = 2048 * 1
-                emg_data[movement] = emg_data[movement][:, part_to_remove:-part_to_remove]
-                ref_data[movement] = ref_data[movement][part_to_remove:-part_to_remove, :]
+
                 if movement == "rest":
                     continue
                 dtw_rms = make_rms_for_dtw(emg_data[movement])

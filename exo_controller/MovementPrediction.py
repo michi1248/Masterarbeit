@@ -32,8 +32,8 @@ class MultiDimensionalDecisionTree:
         use_spatial_filter=False,
         filter_ = None,
         use_difference_heatmap=False,
-        neuromuscular_delay=50,
-        delay_to_movement=50,
+        neuromuscular_delay=70,
+        delay_to_movement=70,
         collected_with_virtual_hand = False,
         retrain = False,
         retrain_number = None
