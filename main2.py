@@ -79,17 +79,53 @@ class EMGProcessor:
         self.model = None
         self.exo_controller = None
         self.emg_interface = EMG_Interface(grid_order=self.grid_order)
-        self.filter_local = MichaelFilter()
-        self.filter_time = MichaelFilter()
-        self.filter = Filters()
+
         self.grid_aranger = None
         self.gauss_filter = None
         self.normalizer = None
 
         self.initialize()
 
-    def initialize(self):
+    def choose_finger_indexes(self):
+        if "fist" in self.movements:
+            self.finger_indexes = [0,2,3,4,5]
+            return self.finger_indexes
+        elif ("thumb" in self.movements) and ("index" in self.movements) and ("middle" in self.movements) and ("ring" in self.movements) and ("pinkie" in self.movements):
+            self.finger_indexes = [0,2,3,4,5]
+            return self.finger_indexes
+        else:
+            self.finger_indexes = []
+            if "thumb" in self.movements:
+                self.finger_indexes.append(0)
+            if "index" in self.movements:
+                self.finger_indexes.append(2)
+            if "middle" in self.movements:
+                self.finger_indexes.append(3)
+            if "ring" in self.movements:
+                self.finger_indexes.append(4)
+            if "pinkie" in self.movements:
+                self.finger_indexes.append(5)
+            if "2pinch" in self.movements:
+                if 0 not in self.finger_indexes:
+                    self.finger_indexes.append(0)
+                if 2 not in self.finger_indexes:
+                    self.finger_indexes.append(2)
+            if "3pinch" in self.movements:
+                if 0 not in self.finger_indexes:
+                    self.finger_indexes.append(0)
+                if 2 not in self.finger_indexes:
+                    self.finger_indexes.append(2)
+                if 3 not in self.finger_indexes:
+                    self.finger_indexes.append(3)
+            self.finger_indexes.sort()
+            return self.finger_indexes
 
+    def initialize(self):
+        self.finger_indexes = self.choose_finger_indexes()
+        self.filter_local = MichaelFilter(num_fingers=len(self.finger_indexes))
+        self.filter_time = MichaelFilter(num_fingers=len(self.finger_indexes))
+        self.filter = Filters()
+        print("using the following fingers: ", self.finger_indexes)
         self.grid_aranger = Grid_Arrangement(self.grid_order)
         self.grid_aranger.make_grid()
 
@@ -108,6 +144,7 @@ class EMGProcessor:
             use_virtual_hand_interface_for_coord_generation = self.use_virtual_hand_interface_for_coord_generation,
             retrain = self.retrain,
             retrain_number = self.retrain_counter,
+            finger_indexes = self.finger_indexes
         )
         patient.run_parallel()
 
@@ -214,7 +251,7 @@ class EMGProcessor:
             self.best_time_tree = 2
 
             if self.use_shallow_conv:
-                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,retrain=self.retrain,retrain_number= self.retrain_counter)
+                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,retrain=self.retrain,retrain_number= self.retrain_counter, finger_indexes=self.finger_indexes)
                 if self.retrain:
                     shallow_model.load_model(cls=shallow_model, file_path=self.patient_id + "_shallow.pt")
                 else:
@@ -248,7 +285,7 @@ class EMGProcessor:
 
         else:
             if self.use_shallow_conv:
-                model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=2, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction)
+                model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=2, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction, finger_indexes=self.finger_indexes)
                 model.load_model(cls = model,file_path=self.patient_id + "_shallow.pt")
                 print("Shallow model loaded")
                 self.best_time_tree = 3
@@ -326,15 +363,10 @@ class EMGProcessor:
         # add gaussian noise to the ground truth data so that the model can learn to deal with noise
         for movement in self.movements:
             # Generate Gaussian noise for each column
-            mean_1 = 0
-            mean_2 = 0
-            std_1 = np.divide(np.std(ref_data[movement][:, 0]), 10)
-            std_2 = np.divide(np.std(ref_data[movement][:, 1]), 10)
-
-            noise1 = np.random.normal(mean_1, std_1, ref_data[movement].shape[0])
-            noise2 = np.random.normal(mean_2, std_2, ref_data[movement].shape[0])
-            ref_data[movement][:, 0] = np.add(ref_data[movement][:, 0], noise1)
-            ref_data[movement][:, 1] = np.add(ref_data[movement][:, 1], noise2)
+            for finger in range(len(self.finger_indexes)):
+                std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
+                noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
+                ref_data[movement][:, finger] = np.add(ref_data[movement][:, 0], noise_i)
 
         # Calculate normalization values
         self.normalizer.get_all_emg_data(
@@ -345,43 +377,21 @@ class EMGProcessor:
 
 
     def format_for_exo(self, results,control_results=None):
-        # Format the results in a way that is compatible with the exoskeleton
-        # This is a placeholder - you'll need to replace it with actual logic
-        # Example: [round(result, 3) for result in results]
+        # exo receives 18 values, the first 8 as the values of the predicted hand and the other 8 as the values of the control hand
         if self.use_control_stream:
-            res = [
-                round(results[0], 3),
-                0,
-                round(results[1], 3),
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                round(control_results[0], 3),
-                0,
-                round(control_results[1], 3),
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-            ]
+            res = [0]*18
+            count = 0
+            for i in self.finger_indexes:
+                res[i] = round(results[count], 3)
+                res[i+9] = round(control_results[count], 3)
+                count += 1
             return res
         else:
-            res = [
-                round(results[0], 3),
-                0,
-                round(results[1], 3),
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-            ]
+            res = [0]*9
+            count = 0
+            for i in self.finger_indexes:
+                res[i] = round(results[count], 3)
+                count += 1
             return res
 
 
@@ -567,7 +577,7 @@ class EMGProcessor:
 
                         if self.use_difference_heatmap:
                             if np.isnan(difference_heatmap).any():
-                                res_time = np.array([-1, -1])
+                                res_time = np.array([-1]*len(self.finger_indexes))
                             else:
                                 if self.use_shallow_conv:
                                     res_time = model.predict(heatmap_local,difference_heatmap)
@@ -605,11 +615,10 @@ class EMGProcessor:
                             time.sleep((64/2048) - (time_end - time_start))
 
             plt.figure()
-            plt.plot(np.array(buffer_pred)[:,0])
-            plt.plot(np.add(np.array(buffer_pred)[:,1],1))
-            plt.plot(np.add(np.array(buffer_control)[:,0],2))
-            plt.plot(np.add(np.array(buffer_control)[:,1],3))
-            plt.legend(["pred thumb","pred index","ref thumb", "ref index"])
+            for finger in range(len(self.finger_indexes)):
+                plt.plot(np.array(buffer_pred)[:,finger],label="pred " + str(finger))
+                plt.plot(np.add(np.array(buffer_control)[:,finger],finger),label="ref " + str(finger))
+            plt.legend()
             plt.show()
 
     def run_prediction_loop(self, model):
@@ -729,7 +738,7 @@ class EMGProcessor:
 
             if self.use_difference_heatmap:
                 if np.isnan(difference_heatmap).any():
-                    res_time = np.array([-1, -1])
+                    res_time = np.array([-1]*len(self.finger_indexes))
                 else:
                     if self.use_shallow_conv:
                         res_time = model.predict(heatmap_local, difference_heatmap)
@@ -798,6 +807,11 @@ if __name__ == "__main__":
             "thumb",
             "index",
             "2pinch",
+            # "3pinch",
+            # "middle",
+            # "ring",
+            # "pinkie",
+            # "fist",
         ],
         grid_order=[1,2,3,4,5],
         use_difference_heatmap=False,
@@ -820,7 +834,7 @@ if __name__ == "__main__":
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True,
         epochs=150,
-        use_dtw=True
+        use_dtw=False
 
     )
     emg_processor.run()

@@ -13,11 +13,12 @@ import torch.nn.init as init
 
 
 class ShallowConvNetWithAttention(nn.Module):
-    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None,retrain=False,retrain_number = None):
+    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None,retrain=False,retrain_number = None, finger_indexes=None):
         super(ShallowConvNetWithAttention, self).__init__()
         self.use_mean = use_mean
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        self.finger_indexes = finger_indexes
         self.number_of_grids = number_of_grids
         self.use_difference_heatmap = use_difference_heatmap
         self.best_time_index = best_time_tree
@@ -46,7 +47,7 @@ class ShallowConvNetWithAttention(nn.Module):
             # Instance Normalization
             self.in1_1 = nn.InstanceNorm2d(64*number_of_grids)
             self.in2_1 = nn.InstanceNorm2d(32)
-            self.fc2_1 = nn.Linear(60, 2)
+            self.fc2_1 = nn.Linear(60, len(self.finger_indexes))
 
             # Spatial Activity Path
             self.conv1_2 = nn.Conv2d(number_of_grids, 64*number_of_grids, groups=number_of_grids, kernel_size=5, padding=1)
@@ -61,9 +62,9 @@ class ShallowConvNetWithAttention(nn.Module):
             # Instance Normalization
             self.in1_2 = nn.InstanceNorm2d(64*number_of_grids)
             self.in2_2 = nn.InstanceNorm2d(32)
-            self.fc2_2 = nn.Linear(60, 2)
+            self.fc2_2 = nn.Linear(60, len(self.finger_indexes))
 
-            self.merge_layer = nn.Linear(2*number_of_grids+ 4, 2)
+            self.merge_layer = nn.Linear(2*number_of_grids+ 2*len(self.finger_indexes), len(self.finger_indexes))
 
 
         else:
@@ -83,8 +84,8 @@ class ShallowConvNetWithAttention(nn.Module):
             #Instance Normalization
             self.in1 = nn.InstanceNorm2d(64*number_of_grids)
             self.in2 = nn.InstanceNorm2d(32)
-            self.fc2 = nn.Linear(60  ,2)
-            self.merge_layer = nn.Linear(number_of_grids + 2 ,2)
+            self.fc2 = nn.Linear(60  ,len(self.finger_indexes))
+            self.merge_layer = nn.Linear(number_of_grids +len(self.finger_indexes) ,len(self.finger_indexes))
 
         # Dropout rate
         self.dropout_rate = 0.2
@@ -281,11 +282,10 @@ class ShallowConvNetWithAttention(nn.Module):
                 else:
                     output = self(heatmap1)
 
-                output1 = output[:,0]
-                output2 = output[:,1]
-                loss1 = criterion(output1, targets[:,0])
-                loss2 = criterion(output2, targets[:,1])
-                total_loss = (loss1 + loss2) #* 100
+                total_loss = torch.tensor(0.0).to(self.device)
+                for one_output in range(output.shape[1]):
+                    loss_one_output = criterion(output[:, one_output], targets[:, one_output])
+                    total_loss += loss_one_output
 
                 optimizer.zero_grad()
                 total_loss.backward()
@@ -359,17 +359,11 @@ class ShallowConvNetWithAttention(nn.Module):
         #crit = nn.MSELoss()
         crit = nn.L1Loss()
 
-        # Separate the tensors into two parts
-        ground_truth_0 = ground_truth[:, 0]
-        ground_truth_1 = ground_truth[:, 1]
 
-        prediction_0 = predictions[:, 0]
-        prediction_1 = predictions[:, 1]
-
-        # Calculate the loss for each part
-        loss_0 = crit(ground_truth_0, prediction_0)
-        loss_1 = crit(ground_truth_1, prediction_1)
-        mse_loss = (loss_0+ loss_1)/(2)
+        mse_loss = torch.tensor(0.0).to(self.device)
+        for one_output in range(ground_truth.shape[1]):
+            mse_loss_one_output = crit(predictions[:, one_output], ground_truth[:, one_output])
+            mse_loss += mse_loss_one_output
 
         # Calculate the mean R-squared value
         mean_r_squared = torch.mean(torch.tensor(r_squared_values))
@@ -429,8 +423,8 @@ class ShallowConvNetWithAttention(nn.Module):
         # Plotting
         plt.figure(figsize=(12, 6))
 
-        for i in range(2):
-            plt.subplot(1, 2, i + 1)
+        for i in range(len(self.finger_indexes)):
+            plt.subplot(1, len(self.finger_indexes), i + 1)
             plt.scatter(np.arange(len(all_targets)), all_targets[:, i], color='blue', label='True Values')
             plt.scatter(np.arange(len(all_predictions)), all_predictions[:, i], color='red', label='Predictions')
             for j in range(len(all_targets)):

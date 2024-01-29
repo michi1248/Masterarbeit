@@ -533,8 +533,8 @@ def find_max_min_values_for_each_movement_and_channel(
     This is needed to normalize the data later on.
     :return: max and min values for each channel
     """
-    max_values = np.zeros(len(important_channels)) - 10000000
-    min_values = np.zeros(len(important_channels)) + 10000000
+    max_values = np.zeros(len(important_channels)) -np.inf
+    min_values = np.zeros(len(important_channels)) +np.inf
     for movement in range(len(emg_data)):
         for channel in important_channels:
             if np.max(emg_data[movement][channel]) > max_values[channel]:
@@ -571,8 +571,8 @@ def find_max_min_values_for_each_movement_(emg_data, important_channels, movemen
     This is needed to normalize the data later on.
     :return: max and min values for each channel
     """
-    max_values = -10000000
-    min_values = 10000000
+    max_values = -np.inf
+    min_values = np.inf
     index_max = None
     index_min = None
     # for movement in movements:
@@ -633,8 +633,8 @@ def find_q_median_values_for_each_movement_and_channel(
     :return: max and min values for each channel
     """
     # TODO wie will ich das hier machen ?? welche median und quantiles nehme ich ??  ich sollte eigentlich genau so machen (größtes 1 und 3 quantile) median keine ahnung :D
-    q1 = np.zeros(len(important_channels)) - 10000000
-    q2 = np.zeros(len(important_channels)) + 10000000
+    q1 = np.zeros(len(important_channels)) - np.inf
+    q2 = np.zeros(len(important_channels)) + np.inf
     median = np.zeros(len(important_channels))
 
     for movement in range(len(emg_data)):
@@ -953,10 +953,16 @@ def get_locations_of_all_maxima(movement_signal, distance=5000):
         if movement_signal.shape[1] == 1:
             movement_signal = movement_signal.squeeze(axis=1)
         else:
-            if np.max(movement_signal[:,0]) > np.max(movement_signal[:, 1]):
-                movement_signal = movement_signal[:, 0]
-            else:
-                movement_signal = movement_signal[:, 1]
+            max_value = -np.inf
+            index = -1
+            # Loop over each column in movement_signal
+            for i in range(movement_signal.shape[1]):
+                # Check if the maximum of the current column is greater than the current max_value
+                if np.max(movement_signal[:, i]) > max_value:
+                    max_value = np.max(movement_signal[:, i])
+                    index = i
+            movement_signal = movement_signal[:, index]
+
 
     local_maxima, _ = find_peaks(movement_signal, distance=distance,height=[0.4,1.2])
     local_minima, _ = find_peaks(-movement_signal, distance=distance, height=[-0.2,0.4])

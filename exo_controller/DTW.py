@@ -19,14 +19,18 @@ def align_signals_dtw(rms_emg_signal, movement_signal,emg_grid):
     if rms_emg_signal is None or movement_signal is None:
         raise ValueError("Both EMG and movement signals must be set before alignment.")
 
-    if np.max(movement_signal[:,0]) >  np.max(movement_signal[:, 1]) :
-        print("used thumb (0)")
-        signal_to_compare = movement_signal[:,0]
-        index = 0
-    else:
-        print("used index (1)")
-        signal_to_compare = movement_signal[:,1]
-        index = 1
+    max_value = -np.inf
+    index = -1
+    # Loop over each column in movement_signal
+    for i in range(movement_signal.shape[1]):
+        # Check if the maximum of the current column is greater than the current max_value
+        if np.max(movement_signal[:, i]) > max_value:
+            max_value = np.max(movement_signal[:, i])
+            index = i
+
+
+    print("used index for dtw: ", index)
+    signal_to_compare = movement_signal[:,index]
 
 
     original_emg_length = len(rms_emg_signal)
@@ -36,7 +40,7 @@ def align_signals_dtw(rms_emg_signal, movement_signal,emg_grid):
     emg_grid = resample(emg_grid, len(rms_emg_signal)//10, axis=1)
 
     print("computing dtw")
-    alignment = dtw(downsampled_emg,downsampled_movement[:,index], keep_internals=True,step_pattern=rabinerJuangStepPattern(6, "c"),open_begin=False,open_end=False)
+    alignment = dtw(downsampled_emg,downsampled_movement[:,index], keep_internals=True,step_pattern=rabinerJuangStepPattern(6, "c",smoothed=True),open_begin=False,open_end=False)
     print("dtw done")
 
     aligned_emg =  np.array(downsampled_emg[alignment.index1])
