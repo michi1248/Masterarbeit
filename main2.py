@@ -366,7 +366,7 @@ class EMGProcessor:
             for finger in range(len(self.finger_indexes)):
                 std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
                 noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
-                ref_data[movement][:, finger] = np.add(ref_data[movement][:, 0], noise_i)
+                ref_data[movement][:, finger] = np.add(ref_data[movement][:, finger], noise_i)
 
         # Calculate normalization values
         self.normalizer.get_all_emg_data(
