@@ -29,7 +29,7 @@ class ShallowConvNetWithAttention(nn.Module):
         self.retrain_number = retrain_number
         self.batch_size = 64
         self.use_muovi_pro = use_muovi_pro
-        if self.use_muovi_pro:
+
 
 
         if self.use_difference_heatmap:
@@ -69,26 +69,43 @@ class ShallowConvNetWithAttention(nn.Module):
 
             self.merge_layer = nn.Linear(2*number_of_grids+ 2*len(self.finger_indexes), len(self.finger_indexes))
 
-
         else:
             # Global Activity Path
             self.global_pool = nn.AdaptiveAvgPool2d(1)
 
-            # Spatial Activity Path
-            self.conv1 = nn.Conv2d(number_of_grids, 64* number_of_grids, groups=number_of_grids, kernel_size=5, padding=1)
-            self.pool = nn.MaxPool2d(2, 2)
-            self.conv2 = nn.Conv2d(64* number_of_grids, 32, kernel_size=5, padding=1)
-            self.fc1 = nn.Linear(512, 60)
+            if not self.use_muovi_pro:
+                # Spatial Activity Path
+                self.conv1 = nn.Conv2d(number_of_grids, 64* number_of_grids, groups=number_of_grids, kernel_size=5, padding=1)
+                self.pool = nn.MaxPool2d(2, 2)
+                self.conv2 = nn.Conv2d(64* number_of_grids, 32, kernel_size=5, padding=1)
+                self.fc1 = nn.Linear(512, 60)
 
-            # Add Batch Normalization after convolutional layers
-            self.bn1 = nn.BatchNorm2d(64*number_of_grids)
-            self.bn2 = nn.BatchNorm2d(32)
+                # Add Batch Normalization after convolutional layers
+                self.bn1 = nn.BatchNorm2d(64*number_of_grids)
+                self.bn2 = nn.BatchNorm2d(32)
 
-            #Instance Normalization
-            self.in1 = nn.InstanceNorm2d(64*number_of_grids)
-            self.in2 = nn.InstanceNorm2d(32)
-            self.fc2 = nn.Linear(60  ,len(self.finger_indexes))
-            self.merge_layer = nn.Linear(number_of_grids +len(self.finger_indexes) ,len(self.finger_indexes))
+                #Instance Normalization
+                self.in1 = nn.InstanceNorm2d(64*number_of_grids)
+                self.in2 = nn.InstanceNorm2d(32)
+                self.fc2 = nn.Linear(60  ,len(self.finger_indexes))
+                self.merge_layer = nn.Linear(number_of_grids +len(self.finger_indexes) ,len(self.finger_indexes))
+            else:
+                # Spatial Activity Path
+                self.conv1 = nn.Conv2d(1, 32, kernel_size=3,
+                                       padding=1)
+                self.pool = nn.MaxPool2d(2, 2)
+                self.conv2 = nn.Conv2d(32 , 16, kernel_size=3, padding=1)
+                self.fc1 = nn.Linear(512, 60)
+
+                # Add Batch Normalization after convolutional layers
+                self.bn1 = nn.BatchNorm2d(32 )
+                self.bn2 = nn.BatchNorm2d(16)
+
+                # Instance Normalization
+                self.in1 = nn.InstanceNorm2d(32 )
+                self.in2 = nn.InstanceNorm2d(16)
+                self.fc2 = nn.Linear(60, len(self.finger_indexes))
+                self.merge_layer = nn.Linear( len(self.finger_indexes) +1, len(self.finger_indexes))
 
         # Dropout rate
         self.dropout_rate = 0.2
@@ -187,50 +204,82 @@ class ShallowConvNetWithAttention(nn.Module):
             return merged_spatial_path
 
         else:
+            if not self.use_muovi_pro:
+                if self.number_of_grids == 5:
+                    chunks = torch.chunk(heatmap1, 2, dim=2)
+                    good_chunks = chunks[0]
+                    bad_chunks = chunks[1]
+                    bad_chunks = torch.chunk(bad_chunks, 3, dim=3)
 
-            if self.number_of_grids == 5:
-                chunks = torch.chunk(heatmap1, 2, dim=2)
-                good_chunks = chunks[0]
-                bad_chunks = chunks[1]
-                bad_chunks = torch.chunk(bad_chunks, 3, dim=3)
+                    good_chunks_split = torch.chunk(good_chunks, 3, dim=3)
+                    concat_tensors = list(good_chunks_split) + [bad_chunks[0], bad_chunks[1]]
+                    stacked_input = torch.cat(concat_tensors, dim=1)
+                else:
+                    # Split the input into two parts
+                    split_images = torch.chunk(heatmap1, self.number_of_grids, dim=3)  # This will create two tensors of shape [batch_size, 1, 8, 8]
+                    stacked_input = torch.cat(split_images, dim=1)  # New shape will be [batch_size, 2, 8, 8]
 
-                good_chunks_split = torch.chunk(good_chunks, 3, dim=3)
-                concat_tensors = list(good_chunks_split) + [bad_chunks[0], bad_chunks[1]]
-                stacked_input = torch.cat(concat_tensors, dim=1)
+                # Global Activity Path
+
+                global_path = self.global_pool(stacked_input)
+                global_path = global_path.view(global_path.size(0), -1)  # Flatten
+                global_path = torch.multiply(global_path,torch.abs(global_path))  # Average over the channels
+
+                # Spatial Activity Path
+                gelu = torch.nn.GELU(approximate='tanh')
+                spatial_path = self.conv1(stacked_input)
+                spatial_path = self.bn1(spatial_path)
+                spatial_path = self.in1(spatial_path)  # Uncomment if using instance normalization
+                spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
+                #spatial_path = self.pool(spatial_path)
+
+                spatial_path = self.conv2(spatial_path)
+                spatial_path = self.bn2(spatial_path)
+                spatial_path = self.in2(spatial_path)  # Uncomment if using instance normalization
+                spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
+                #spatial_path = self.pool(spatial_path)
+
+                spatial_path = spatial_path.view(spatial_path.size(0), -1)
+                spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after conv2
+                spatial_path = self.fc1(spatial_path)
+                spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after fc1
+                spatial_path = self.fc2(spatial_path)
+
+                gobal_path = global_path.view(global_path.size(0), -1)
+                merged_spatial_path = torch.cat((spatial_path, gobal_path), dim=1)
+                merged_spatial_path = self.merge_layer(merged_spatial_path)
             else:
-                # Split the input into two parts
-                split_images = torch.chunk(heatmap1, self.number_of_grids, dim=3)  # This will create two tensors of shape [batch_size, 1, 8, 8]
-                stacked_input = torch.cat(split_images, dim=1)  # New shape will be [batch_size, 2, 8, 8]
 
-            # Global Activity Path
 
-            global_path = self.global_pool(stacked_input)
-            global_path = global_path.view(global_path.size(0), -1)  # Flatten
-            global_path = torch.multiply(global_path,torch.abs(global_path))  # Average over the channels
 
-            # Spatial Activity Path
-            gelu = torch.nn.GELU(approximate='tanh')
-            spatial_path = self.conv1(stacked_input)
-            spatial_path = self.bn1(spatial_path)
-            spatial_path = self.in1(spatial_path)  # Uncomment if using instance normalization
-            spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
-            #spatial_path = self.pool(spatial_path)
+                global_path = self.global_pool(heatmap1)
+                global_path = global_path.view(global_path.size(0), -1)  # Flatten
+                global_path = torch.multiply(global_path, torch.abs(global_path))  # Average over the channels
 
-            spatial_path = self.conv2(spatial_path)
-            spatial_path = self.bn2(spatial_path)
-            spatial_path = self.in2(spatial_path)  # Uncomment if using instance normalization
-            spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
-            #spatial_path = self.pool(spatial_path)
+                # Spatial Activity Path
+                gelu = torch.nn.GELU(approximate='tanh')
+                spatial_path = self.conv1(heatmap1)
+                spatial_path = self.bn1(spatial_path)
+                spatial_path = self.in1(spatial_path)  # Uncomment if using instance normalization
+                spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
+                # spatial_path = self.pool(spatial_path)
 
-            spatial_path = spatial_path.view(spatial_path.size(0), -1)
-            spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after conv2
-            spatial_path = self.fc1(spatial_path)
-            spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after fc1
-            spatial_path = self.fc2(spatial_path)
+                spatial_path = self.conv2(spatial_path)
+                spatial_path = self.bn2(spatial_path)
+                spatial_path = self.in2(spatial_path)  # Uncomment if using instance normalization
+                spatial_path = torch.nn.GELU(approximate='tanh')(spatial_path)
+                # spatial_path = self.pool(spatial_path)
 
-            gobal_path = global_path.view(global_path.size(0), -1)
-            merged_spatial_path = torch.cat((spatial_path, gobal_path), dim=1)
-            merged_spatial_path = self.merge_layer(merged_spatial_path)
+                spatial_path = spatial_path.view(spatial_path.size(0), -1)
+                spatial_path = F.dropout(spatial_path, p=self.dropout_rate,
+                                         training=self.training)  # Dropout after conv2
+                spatial_path = self.fc1(spatial_path)
+                spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after fc1
+                spatial_path = self.fc2(spatial_path)
+
+                gobal_path = global_path.view(global_path.size(0), -1)
+                merged_spatial_path = torch.cat((spatial_path, gobal_path), dim=1)
+                merged_spatial_path = self.merge_layer(merged_spatial_path)
 
 
             return merged_spatial_path
@@ -273,10 +322,13 @@ class ShallowConvNetWithAttention(nn.Module):
                     heatmap1 = heatmap1.to(self.device)
                     heatmap2 = heatmap2.to(self.device)
                 else:
-                    if self.number_of_grids == 5:
-                        heatmap1 = inputs.view(-1, 1, 16, 24)  # Reshape input
+                    if not self.use_muovi_pro:
+                        if self.number_of_grids == 5:
+                            heatmap1 = inputs.view(-1, 1, 16, 24)  # Reshape input
+                        else:
+                            heatmap1 = inputs.view(-1, 1, 8, 8*self.number_of_grids)
                     else:
-                        heatmap1 = inputs.view(-1, 1, 8, 8*self.number_of_grids)
+                        heatmap1 = inputs.view(-1, 1, 2, 16)
                     heatmap1 = heatmap1.to(self.device)
                 targets = targets.to(self.device)
 
@@ -308,10 +360,13 @@ class ShallowConvNetWithAttention(nn.Module):
             if not self.use_difference_heatmap:
                 x = torch.from_numpy(heatmap1)
                 x = x.float()  # Convert to float
-                if self.number_of_grids == 5:
-                    x = x.view(-1, 1, 16, 24)
+                if not self.use_muovi_pro:
+                    if self.number_of_grids == 5:
+                        x = x.view(-1, 1, 16, 24)
+                    else:
+                        x = x.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape input
                 else:
-                    x = x.view(-1, 1, 8, 8*self.number_of_grids)  # Reshape input
+                    x = x.view(-1, 1, 2, 16)
                 x = x.to(self.device)
                 # pred  = self(x).cpu().numpy()
                 # if pred[0] < 0:
@@ -398,11 +453,15 @@ class ShallowConvNetWithAttention(nn.Module):
                     heatmap1 = heatmap1.to(self.device)
                     heatmap2 = heatmap2.to(self.device)
                 else:
-                    if self.number_of_grids == 5:
-                        heatmap1 = inputs.view(-1, 1, 16, 24)
+                    if not self.use_muovi_pro:
+                        if self.number_of_grids == 5:
+                            heatmap1 = inputs.view(-1, 1, 16, 24)  # Reshape input
+                        else:
+                            heatmap1 = inputs.view(-1, 1, 8, 8 * self.number_of_grids)
                     else:
-                        heatmap1 = inputs.view(-1, 1, 8, 8*self.number_of_grids)
+                        heatmap1 = inputs.view(-1, 1, 2, 16)
                     heatmap1 = heatmap1.to(self.device)
+
 
                 targets = targets.to(self.device)
                 if self.use_difference_heatmap:

@@ -54,7 +54,6 @@ class Muoviprobe_Interface:
 
         self.connected = False
         self.emgSocket = None
-
         self.tcp_ip =  "0.0.0.0" #"192.168.14.1"
         self.tcp_port = 54321
         self.sampling_frequency = 2000
@@ -116,7 +115,6 @@ class Muoviprobe_Interface:
             emg_chunk = self.emgSocket.recv(self.BufferSize)
             emg_chunk = self._bytes_to_integers(emg_chunk)
             emg_chunk = emg_chunk.reshape((38, -1), order="F")[self.emg_indices]
-            print("shape received emg: ", np.shape(emg_chunk))
             return emg_chunk.astype(np.float32)
 
         except Exception as e:
@@ -169,15 +167,16 @@ class Muoviprobe_Interface:
 
 
 if __name__ == "__main__":
-    emg_interface = Muoviprobe_Interface()
-    emg_interface.initialize_all()
-    #emg_interface.clear_socket_buffer()
-    while True:
-        #emg_interface.clear_socket_buffer()
-        emg_chunk = emg_interface.get_EMG_chunk()
-        print(emg_chunk)
-        time.sleep(0.1)
-        # if keyboard.read_key() == "q":
-        #     break
-    print("closing connection")
-    emg_interface.close_connection()
+    pass
+    # emg_interface = Muoviprobe_Interface()
+    # emg_interface.initialize_all()
+    # #emg_interface.clear_socket_buffer()
+    # while True:
+    #     #emg_interface.clear_socket_buffer()
+    #     emg_chunk = emg_interface.get_EMG_chunk()
+    #     print(emg_chunk)
+    #     time.sleep(0.1)
+    #     # if keyboard.read_key() == "q":
+    #     #     break
+    # print("closing connection")
+    # emg_interface.close_connection()

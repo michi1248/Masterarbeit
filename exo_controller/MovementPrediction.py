@@ -48,7 +48,7 @@ class MultiDimensionalDecisionTree:
         self.use_spatial_filter = use_spatial_filter
         self.filter = filter_
         self.grid_order = grid_order
-        self.grid_aranger = Grid_Arrangement(self.grid_order)
+        self.grid_aranger = Grid_Arrangement(self.grid_order,use_muovi_pro=use_muovi_pro)
         self.grid_aranger.make_grid()
         self.use_difference_heatmap = use_difference_heatmap
         self.collected_with_virtual_hand = collected_with_virtual_hand

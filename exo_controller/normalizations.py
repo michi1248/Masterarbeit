@@ -14,6 +14,7 @@ class Normalization:
         sampling_frequency=2048,
         frame_duration=150,
         use_spatial_filter=False,
+        use_muovi_pro = False,
     ):
         """
         :param movements: list of movements that should be used for normalization
@@ -28,6 +29,7 @@ class Normalization:
         if important_channels is None:
             important_channels = range(320)
         self.important_channels = important_channels
+        self.use_muovi_pro = use_muovi_pro
         self.grid_order = grid_order
         self.max_values = None
         self.min_values = None
@@ -37,7 +39,7 @@ class Normalization:
         self.mean = None
         self.all_emg_data = None
         self.method = method
-        self.grid_aranger = Grid_Arrangement(grid_order)
+        self.grid_aranger = Grid_Arrangement(grid_order,use_muovi_pro=use_muovi_pro)
         self.grid_aranger.make_grid()
         self.sampling_frequency = sampling_frequency
         self.frame_duration = frame_duration
@@ -153,8 +155,8 @@ class Normalization:
         calculates the max min values to display all heatmaps in the same color range
         :return:
         """
-        max_values = -10000000
-        min_values = 10000000
+        max_values = -np.inf
+        min_values = np.inf
         for movement in range(len(self.all_emg_data)):
             sample_length = self.all_emg_data[movement].shape[2]
             num_samples = int(
@@ -252,35 +254,35 @@ class Normalization:
         if self.method == "no_scaling":
             return
         if self.method == "Min_Max_Scaling_all_channels":
-            self.max_values = -10000000
-            self.min_values = 10000000
+            self.max_values = -np.inf
+            self.min_values = np.inf
 
         if self.method == "Robust_Scaling":
             self.q1 = (
                 np.zeros((self.all_emg_data[0].shape[0], self.all_emg_data[0].shape[1]))
-                - 10000000
+                - np.inf
             )
             self.q2 = (
                 np.zeros((self.all_emg_data[0].shape[0], self.all_emg_data[0].shape[1]))
-                + 10000000
+                + np.inf
             )
             self.median = np.zeros(
                 (self.all_emg_data[0].shape[0], self.all_emg_data[0].shape[1])
             )
 
         if self.method == "Robust_all_channels":
-            self.q1 = -1000000000
-            self.q2 = 10000000000
+            self.q1 = -np.inf
+            self.q2 = np.inf
             self.median = 0
 
         if self.method == "Min_Max_Scaling_over_whole_data":
             self.max_values = (
                 np.zeros((self.all_emg_data[0].shape[0], self.all_emg_data[0].shape[1]))
-                - 10000000
+                - np.inf
             )
             self.min_values = (
                 np.zeros((self.all_emg_data[0].shape[0], self.all_emg_data[0].shape[1]))
-                + 10000000
+                + np.inf
             )
 
         all_heatmaps = []
@@ -296,7 +298,10 @@ class Normalization:
                 (self.frame_duration / 1000) * self.sampling_frequency
             )
 
-            self.samples =[i for i in range(0, sample_length, 64)]
+            if self.use_muovi_pro:
+                self.samples = [i for i in range(0, sample_length, 18)]
+            else:
+                self.samples =[i for i in range(0, sample_length, 64)]
 
             for frame in self.samples:
                 if (frame - number_observation_samples < 0) or (

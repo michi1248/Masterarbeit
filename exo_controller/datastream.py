@@ -142,8 +142,8 @@ class Realtime_Datagenerator:
     def run_parallel(self):
         if not self.debug:
             if self.use_muovi_pro:
-                self.interface = Muoviprobe_Interface()
-                self.interface.initialize_all()
+                self.emgSocket = Muoviprobe_Interface()
+                self.emgSocket.initialize_all()
             else:
                 self.emgSocket.send("startTX".encode("utf-8"))
 
@@ -175,7 +175,7 @@ class Realtime_Datagenerator:
 
         if not self.debug:
             if self.use_muovi_pro:
-                self.interface.close_connection()
+                self.emgSocket.close_connection()
             else:
                 self.emgSocket.send("stopTX".encode("utf-8"))
                 self.emgSocket.close()
@@ -472,8 +472,20 @@ class Realtime_Datagenerator:
 
                 try:
                     if self.use_muovi_pro:
-                        data = self.interface.get_EMG_chunk()
+                        self.emgSocket.clear_socket_buffer()
+                        data = self.emgSocket.get_EMG_chunk()
                     else:
+                        self.emgSocket.setblocking(0)
+                        while True:
+                            try:
+
+                                data = self.emgSocket.recv(self.BufferSize)  # Non-blocking receive
+                                if not data:
+                                    self.emgSocket.setblocking(1)
+                                    break  # Break if no more data is in the buffer
+                            except BlockingIOError:
+                                self.emgSocket.setblocking(1)
+                                break  # No more data to read
                         data = np.frombuffer(
                                     self.emgSocket.recv(self.BufferSize), dtype=np.int16
                                 ).reshape((408, -1), order="F")[self.emg_indices]
@@ -495,7 +507,9 @@ class Realtime_Datagenerator:
 
 
                         time_difference_buffer.append(time_difference_between_last_sample)
-                except Exception:
+                except Exception as e:
+                    print("exception in datastream get emg")
+                    print(e)
                     continue
             self.time_diffs.update({self.movement_name[self.movement_count]: time_diff})
 

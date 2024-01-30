@@ -13,6 +13,7 @@ class ChannelExtraction:
         sampling_frequency=2048,
         frame_duration=150,
         use_gaussian_filter=False,
+        use_muovi_pro=False,
     ):
         """
 
@@ -27,7 +28,7 @@ class ChannelExtraction:
         self.closest_mu = closest_mu is the MU that fired the closest to the last frame, important if no mu fires since the last frame to use the old one again
         self.global_counter = global_counter is the number of frames that have been plotted, important because for first time we need to plot colorbar and other times not
         """
-
+        self.use_muovipro = use_muovi_pro
         self.movement_name = movement_name
         self.important_channels = []
         self.emg_data = emg
@@ -112,8 +113,11 @@ class ChannelExtraction:
         :return:
         """
         # samples = all sample values when using all samples with self.frame_duration in between
+        if self.use_muovipro:
+            self.samples =[i for i in range(0, self.sample_length, 18)]
 
-        self.samples =[i for i in range(0, self.sample_length, 64)]
+        else:
+            self.samples =[i for i in range(0, self.sample_length, 64)]
         self.samples = [
             element for element in self.samples if element <= len(self.ref_data)
         ]
@@ -146,7 +150,11 @@ class ChannelExtraction:
 
     def get_channels(self):
         # samples = all sample values when using all samples with self.frame_duration in between
-        self.samples =[i for i in range(0, self.sample_length, 64)]
+        if self.use_muovipro:
+            self.samples =[i for i in range(0, self.sample_length, 18)]
+
+        else:
+            self.samples =[i for i in range(0, self.sample_length, 64)]
         self.samples = [
             element for element in self.samples if element <= len(self.ref_data)
         ]
