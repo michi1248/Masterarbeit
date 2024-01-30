@@ -36,7 +36,8 @@ class MultiDimensionalDecisionTree:
         delay_to_movement=70,
         collected_with_virtual_hand = False,
         retrain = False,
-        retrain_number = None
+        retrain_number = None,
+        use_muovi_pro = False,
 
     ):
         self.normalizer = normalizer
@@ -53,15 +54,21 @@ class MultiDimensionalDecisionTree:
         self.collected_with_virtual_hand = collected_with_virtual_hand
         self.retrain = retrain
         self.retrain_number = retrain_number
+        self.use_muovi_pro = use_muovi_pro
+        if self.use_muovi_pro:
+            self.sampling_frequency = 2000
+            self.sample_difference_overlap = 18 # amount of new samples in each chunk
+        else:
+            self.sampling_frequency = 2048
+            self.sample_difference_overlap = 64
+
 
         if self.use_gauss_filter == True:
             self.gauss_filter = self.filter.create_gaussian_filter(size_filter=3)
 
         self.patient_number = patient_number
         self.ref_data = ref
-        self.sample_difference_overlap = (
-            sample_difference_overlap  # amount of new datapoints coming in
-        )
+
         self.max_depth = max_depth  # max depth of the tree
         self.min_samples_split = min_samples_split  # min number of samples to split
         self.important_channels = (
@@ -79,7 +86,7 @@ class MultiDimensionalDecisionTree:
             windom_size  # window size for the data ( length of the window in ms)
         )
         self.window_size_in_samples = int(
-            (self.window_size / 1000) * 2048
+            (self.window_size / 1000) * self.sampling_frequency
         )  # window size in samples
         self.sample_difference_overlap = sample_difference_overlap  # difference between the start of the next window and the start of the previous window in samples
         self.overlap = (
@@ -92,10 +99,10 @@ class MultiDimensionalDecisionTree:
         self.neuromuscular_delay = neuromuscular_delay
         self.delay_to_movement = delay_to_movement
         self.neuromuscular_delay_in_samples = int(
-            (self.neuromuscular_delay / 1000) * 2048
+            (self.neuromuscular_delay / 1000) * self.sampling_frequency
         )  # neuromuscucular delay in samples
         self.delay_to_movement_in_samples = int(
-            (self.delay_to_movement / 1000) * 2048
+            (self.delay_to_movement / 1000) * self.sampling_frequency
         )
         count = 0
         for i in range(
@@ -347,7 +354,7 @@ class MultiDimensionalDecisionTree:
                 emg_data = emg_data_new
 
             if self.use_bandpass_filter:
-                emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
+                emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=self.sampling_frequency)
 
 
             for i in range(
@@ -392,13 +399,13 @@ class MultiDimensionalDecisionTree:
                     # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
                     # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
                     if (i + self.neuromuscular_delay_in_samples) < self.ref_data[movement].shape[0]:
-                        for skip in range(64, self.neuromuscular_delay_in_samples, 64):
+                        for skip in range(64, self.neuromuscular_delay_in_samples, self.sample_difference_overlap):
                             ref_in_the_future = self.ref_data[movement][i+skip, :]
                             segments.append(segment)
                             labels.append(ref_in_the_future)
 
                     if (i - self.delay_to_movement_in_samples) >= 0:
-                        for skip in range(64, self.delay_to_movement_in_samples, 64):
+                        for skip in range(64, self.delay_to_movement_in_samples, self.sample_difference_overlap):
                             ref_in_the_past = self.ref_data[movement][i-skip, :]
                             segments.append(segment)
                             labels.append(ref_in_the_past)
@@ -431,7 +438,7 @@ class MultiDimensionalDecisionTree:
                 ref_data = self.ref_data[movement]
                 emg_data = self.emg_data[movement]
                 if self.use_bandpass_filter:
-                    emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=2048)
+                    emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=self.sampling_frequency)
 
 
                 for i in range(
@@ -509,13 +516,13 @@ class MultiDimensionalDecisionTree:
 
 
                         if (i + self.neuromuscular_delay_in_samples) < self.ref_data[movement].shape[0]:
-                            for skip in range(64, self.neuromuscular_delay_in_samples, 64):
+                            for skip in range(64, self.neuromuscular_delay_in_samples, self.sample_difference_overlap):
                                 ref_in_the_future = self.ref_data[movement][i + skip, :]
                                 combined_diffs.append(difference_heatmap)
                                 combined_ys.append(ref_in_the_future)
 
                         if (i - self.delay_to_movement_in_samples) >= 0:
-                            for skip in range(64, self.delay_to_movement_in_samples, 64):
+                            for skip in range(64, self.delay_to_movement_in_samples, self.sample_difference_overlap):
                                 ref_in_the_past = self.ref_data[movement][i - skip, :]
                                 combined_diffs.append(difference_heatmap)
                                 combined_ys.append(ref_in_the_past)

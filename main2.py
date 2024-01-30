@@ -13,6 +13,7 @@ from exo_controller import normalizations
 from exo_controller.helpers import *
 from exo_controller.spatial_filters import Filters
 from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
+from exo_controller.muovipro import *
 import time
 import threading
 import keyboard
@@ -45,7 +46,8 @@ class EMGProcessor:
         use_shallow_conv,
         use_virtual_hand_interface_for_coord_generation,
         epochs,
-        use_dtw
+        use_dtw,
+        use_muovi_pro
 
     ):
         self.patient_id = patient_id
@@ -74,11 +76,15 @@ class EMGProcessor:
         self.retrain_counter = 0
         self.epochs = epochs
         self.use_dtw = use_dtw
+        self.use_muovi_pro = use_muovi_pro
 
         self.mean_rest = None
         self.model = None
         self.exo_controller = None
-        self.emg_interface = EMG_Interface(grid_order=self.grid_order)
+        if self.use_muovi_pro:
+            self.emg_interface = Muoviprobe_Interface()
+        else:
+            self.emg_interface = EMG_Interface(grid_order=self.grid_order)
 
         self.grid_aranger = None
         self.gauss_filter = None
@@ -144,7 +150,8 @@ class EMGProcessor:
             use_virtual_hand_interface_for_coord_generation = self.use_virtual_hand_interface_for_coord_generation,
             retrain = self.retrain,
             retrain_number = self.retrain_counter,
-            finger_indexes = self.finger_indexes
+            finger_indexes = self.finger_indexes,
+            use_muovi_pro = self.use_muovi_pro
         )
         patient.run_parallel()
 
@@ -224,7 +231,8 @@ class EMGProcessor:
                     use_difference_heatmap=self.use_difference_heatmap,
                     collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
                     retrain=True,
-                    retrain_number = self.retrain_counter
+                    retrain_number = self.retrain_counter,
+                    use_muovi_pro = self.use_muovi_pro,
                 )
 
             else:
@@ -241,7 +249,8 @@ class EMGProcessor:
                     use_bandpass_filter=self.use_bandpass_filter,
                     filter_=self.filter,
                     use_difference_heatmap=self.use_difference_heatmap,
-                    collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation
+                    collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
+                    use_muovi_pro = self.use_muovi_pro,
                 )
             model.build_training_data(model.movements)
             model.save_trainings_data()
@@ -251,7 +260,7 @@ class EMGProcessor:
             self.best_time_tree = 2
 
             if self.use_shallow_conv:
-                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,retrain=self.retrain,retrain_number= self.retrain_counter, finger_indexes=self.finger_indexes)
+                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,retrain=self.retrain,retrain_number= self.retrain_counter, finger_indexes=self.finger_indexes,use_muovi_pro=self.use_muovi_pro)
                 if self.retrain:
                     shallow_model.load_model(cls=shallow_model, file_path=self.patient_id + "_shallow.pt")
                 else:
@@ -285,7 +294,7 @@ class EMGProcessor:
 
         else:
             if self.use_shallow_conv:
-                model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=2, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction, finger_indexes=self.finger_indexes)
+                model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=2, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction, finger_indexes=self.finger_indexes,use_muovi_pro=self.use_muovi_pro)
                 model.load_model(cls = model,file_path=self.patient_id + "_shallow.pt")
                 print("Shallow model loaded")
                 self.best_time_tree = 3
@@ -834,7 +843,8 @@ if __name__ == "__main__":
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True,
         epochs=150,
-        use_dtw=False
+        use_dtw=False,
+        use_muovi_pro=False
 
     )
     emg_processor.run()

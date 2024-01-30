@@ -1,24 +1,16 @@
 import socket
-import time
-import pickle
 import numpy as np
 import keyboard
-import pandas as pd
-import torch
-from scipy.signal import resample, butter, sosfiltfilt, iirnotch
-from scipy.spatial.transform import Rotation
-from vispy import app, scene
-import ast
-
 
 class EMG_Interface:
     def __init__(self,grid_order=None):
-        ###########################################################################
-        # Define process for reading data
-        self.read_process = None
-        self.queue_emg = [np.zeros((1, 320, 64))] * 2
-        # self.initialize_all()
-        self.process_counter = 0
+        """
+        This class is used to connect to the EMG device and to receive the EMG data.
+
+        :param grid_order: list with numbers between 1 and 5
+        [1,2,3,4,5] means that we use 5 grids (0:64 and 128:384)
+        if less than 5 grids are given, we use the amount of values in the list from multiple in 1 to the number of values
+        """
         if grid_order is None:
             grid_order = [1,2,3,4,5]
         self.grid_order = grid_order
@@ -33,13 +25,10 @@ class EMG_Interface:
         else:
             self.emg_indices = np.r_[128 : (128 + len(self.grid_order) * 64)]
 
-        self.buffer_size = 3
-        self.EMG_HEADER = 8
-        # Run Biolab Light and select refresh rate = 64
+        # size of the buffer in bytes
         self.BufferSize = 408 * 64 * 2  # ch, samples, int16 -> 2 bytes
         self.connected = False
         self.emgSocket = None
-
         self.tcp_ip = "localhost"
         self.tcp_port = 31000
         self.sampling_frequency = 2048
@@ -72,20 +61,12 @@ class EMG_Interface:
         By calling this function all necessary steps are to run the exo control.
 
         """
-        self.initialize_filters()
         self.initialize_emg_socket()
 
-    def initialize_filters(self):
-        """
-
-        define the filters that are needed to filter emg and movement
-
-        """
-        # the filters to use
-        self.filter_sos = butter(4, 20, "lowpass", output="sos", fs=2048)
-        self.notch_filter = iirnotch(w0=50, Q=75, fs=2044)
-
     def clear_socket_buffer(self):
+        """
+        This method clears the socket buffer. It is used to remove all old data from the buffer until it is empty
+        """
         # Make the socket non-blocking
         self.emgSocket.setblocking(0)
         while True:
@@ -121,31 +102,12 @@ class EMG_Interface:
         self.connected = False
         # Write message to stop transmission
         self.write_data("stopTX")
-
         # Close client socket
         self.emgSocket.close()
 
     def write_data(self, msg):
         """this method sends data to the emg device"""
         self.emgSocket.send(msg.encode("utf-8"))
-
-    def process(self):
-        """
-
-        This method combines all methods. If this Loop is calles to do the exo control in real time
-        By pressing "q" the process gets terminated
-
-        """
-        max_min_values = None
-        while True:
-            try:
-                chunk = self.get_EMG_chunk()
-                if keyboard.read_key() == "p":
-                    break
-            except Exception as e:
-                print(e)
-                self.close_connection()
-                print("Connection closed")
 
 
 if __name__ == "__main__":

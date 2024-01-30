@@ -17,6 +17,7 @@ import vlc
 from exo_controller.Videoplayer import PyPlayer, BaseTkContainer
 from exo_controller.Interface_Datageneration_Virtual_Hand import Interface, Container
 from exo_controller.exo_controller import Exo_Control
+from exo_controller.muovipro import *
 from scipy.signal import resample
 
 
@@ -33,6 +34,7 @@ class Realtime_Datagenerator:
         retrain=False,
         retrain_number=0,
         finger_indexes=None,
+        use_muovi_pro=False,
     ):
         if grid_order is None:
             grid_order = [1,2,3,4,5]
@@ -67,6 +69,7 @@ class Realtime_Datagenerator:
         self.BufferSize = 408 * 64 * 2  # ch, samples, int16 -> 2 bytes
         # size of one chunk in sample
         self.chunk_size = 64
+        self.use_muovi_pro = use_muovi_pro
 
 
         self.finger_indexes = finger_indexes
@@ -88,30 +91,36 @@ class Realtime_Datagenerator:
         self.time_differences_virtual_hand = {}
         self.time_differences_emg = {}
 
-
-        if len(self.grid_order) ==5:
-            self.emg_indices = np.concatenate([np.r_[:64], np.r_[128:384]])
+        if not self.use_muovi_pro:
+            if len(self.grid_order) ==5:
+                self.emg_indices = np.concatenate([np.r_[:64], np.r_[128:384]])
+            else:
+                self.emg_indices =  np.r_[128:(128+len(self.grid_order)*64)]
+            ##################################### Stuff for Sockets / Streaming ##########################################
+            self.buffer_size = 3
+            self.EMG_HEADER = 8
+            # Run Biolab Light and select refresh rate = 64
+            self.BufferSize = 408 * 64 * 2  # ch, samples, int16 -> 2 bytes
+            self.serverIP = "127.0.0.1"  # mit welcher IP verbinden
+            self.serverPort = 1234  # mit welchem Port verbinden
+            self.emgSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sampling_frequency_emg = 2048
+            if not debug:
+                self.emgSocket.connect(("127.0.0.1", 31000))
+                # self.emgSocket.setblocking(False)
+                print("Server is open for connections now.\n")
+                # self.emg_client_address = None
+                self.emg_client_address = None
+                self.number_chunks_one_sample = 64
         else:
-            self.emg_indices =  np.r_[128:(128+len(self.grid_order)*64)]
-        ##################################### Stuff for Sockets / Streaming ##########################################
-        self.buffer_size = 3
-        self.EMG_HEADER = 8
-        # Run Biolab Light and select refresh rate = 64
-        self.BufferSize = 408 * 64 * 2  # ch, samples, int16 -> 2 bytes
-        self.serverIP = "127.0.0.1"  # mit welcher IP verbinden
-        self.serverPort = 1234  # mit welchem Port verbinden
-        self.emgSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sampling_frequency_emg = 2000
+            self.number_chunks_one_sample = 18
 
         self.movement_names_videos = movements
 
         self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
 
-        if not debug:
-            self.emgSocket.connect(("127.0.0.1", 31000))
-            # self.emgSocket.setblocking(False)
-            print("Server is open for connections now.\n")
-            # self.emg_client_address = None
-            self.emg_client_address = None
+
 
     def createInner(self):
         return PyPlayer(self)
@@ -132,7 +141,11 @@ class Realtime_Datagenerator:
 
     def run_parallel(self):
         if not self.debug:
-            self.emgSocket.send("startTX".encode("utf-8"))
+            if self.use_muovi_pro:
+                self.interface = Muoviprobe_Interface()
+                self.interface.initialize_all()
+            else:
+                self.emgSocket.send("startTX".encode("utf-8"))
 
 
 
@@ -161,9 +174,12 @@ class Realtime_Datagenerator:
             t3.join()
 
         if not self.debug:
-            self.emgSocket.send("stopTX".encode("utf-8"))
-            self.emgSocket.close()
-            self.interface.close_connection()
+            if self.use_muovi_pro:
+                self.interface.close_connection()
+            else:
+                self.emgSocket.send("stopTX".encode("utf-8"))
+                self.emgSocket.close()
+                self.interface.close_connection()
 
         # get 3d points
         print("movie start values:", self.values_movie_start_emg)
@@ -217,8 +233,8 @@ class Realtime_Datagenerator:
                         result_array.append(v[0])
                         counter += 1
                         continue
-                    if round(time_difference*2048) >= 1:
-                        number_to_resample = round(time_difference*2048)
+                    if round(time_difference*self.sampling_frequency_emg) >= 1:
+                        number_to_resample = round(time_difference*self.sampling_frequency_emg)
                     else:
                         number_to_resample = 1
                     resampled = resample(v[counter-1:counter],number_to_resample)
@@ -229,7 +245,7 @@ class Realtime_Datagenerator:
                 # emg_data[self.movement_name[0]] = np.array([step[None, ...] for step in v[start:stop]])
                 kinematics_data[self.movement_name_virtual_hand[0]] = np.array(result_array)
                 print("length of kinematics data: ", len(result_array))
-                print("length of kinematics data in seconds: ", len(result_array)/2048)
+                print("length of kinematics data in seconds: ", len(result_array)/self.sampling_frequency_emg)
                 self.movement_name_virtual_hand.pop(0)
         else:
             for i in self.movement_name:
@@ -248,7 +264,7 @@ class Realtime_Datagenerator:
                 # hoch much one incoming emg chunk is in samples in the video
                 # e.g hw much is 64 samples in emg in secondds in the video
                 # the following lines are necessary to ressample the kinematics data to the emg data
-                skip = int(np.round((64 / 2048) * 120))
+                skip = int(np.round((64 / self.sampling_frequency_emg) * 120))
 
                 # chunk_size__samples = skip * 3
                 #
@@ -287,16 +303,20 @@ class Realtime_Datagenerator:
 
 
                 print("v shape: ", np.array(v).shape)
-                v_reshaped = np.array(
-                    v).transpose((1, 0, 2)).reshape(len(self.grid_order) * 64, -1)
+                if self.use_muovi_pro:
+                    v_reshaped = np.array(
+                        v).transpose((1, 0, 2)).reshape(32, -1)
+                else:
+                    v_reshaped = np.array(
+                        v).transpose((1, 0, 2)).reshape(len(self.grid_order) * 64, -1)
                  # afterwards shape of v_reshaped is #channels x #samples
                 print("v_reshaped shape: ", v_reshaped.shape)
 
                 time_differences_emg_reshaped = []
 
                 for one_sample in range(v_reshaped.shape[1]):
-                    buffer = one_sample // 64
-                    time_difference_this_chunk_split_into_64_samples =  self.time_differences_emg[k][buffer] / 64
+                    buffer = one_sample // self.number_chunks_one_sample
+                    time_difference_this_chunk_split_into_64_samples =  self.time_differences_emg[k][buffer] / self.number_chunks_one_sample
                     time_differences_emg_reshaped.append(time_difference_this_chunk_split_into_64_samples)
 
                 # if the kinematics started first, we need to crop the kinematics os that the start time is the same
@@ -324,8 +344,8 @@ class Realtime_Datagenerator:
                         counter += 1
                         continue
 
-                    if round(time_difference * 2048) >= 1:
-                        number_to_resample = round(time_difference * 2048)
+                    if round(time_difference * self.sampling_frequency_emg) >= 1:
+                        number_to_resample = round(time_difference * self.sampling_frequency_emg)
                     else:
                         number_to_resample = 1
                     resampled = resample(v_reshaped[counter - 1:counter], number_to_resample)
@@ -337,7 +357,7 @@ class Realtime_Datagenerator:
                 print("emg shape", np.array(result_array).transpose().shape)
                 self.movement_name.pop(0)
                 print("length of emg data: ", len(result_array))
-                print("length of emg data result array in seconds: ", len(result_array) / 2048)
+                print("length of emg data result array in seconds: ", len(result_array) / self.sampling_frequency_emg)
 
 
             else:
@@ -451,12 +471,13 @@ class Realtime_Datagenerator:
                 # get emg data
 
                 try:
-                    data = np.frombuffer(
-                                self.emgSocket.recv(self.BufferSize), dtype=np.int16
-                            ).reshape((408, -1), order="F")[self.emg_indices]
+                    if self.use_muovi_pro:
+                        data = self.interface.get_EMG_chunk()
+                    else:
+                        data = np.frombuffer(
+                                    self.emgSocket.recv(self.BufferSize), dtype=np.int16
+                                ).reshape((408, -1), order="F")[self.emg_indices]
                     if self.recording_started_emg:
-
-
                         count += 1
                         if count == 1:
                             # time_diff = measures the time difference between when pressed recording start and when the first sample was taken

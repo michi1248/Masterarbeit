@@ -13,7 +13,7 @@ import torch.nn.init as init
 
 
 class ShallowConvNetWithAttention(nn.Module):
-    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None,retrain=False,retrain_number = None, finger_indexes=None):
+    def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None,retrain=False,retrain_number = None, finger_indexes=None,use_muovi_pro=False):
         super(ShallowConvNetWithAttention, self).__init__()
         self.use_mean = use_mean
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -28,6 +28,9 @@ class ShallowConvNetWithAttention(nn.Module):
         self.retrain = retrain
         self.retrain_number = retrain_number
         self.batch_size = 64
+        self.use_muovi_pro = use_muovi_pro
+        if self.use_muovi_pro:
+
 
         if self.use_difference_heatmap:
             # Global Activity Path
