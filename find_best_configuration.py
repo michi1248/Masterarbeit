@@ -221,6 +221,7 @@ class EMGProcessor:
                 collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
                 windom_size=self.window_size,
                 use_muovi_pro=self.use_muovi_pro,
+                use_spatial_filter=self.use_spatial_filter,
             )
             model.build_training_data(model.movements)
             model.save_trainings_data()
@@ -305,7 +306,7 @@ class EMGProcessor:
 
         #shape should be grid
         if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro)
+            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter)
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
             self.normalizer.set_mean(mean=self.mean_rest)
 

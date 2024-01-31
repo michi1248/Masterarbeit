@@ -237,6 +237,7 @@ class EMGProcessor:
                     retrain=True,
                     retrain_number = self.retrain_counter,
                     use_muovi_pro = self.use_muovi_pro,
+                    use_spatial_filter=self.use_spatial_filter,
                 )
 
             else:
@@ -255,6 +256,7 @@ class EMGProcessor:
                     use_difference_heatmap=self.use_difference_heatmap,
                     collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
                     use_muovi_pro = self.use_muovi_pro,
+                    use_spatial_filter=self.use_spatial_filter,
                 )
             model.build_training_data(model.movements)
             model.save_trainings_data()
@@ -316,7 +318,8 @@ class EMGProcessor:
                     use_gauss_filter=self.use_gauss_filter,
                     use_bandpass_filter=self.use_bandpass_filter,
                     filter_=self.filter,
-                    collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation
+                    collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
+                    use_spatial_filter = self.use_spatial_filter,
                 )
                 model.load_model(subject=self.patient_id)
                 self.best_time_tree = 1  # This might need to be adjusted based on how your model handles time trees
@@ -372,7 +375,7 @@ class EMGProcessor:
 
         #shape should be grid
         if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro)
+            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter)
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
             self.normalizer.set_mean(mean=self.mean_rest)
 

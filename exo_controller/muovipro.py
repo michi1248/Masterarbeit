@@ -37,13 +37,13 @@ class Muoviprobe_Interface:
 
     def get_start_command(self) :
         self.command = 1 << 3
-        self.command += 0 << 1
+        self.command += 1 << 1
         self.command += 1
         return self.command
 
     def get_stop_command(self) :
         self.command = 1 << 3
-        self.command += 0 << 1
+        self.command += 1 << 1
         self.command += 0
         return self.command
 
@@ -167,16 +167,16 @@ class Muoviprobe_Interface:
 
 
 if __name__ == "__main__":
-    pass
-    # emg_interface = Muoviprobe_Interface()
-    # emg_interface.initialize_all()
-    # #emg_interface.clear_socket_buffer()
-    # while True:
-    #     #emg_interface.clear_socket_buffer()
-    #     emg_chunk = emg_interface.get_EMG_chunk()
-    #     print(emg_chunk)
-    #     time.sleep(0.1)
-    #     # if keyboard.read_key() == "q":
-    #     #     break
-    # print("closing connection")
-    # emg_interface.close_connection()
+    # pass
+    emg_interface = Muoviprobe_Interface()
+    emg_interface.initialize_all()
+    #emg_interface.clear_socket_buffer()
+    while True:
+        #emg_interface.clear_socket_buffer()
+        emg_chunk = emg_interface.get_EMG_chunk()
+        print(emg_chunk)
+        time.sleep(0.1)
+        # if keyboard.read_key() == "q":
+        #     break
+    print("closing connection")
+    emg_interface.close_connection()

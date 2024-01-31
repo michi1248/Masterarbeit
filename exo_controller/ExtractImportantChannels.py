@@ -2,6 +2,8 @@ import numpy as np
 import tqdm
 from exo_controller import helpers
 from exo_controller import normalizations
+from exo_controller.spatial_filters import Filters
+
 
 
 class ChannelExtraction:
@@ -14,6 +16,7 @@ class ChannelExtraction:
         frame_duration=150,
         use_gaussian_filter=False,
         use_muovi_pro=False,
+        use_spatial_filter=False,
     ):
         """
 
@@ -28,16 +31,22 @@ class ChannelExtraction:
         self.closest_mu = closest_mu is the MU that fired the closest to the last frame, important if no mu fires since the last frame to use the old one again
         self.global_counter = global_counter is the number of frames that have been plotted, important because for first time we need to plot colorbar and other times not
         """
+        self.use_spatial_filter = use_spatial_filter
         self.use_muovipro = use_muovi_pro
         self.movement_name = movement_name
         self.important_channels = []
         self.emg_data = emg
+        self.filter = Filters()
         self.ref_data = ref[self.movement_name]
         # self.sample_lengths = [
         #     len(self.emg_data[i].shape[1]) for i in list(self.emg_data.keys())
         # ]
         self.sample_length = self.emg_data[self.movement_name].shape[2]
-        self.sampling_frequency = sampling_frequency
+        if self.use_muovipro:
+            self.sampling_frequency = 2000
+        else:
+            self.sampling_frequency = 2048
+
         self.num_samples = int(
             self.sample_length / (self.sampling_frequency * (frame_duration / 1000))
         )
@@ -50,15 +59,27 @@ class ChannelExtraction:
         self.closest_mu = 0
         self.use_gaussian_filter = use_gaussian_filter
         if self.use_gaussian_filter:
-            self.gauss_filter = helpers.create_gaussian_filter(size_filter=5)
+            self.gauss_filter = helpers.create_gaussian_filter(size_filter=3)
 
     def make_heatmap_emg(self, frame):
         """
         :return: heatmap of emg data
 
         """
-        heatmap = helpers.calculate_heatmap(
-            emg_grid=self.emg_data[self.movement_name], position=frame, interval_in_samples=self.number_observation_samples
+        if (frame - self.number_observation_samples < 0) or (
+                self.emg_data[self.movement_name].shape[2] < (self.number_observation_samples)
+        ):
+            emg_to_use = self.emg_data[self.movement_name][:, :, : frame + 1]
+        else:
+            emg_to_use = self.emg_data[self.movement_name][:, :,
+                         frame - self.number_observation_samples: frame
+                         ]
+
+        if self.use_spatial_filter:
+            emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
+
+        heatmap = helpers.calculate_local_heatmap_realtime(
+            emg_to_use
         )
 
         if self.movement_name == "rest":
