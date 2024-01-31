@@ -9,10 +9,10 @@ class MichaelFilter:
         output_smoothing=True,
         additinal_filter=True,
         only_additional_filter=False,
-        weight_prediction_impact_on_regression=0.75,
-        weight_additional_filter=3,
+        weight_prediction_impact_on_regression=0.6, # the lower the more smooth but less reactive ( 0.75 is good)
+        weight_additional_filter=6, # the higher the smoother but delayed / less reactive (3 is good)
         degree_regressions=1,
-        buffer_length=5,
+        buffer_length=7, # (5 is good)
         skip_predictions=1,
         num_fingers=2,
     ):

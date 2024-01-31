@@ -12,6 +12,7 @@ import torch.nn.init as init
 
 
 
+
 class ShallowConvNetWithAttention(nn.Module):
     def __init__(self, use_difference_heatmap=False, best_time_tree=0, grid_aranger=None,number_of_grids=2,use_mean = None,retrain=False,retrain_number = None, finger_indexes=None,use_muovi_pro=False):
         super(ShallowConvNetWithAttention, self).__init__()
@@ -27,10 +28,8 @@ class ShallowConvNetWithAttention(nn.Module):
         self.dropout_rate = 0.2
         self.retrain = retrain
         self.retrain_number = retrain_number
-        self.batch_size = 64
+        self.batch_size = 128
         self.use_muovi_pro = use_muovi_pro
-
-
 
         if self.use_difference_heatmap:
             # Global Activity Path
@@ -598,7 +597,7 @@ class ShallowConvNetWithAttention(nn.Module):
             # Create the data loaders
             train_dataset = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
             test_dataset = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
-            train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+            train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True,num_workers=2,)
             test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
             self.train_loader = train_loader
             self.test_loader = test_loader
@@ -629,8 +628,8 @@ class ShallowConvNetWithAttention(nn.Module):
             test_dataset_time = TensorDataset(torch.from_numpy(np.stack((X_test,X_test_time),axis=0)), torch.from_numpy(np.stack((y_test,y_test_time),axis=0)))
 
 
-            train_loader_time = DataLoader(train_dataset_time, batch_size=self.batch_size, shuffle=True)
-            test_loader_time = DataLoader(test_dataset_time, batch_size=self.batch_size, shuffle=True)
+            train_loader_time = DataLoader(train_dataset_time, batch_size=self.batch_size, shuffle=True,num_workers=2,pin_memory=True)
+            test_loader_time = DataLoader(test_dataset_time, batch_size=self.batch_size, shuffle=True,num_workers=2,pin_memory=True)
             self.train_loader = train_loader_time
             self.test_loader  = test_loader_time
             return train_loader_time, test_loader_time

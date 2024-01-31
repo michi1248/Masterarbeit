@@ -854,7 +854,7 @@ if __name__ == "__main__":
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
-        use_gauss_filter=False,
+        use_gauss_filter=True,
         use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
@@ -862,9 +862,9 @@ if __name__ == "__main__":
         use_control_stream=False,
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True,
-        epochs=150,
+        epochs=10,
         use_dtw=False,
-        use_muovi_pro=True
+        use_muovi_pro=True,
 
     )
     emg_processor.run()

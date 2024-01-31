@@ -17,7 +17,7 @@ from exo_controller.spatial_filters import Filters
 from exo_controller.DTW import align_signals_dtw, make_rms_for_dtw
 #from exo_controller.ShallowConv import ShallowConvNetWithAttention
 from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
-import time
+from exo_controller.muovipro import *
 import keyboard
 
 
@@ -49,7 +49,8 @@ class EMGProcessor:
         use_virtual_hand_interface_for_coord_generation,
         epochs,
         split_index_if_same_dataset = None,
-        use_dtw = False
+        use_dtw = False,
+        use_muovi_pro= False
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -74,13 +75,19 @@ class EMGProcessor:
         self.use_shallow_conv = use_shallow_conv
         self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
         self.use_dtw = use_dtw
+        self.use_muovi_pro = use_muovi_pro
+        if use_muovi_pro:
+            self.sampling_frequency = 2000
+        else:
+            self.sampling_frequency = 2048
 
         self.mean_rest = None
         self.model = None
         self.exo_controller = None
-        self.emg_interface = EMG_Interface(grid_order=self.grid_order)
-        self.filter_local = MichaelFilter()
-        self.filter_time = MichaelFilter()
+        if self.use_muovi_pro:
+            self.emg_interface = Muoviprobe_Interface()
+        else:
+            self.emg_interface = EMG_Interface(grid_order=self.grid_order)
         self.filter = Filters()
         self.grid_aranger = None
         self.gauss_filter = None
@@ -128,8 +135,10 @@ class EMGProcessor:
 
     def initialize(self):
         self.finger_indexes = self.choose_finger_indexes()
+        self.filter_local = MichaelFilter(num_fingers=len(self.finger_indexes))
+        self.filter_time = MichaelFilter(num_fingers=len(self.finger_indexes))
         print("using the following fingers: ", self.finger_indexes)
-        self.grid_aranger = Grid_Arrangement(self.grid_order)
+        self.grid_aranger = Grid_Arrangement(self.grid_order,use_muovi_pro=self.use_muovi_pro)
         self.grid_aranger.make_grid()
 
         if self.use_gauss_filter:
@@ -146,6 +155,7 @@ class EMGProcessor:
             grid_order = self.grid_order,
             use_virtual_hand_interface_for_coord_generation = self.use_virtual_hand_interface_for_coord_generation,
             finger_indexes = self.finger_indexes,
+            use_muovi_pro=self.use_muovi_pro,
         )
         patient.run_parallel()
 
@@ -210,6 +220,7 @@ class EMGProcessor:
                 use_difference_heatmap=self.use_difference_heatmap,
                 collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
                 windom_size=self.window_size,
+                use_muovi_pro=self.use_muovi_pro,
             )
             model.build_training_data(model.movements)
             model.save_trainings_data()
@@ -223,7 +234,7 @@ class EMGProcessor:
             model.train()
             model.evaluate()
         else:
-            shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,finger_indexes=self.finger_indexes)
+            shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,finger_indexes=self.finger_indexes,use_muovi_pro=self.use_muovi_pro)
             shallow_model.apply(shallow_model._initialize_weights)
             train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
             shallow_model.train_model(train_loader, epochs=self.epochs)
@@ -266,7 +277,10 @@ class EMGProcessor:
             ]
 
         else:
-            self.channels = range(len(self.grid_order) * 64)
+            if self.use_muovi_pro:
+                self.channels = range(32)
+            else:
+                self.channels = range(len(self.grid_order) * 64)
 
         self.normalizer = normalizations.Normalization(
             method=self.scaling_method,
@@ -274,6 +288,7 @@ class EMGProcessor:
             important_channels=self.channels,
             frame_duration=self.window_size,
             use_spatial_filter=self.use_spatial_filter,
+            use_muovi_pro=self.use_muovi_pro
         )
 
         #shape should be 320 x #samples
@@ -290,7 +305,7 @@ class EMGProcessor:
 
         #shape should be grid
         if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter)
+            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro)
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
             self.normalizer.set_mean(mean=self.mean_rest)
 
@@ -353,10 +368,14 @@ class EMGProcessor:
         predictions = []
         ground_truth = []
         # Main prediction loop
-        max_chunk_number = np.ceil(
-            max(self.num_previous_samples) / 64
-        )  # calculate number of how many chunks we have to store till we delete old
-
+        if self.use_muovi_pro:
+            max_chunk_number = np.ceil(
+                max(self.num_previous_samples) / 18
+            )  # calculat
+        else:
+            max_chunk_number = np.ceil(
+                max(self.num_previous_samples) / 64
+            )  # calculate number of how many chunks we have to store till we delete old
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
 
@@ -398,18 +417,20 @@ class EMGProcessor:
             for i in emg_data.keys():
                 emg_data[i] = self.filter.bandpass_filter_emg_data(emg_data[i], fs=2048)
 
-
-
+        if self.use_muovi_pro:
+            skipping_samples = 18
+        else:
+            skipping_samples = 64
         for movement in ref_data.keys():
             if movement in self.movements:
                 ref_data_for_this_movement = ref_data[movement]
                 emg_buffer = []
                 # ref_data[movement] = normalize_2D_array(ref_data[movement], axis=0)
                 print("movement: ", movement, file=sys.stderr)
-                for sample in tqdm.tqdm(range(0,emg_data[movement].shape[2]- int((self.window_size / 1000) * 2048) + 1, 64)):
+                for sample in tqdm.tqdm(range(0,emg_data[movement].shape[2]- int((self.window_size / 1000) * self.sampling_frequency) + 1, skipping_samples)):
                     if (sample <= ref_data[movement].shape[0]) and (sample - max(self.num_previous_samples) >= 0):
                         time_start = time.time()
-                        chunk = emg_data[movement][:, :, sample : sample + 64]
+                        chunk = emg_data[movement][:, :, sample : sample + skipping_samples]
                         emg_buffer.append(chunk)
                         if (
                             len(emg_buffer) > max_chunk_number
@@ -612,7 +633,7 @@ if __name__ == "__main__":
                     use_spatial_filter=False,
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
-                    use_gauss_filter=False,
+                    use_gauss_filter=True,
                     use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
                     window_size=150,
                     scaling_method=method,
@@ -623,7 +644,8 @@ if __name__ == "__main__":
                     use_virtual_hand_interface_for_coord_generation = True,
                     epochs = epochs,
                     split_index_if_same_dataset = split_index_if_same_dataset,
-                    use_dtw = False
+                    use_dtw = False,
+                    use_muovi_pro=False,
 
                 )
                 if count <= 1:
