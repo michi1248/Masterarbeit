@@ -305,6 +305,7 @@ class ShallowConvNetWithAttention(nn.Module):
         #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.75)
 
         progress_bar = tqdm(train_loader, desc="Epochs", leave=False, total=epochs)
+        total_loss = torch.tensor(0.0).to(self.device)
         for epoch in range(epochs):
             epoch_loss = 0
             for inputs, targets in train_loader:
@@ -337,7 +338,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 else:
                     output = self(heatmap1)
 
-                total_loss = torch.tensor(0.0).to(self.device)
+
                 for one_output in range(output.shape[1]):
                     loss_one_output = criterion(output[:, one_output], targets[:, one_output])
                     total_loss += loss_one_output
@@ -350,6 +351,7 @@ class ShallowConvNetWithAttention(nn.Module):
 
                 scheduler.step()
 
+                total_loss = 0.0
             progress_bar.update(1)
 
         progress_bar.close()
