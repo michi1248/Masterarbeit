@@ -319,7 +319,8 @@ class EMGProcessor:
                     use_bandpass_filter=self.use_bandpass_filter,
                     filter_=self.filter,
                     collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
-                    use_spatial_filter = self.use_spatial_filter,
+                    use_muovi_pro=self.use_muovi_pro,
+                    use_spatial_filter=self.use_spatial_filter,
                 )
                 model.load_model(subject=self.patient_id)
                 self.best_time_tree = 1  # This might need to be adjusted based on how your model handles time trees
@@ -416,7 +417,7 @@ class EMGProcessor:
 
     def output_results(self, results,control_results=None):
 
-        for i in range(2):
+        for i in range(len(self.finger_indexes)):
             if results[i] > 1:
                 results[i] = 1
             if results[i] < 0:
@@ -642,12 +643,12 @@ class EMGProcessor:
                         if time_end - time_start < (skipping_samples/self.sampling_frequency):
                             time.sleep((skipping_samples/self.sampling_frequency) - (time_end - time_start))
 
-            plt.figure()
-            for finger in range(len(self.finger_indexes)):
-                plt.plot(np.array(buffer_pred)[:,finger],label="pred " + str(finger))
-                plt.plot(np.add(np.array(buffer_control)[:,finger],finger),label="ref " + str(finger))
-            plt.legend()
-            plt.show()
+            # plt.figure()
+            # for finger in range(len(self.finger_indexes)):
+            #     plt.plot(np.array(buffer_pred)[:,finger],label="pred " + str(finger))
+            #     plt.plot(np.add(np.array(buffer_control)[:,finger],finger),label="ref " + str(finger))
+            # plt.legend()
+            # plt.show()
 
     def run_prediction_loop(self, model):
 
@@ -824,6 +825,7 @@ class EMGProcessor:
             self.run_prediction_loop_recorded_data(model)
         else:
             self.run_prediction_loop(model)
+        #self.run_prediction_loop(model)
 
 
 if __name__ == "__main__":
@@ -851,21 +853,21 @@ if __name__ == "__main__":
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=40,
-        load_trained_model=False,
+        time_for_each_movement_recording=20,
+        load_trained_model=True,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
-        use_gauss_filter=True,
-        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
+        use_gauss_filter=False,
+        use_recorded_data=False, #r"trainings_data/resulting_trainings_data/subject_Test/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
         use_control_stream=False,
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True,
-        epochs=10,
+        epochs=100,
         use_dtw=False,
         use_muovi_pro=True,
 

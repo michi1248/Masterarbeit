@@ -59,7 +59,7 @@ class ChannelExtraction:
         self.closest_mu = 0
         self.use_gaussian_filter = use_gaussian_filter
         if self.use_gaussian_filter:
-            self.gauss_filter = helpers.create_gaussian_filter(size_filter=3)
+            self.gauss_filter = helpers.create_gaussian_filter(size_filter=5)
 
     def make_heatmap_emg(self, frame):
         """

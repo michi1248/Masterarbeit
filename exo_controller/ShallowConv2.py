@@ -18,6 +18,7 @@ class ShallowConvNetWithAttention(nn.Module):
         super(ShallowConvNetWithAttention, self).__init__()
         self.use_mean = use_mean
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print("using : " , self.device)
 
         self.finger_indexes = finger_indexes
         self.number_of_grids = number_of_grids
@@ -597,7 +598,7 @@ class ShallowConvNetWithAttention(nn.Module):
             # Create the data loaders
             train_dataset = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
             test_dataset = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
-            train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True,num_workers=2,)
+            train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
             test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
             self.train_loader = train_loader
             self.test_loader = test_loader
@@ -628,8 +629,8 @@ class ShallowConvNetWithAttention(nn.Module):
             test_dataset_time = TensorDataset(torch.from_numpy(np.stack((X_test,X_test_time),axis=0)), torch.from_numpy(np.stack((y_test,y_test_time),axis=0)))
 
 
-            train_loader_time = DataLoader(train_dataset_time, batch_size=self.batch_size, shuffle=True,num_workers=2,pin_memory=True)
-            test_loader_time = DataLoader(test_dataset_time, batch_size=self.batch_size, shuffle=True,num_workers=2,pin_memory=True)
+            train_loader_time = DataLoader(train_dataset_time, batch_size=self.batch_size, shuffle=True)
+            test_loader_time = DataLoader(test_dataset_time, batch_size=self.batch_size, shuffle=True)
             self.train_loader = train_loader_time
             self.test_loader  = test_loader_time
             return train_loader_time, test_loader_time

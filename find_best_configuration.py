@@ -608,7 +608,7 @@ if __name__ == "__main__":
         best_mse_no_mean = None
 
 
-        for epochs in [10,50,100,150,200,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [1,5,10,50,100,150,200,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
@@ -634,7 +634,7 @@ if __name__ == "__main__":
                     use_spatial_filter=False,
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
-                    use_gauss_filter=True,
+                    use_gauss_filter=False,
                     use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
                     window_size=150,
                     scaling_method=method,
@@ -715,7 +715,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [10,50,100,150,200,250,500]
+                x = [1,5,10,50,100,150,200,250,500]
                 x = x[:x.index(epochs)+1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
