@@ -90,6 +90,9 @@ class ShallowConvNetWithAttention(nn.Module):
                 self.fc2 = nn.Linear(60  ,len(self.finger_indexes))
                 self.merge_layer = nn.Linear(number_of_grids +len(self.finger_indexes) ,len(self.finger_indexes))
             else:
+
+                self.fc_all1 = nn.Linear(32, len(self.finger_indexes))
+
                 # Spatial Activity Path
                 self.conv1 = nn.Conv2d(1, 32, kernel_size=3,
                                        padding=1)
@@ -105,7 +108,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 self.in1 = nn.InstanceNorm2d(32 )
                 self.in2 = nn.InstanceNorm2d(16)
                 self.fc2 = nn.Linear(60, len(self.finger_indexes))
-                self.merge_layer = nn.Linear( len(self.finger_indexes) +1, len(self.finger_indexes))
+                self.merge_layer = nn.Linear( 2*len(self.finger_indexes) +1, len(self.finger_indexes))
 
         # Dropout rate
         self.dropout_rate = 0.2
@@ -249,9 +252,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 merged_spatial_path = torch.cat((spatial_path, gobal_path), dim=1)
                 merged_spatial_path = self.merge_layer(merged_spatial_path)
             else:
-
-
-
+                heatmap1_only_channels = heatmap1.view(heatmap1.size(0),1,-1)
                 global_path = self.global_pool(heatmap1)
                 global_path = global_path.view(global_path.size(0), -1)  # Flatten
                 global_path = torch.multiply(global_path, torch.abs(global_path))  # Average over the channels
@@ -277,8 +278,11 @@ class ShallowConvNetWithAttention(nn.Module):
                 spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after fc1
                 spatial_path = self.fc2(spatial_path)
 
+                channel_wise_spatial_path = self.fc_all1(heatmap1_only_channels)
+
                 gobal_path = global_path.view(global_path.size(0), -1)
-                merged_spatial_path = torch.cat((spatial_path, gobal_path), dim=1)
+                channel_wise_spatial_path = channel_wise_spatial_path.view(channel_wise_spatial_path.size(0),-1)
+                merged_spatial_path = torch.cat((spatial_path, gobal_path,channel_wise_spatial_path), dim=1)
                 merged_spatial_path = self.merge_layer(merged_spatial_path)
 
 

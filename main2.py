@@ -854,20 +854,20 @@ if __name__ == "__main__":
         output_on_exo=True,
         filter_output=True,
         time_for_each_movement_recording=30,
-        load_trained_model=True,
+        load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Test/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Test/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
         use_control_stream=False,
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True,
-        epochs=150,
+        epochs=200,
         use_dtw=False,
         use_muovi_pro=True,
 
