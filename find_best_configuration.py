@@ -50,7 +50,8 @@ class EMGProcessor:
         epochs,
         split_index_if_same_dataset = None,
         use_dtw = False,
-        use_muovi_pro= False
+        use_muovi_pro= False,
+        skip_in_ms = 25,
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -76,10 +77,15 @@ class EMGProcessor:
         self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
         self.use_dtw = use_dtw
         self.use_muovi_pro = use_muovi_pro
+        self.skip_in_ms = skip_in_ms
+
         if use_muovi_pro:
             self.sampling_frequency = 2000
+            self.skip_in_samples = int((skip_in_ms / 1000) * self.sampling_frequency)
         else:
             self.sampling_frequency = 2048
+            self.skip_in_samples = int((skip_in_ms / 1000) * self.sampling_frequency)
+
 
         self.mean_rest = None
         self.model = None
@@ -222,6 +228,7 @@ class EMGProcessor:
                 windom_size=self.window_size,
                 use_muovi_pro=self.use_muovi_pro,
                 use_spatial_filter=self.use_spatial_filter,
+                sample_difference_overlap=self.skip_in_samples,
             )
             model.build_training_data(model.movements)
             model.save_trainings_data()
@@ -289,7 +296,9 @@ class EMGProcessor:
             important_channels=self.channels,
             frame_duration=self.window_size,
             use_spatial_filter=self.use_spatial_filter,
-            use_muovi_pro=self.use_muovi_pro
+            use_muovi_pro=self.use_muovi_pro,
+            skip_in_samples=self.skip_in_samples,
+
         )
 
         #shape should be 320 x #samples
@@ -302,14 +311,6 @@ class EMGProcessor:
         for i in emg_data.keys():
             emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(emg_data[i])
 
-
-
-        #shape should be grid
-        if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter)
-            self.mean_rest, _, _ = channel_extractor.get_heatmaps()
-            self.normalizer.set_mean(mean=self.mean_rest)
-
         # add gaussian noise to the ground truth data so that the model can learn to deal with noise
         for movement in self.movements:
             # Generate Gaussian noise for each column
@@ -317,6 +318,12 @@ class EMGProcessor:
                 std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
                 noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
                 ref_data[movement][:, finger] = np.add(ref_data[movement][:, finger], noise_i)
+
+        #shape should be grid
+        if self.use_mean_subtraction:
+            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data.copy(), ref_data.copy(),use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter,frame_duration=self.window_size,skip_in_samples=self.skip_in_samples)
+            self.mean_rest, _, _ = channel_extractor.get_heatmaps()
+            self.normalizer.set_mean(mean=self.mean_rest.copy())
 
         # Calculate normalization values
         self.normalizer.get_all_emg_data(
@@ -371,12 +378,13 @@ class EMGProcessor:
         # Main prediction loop
         if self.use_muovi_pro:
             max_chunk_number = np.ceil(
-                max(self.num_previous_samples) / 18
+                max(self.num_previous_samples) / self.skip_in_samples
             )  # calculat
         else:
             max_chunk_number = np.ceil(
-                max(self.num_previous_samples) / 64
+                max(self.num_previous_samples) / self.skip_in_samples
             )  # calculate number of how many chunks we have to store till we delete old
+        print("max_chunk_number: ", max_chunk_number)
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
 
@@ -416,22 +424,19 @@ class EMGProcessor:
 
         if self.use_bandpass_filter:
             for i in emg_data.keys():
-                emg_data[i] = self.filter.bandpass_filter_emg_data(emg_data[i], fs=2048)
+                emg_data[i] = self.filter.bandpass_filter_emg_data(emg_data[i], fs=self.sampling_frequency)
 
-        if self.use_muovi_pro:
-            skipping_samples = 18
-        else:
-            skipping_samples = 64
+
         for movement in ref_data.keys():
             if movement in self.movements:
                 ref_data_for_this_movement = ref_data[movement]
                 emg_buffer = []
                 # ref_data[movement] = normalize_2D_array(ref_data[movement], axis=0)
                 print("movement: ", movement, file=sys.stderr)
-                for sample in tqdm.tqdm(range(0,emg_data[movement].shape[2]- int((self.window_size / 1000) * self.sampling_frequency) + 1, skipping_samples)):
+                for sample in tqdm.tqdm(range(0,emg_data[movement].shape[2]- int((self.window_size / 1000) * self.sampling_frequency) + 1,self.skip_in_samples)):
                     if (sample <= ref_data[movement].shape[0]) and (sample - max(self.num_previous_samples) >= 0):
                         time_start = time.time()
-                        chunk = emg_data[movement][:, :, sample : sample + skipping_samples]
+                        chunk = emg_data[movement][:, :, sample : sample + self.skip_in_samples]
                         emg_buffer.append(chunk)
                         if (
                             len(emg_buffer) > max_chunk_number
@@ -562,7 +567,7 @@ class EMGProcessor:
             if self.only_record_data:
                 return
             self.process_data(emg_data, ref_data)
-            model = self.train_model(emg_data, ref_data,already_build=already_build)
+            model = self.train_model(emg_data.copy(), ref_data.copy(),already_build=already_build)
         else:
             model = self.train_model(None, None, already_build=already_build)
 
@@ -596,7 +601,7 @@ if __name__ == "__main__":
 
     use_shallow_conv = True
 
-    for method in  ["Min_Max_Scaling_over_whole_data"]:#"Min_Max_Scaling_all_channels","Robust_Scaling","Robust_all_channels",
+    for method in  ["Min_Max_Scaling_over_whole_data","no_scaling","Robust_Scaling","Robust_all_channels",]:
         evaluation_results_mean_sub = []
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
@@ -608,19 +613,24 @@ if __name__ == "__main__":
         best_mse_no_mean = None
 
 
-        for epochs in [1,5,10,50,100,150,200,250,500]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [1,5,10,50,100,150,200,250]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_18_01_2024_normal2",
+                    patient_id="Michi_different_movements_6_2",
                     movements=[
                         "rest",
                         "thumb",
                         "index",
-                        "2pinch",
+                        # "2pinch",
+                        # "3pinch",
+                        "middle",
+                        "ring",
+                        "pinkie",
+                        # "fist",
                     ],
                     grid_order=[1,2,3,4,5],
                     use_difference_heatmap=False,
@@ -635,7 +645,7 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_18_01_2024_normal3/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_different_movements_6_2_control/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
@@ -646,7 +656,8 @@ if __name__ == "__main__":
                     epochs = epochs,
                     split_index_if_same_dataset = split_index_if_same_dataset,
                     use_dtw = False,
-                    use_muovi_pro=False,
+                    use_muovi_pro=True,
+                    skip_in_ms = 25,
 
                 )
                 if count <= 1:
@@ -715,7 +726,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [1,5,10,50,100,150,200,250,500]
+                x = [1,5,10,50,100,150,200,250]
                 x = x[:x.index(epochs)+1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
@@ -739,5 +750,5 @@ if __name__ == "__main__":
 
                 train_name = emg_processor.patient_id.split("_")[-1]
                 test_name = emg_processor.use_recorded_data.split("_")[-1].split("/")[0]
-                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + ".png")
+                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + "gauss_filtered.png")
 

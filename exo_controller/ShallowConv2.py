@@ -31,6 +31,8 @@ class ShallowConvNetWithAttention(nn.Module):
         self.retrain_number = retrain_number
         self.batch_size = 128
         self.use_muovi_pro = use_muovi_pro
+        # self.criterion = nn.HuberLoss()
+        self.criterion = nn.L1Loss()
 
         if self.use_difference_heatmap:
             # Global Activity Path
@@ -292,8 +294,7 @@ class ShallowConvNetWithAttention(nn.Module):
         if self.use_difference_heatmap:
             learning_rate = 0.0001
         self.train()
-        criterion = nn.L1Loss()
-        #criterion = nn.MSELoss()
+
         optimizer = optim.AdamW(self.parameters(), lr=learning_rate,weight_decay=0.1,amsgrad=True)
         #early_stopping = EarlyStopping(patience=5, min_delta=0.001)  # Adjust as needed
 
@@ -344,7 +345,7 @@ class ShallowConvNetWithAttention(nn.Module):
 
 
                 for one_output in range(output.shape[1]):
-                    loss_one_output = criterion(output[:, one_output], targets[:, one_output])
+                    loss_one_output = self.criterion(output[:, one_output], targets[:, one_output])
                     total_loss += loss_one_output
 
                 optimizer.zero_grad()
@@ -420,13 +421,10 @@ class ShallowConvNetWithAttention(nn.Module):
             ssr = torch.sum((ground_truth[:, i] - predictions[:, i]) ** 2)
             r_squared_values.append(1 - ssr / (sst + 1e-8))
 
-        #crit = nn.MSELoss()
-        crit = nn.L1Loss()
-
 
         mse_loss = torch.tensor(0.0).to(self.device)
         for one_output in range(ground_truth.shape[1]):
-            mse_loss_one_output = crit(predictions[:, one_output], ground_truth[:, one_output])
+            mse_loss_one_output = self.criterion(predictions[:, one_output], ground_truth[:, one_output])
             mse_loss += mse_loss_one_output
 
         # Calculate the mean R-squared value
@@ -438,7 +436,6 @@ class ShallowConvNetWithAttention(nn.Module):
     def evaluate(self, test_loader):
         self.eval()
         total_loss = 0
-        criterion = nn.MSELoss()
         all_targets = []
         all_predictions = []
 
@@ -474,7 +471,7 @@ class ShallowConvNetWithAttention(nn.Module):
                     outputs = self(heatmap1, heatmap2)
                 else:
                     outputs = self(heatmap1)
-                loss = criterion(outputs, targets)
+                loss = self.criterion(outputs, targets)
                 total_loss += loss.item()
 
                 all_targets.extend(targets.cpu().numpy())
@@ -488,19 +485,19 @@ class ShallowConvNetWithAttention(nn.Module):
         all_targets = np.array(all_targets)
         all_predictions = np.array(all_predictions)
 
-        # Plotting
-        plt.figure(figsize=(12, 6))
-
-        for i in range(len(self.finger_indexes)):
-            plt.subplot(1, len(self.finger_indexes), i + 1)
-            plt.scatter(np.arange(len(all_targets)), all_targets[:, i], color='blue', label='True Values')
-            plt.scatter(np.arange(len(all_predictions)), all_predictions[:, i], color='red', label='Predictions')
-            for j in range(len(all_targets)):
-                plt.plot([j, j], [all_targets[j, i], all_predictions[j, i]], color='gray', linestyle='--')
-            plt.title(f'Comparison of True Values and Predictions (Output {i + 1})')
-            plt.legend()
-
-        plt.show()
+        # # Plotting
+        # plt.figure(figsize=(12, 6))
+        #
+        # for i in range(len(self.finger_indexes)):
+        #     plt.subplot(1, len(self.finger_indexes), i + 1)
+        #     plt.scatter(np.arange(len(all_targets)), all_targets[:, i], color='blue', label='True Values')
+        #     plt.scatter(np.arange(len(all_predictions)), all_predictions[:, i], color='red', label='Predictions')
+        #     for j in range(len(all_targets)):
+        #         plt.plot([j, j], [all_targets[j, i], all_predictions[j, i]], color='gray', linestyle='--')
+        #     plt.title(f'Comparison of True Values and Predictions (Output {i + 1})')
+        #     plt.legend()
+        #
+        # plt.show()
 
     def save_model(self, path):
         torch.save(self.state_dict(), path)

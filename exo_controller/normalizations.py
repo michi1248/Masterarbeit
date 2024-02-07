@@ -15,6 +15,7 @@ class Normalization:
         frame_duration=150,
         use_spatial_filter=False,
         use_muovi_pro = False,
+        skip_in_samples = None
     ):
         """
         :param movements: list of movements that should be used for normalization
@@ -41,11 +42,17 @@ class Normalization:
         self.method = method
         self.grid_aranger = Grid_Arrangement(grid_order,use_muovi_pro=use_muovi_pro)
         self.grid_aranger.make_grid()
-        self.sampling_frequency = sampling_frequency
+        if self.use_muovi_pro:
+            self.sampling_frequency = 2000
+        else:
+            self.sampling_frequency = 2048
         self.frame_duration = frame_duration
         self.use_spatial_filter = use_spatial_filter
         if self.use_spatial_filter:
             self.spatial_filter = Filters()
+
+
+        self.skip_in_samples = skip_in_samples
 
     def robust_scaling(self, data):
         """
@@ -128,7 +135,7 @@ class Normalization:
                     self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
                         emg_data_one_movement
                     )
-                    - np.reshape(self.mean, (self.mean.shape[0], self.mean.shape[1], 1))
+                    # - np.reshape(self.mean, (self.mean.shape[0], self.mean.shape[1], 1))
                 )
             else:
                 emg_data_one_movement = (
@@ -170,8 +177,8 @@ class Normalization:
                 heatmap = self.calculate_heatmap(
                     self.all_emg_data[movement], frame, number_observation_samples
                 )
-                if (self.mean is not None) and (self.mean is not None):
-                    heatmap = heatmap - self.mean
+                # if (self.mean is not None) and (self.mean is not None):
+                #     heatmap = heatmap - self.mean
                 if np.max(heatmap) > max_values:
                     max_values = np.max(heatmap)
                 if np.min(heatmap) < min_values:
@@ -289,8 +296,7 @@ class Normalization:
 
         for movement in range(len(self.all_emg_data)):
 
-
-            sample_length = self.all_emg_data[movement][1][1].shape[0]
+            sample_length = self.all_emg_data[movement].shape[2]
             num_samples = int(
                 sample_length / (self.sampling_frequency * (self.frame_duration / 1000))
             )
@@ -299,9 +305,9 @@ class Normalization:
             )
 
             if self.use_muovi_pro:
-                self.samples = [i for i in range(0, sample_length, 18)]
+                self.samples = [i for i in range(0, sample_length, self.skip_in_samples)]
             else:
-                self.samples =[i for i in range(0, sample_length, 64)]
+                self.samples =[i for i in range(0, sample_length, self.skip_in_samples)]
 
             for frame in self.samples:
                 if (frame - number_observation_samples < 0) or (
@@ -320,8 +326,6 @@ class Normalization:
                 heatmap = self.calculate_heatmap_on_whole_samples(
                     emg_data_to_use
                 )
-
-
 
                 if (self.mean is not None) and (self.mean is not None):
                     heatmap = np.subtract(heatmap ,self.mean)

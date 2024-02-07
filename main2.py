@@ -47,7 +47,8 @@ class EMGProcessor:
         use_virtual_hand_interface_for_coord_generation,
         epochs,
         use_dtw,
-        use_muovi_pro
+        use_muovi_pro,
+        skip_in_ms,
 
     ):
         self.patient_id = patient_id
@@ -81,6 +82,7 @@ class EMGProcessor:
             self.sampling_frequency = 2000
         else:
             self.sampling_frequency = 2048
+        self.skip_in_samples = int((skip_in_ms / 1000) * self.sampling_frequency)
 
         self.mean_rest = None
         self.model = None
@@ -238,6 +240,7 @@ class EMGProcessor:
                     retrain_number = self.retrain_counter,
                     use_muovi_pro = self.use_muovi_pro,
                     use_spatial_filter=self.use_spatial_filter,
+                    sample_difference_overlap=self.skip_in_samples,
                 )
 
             else:
@@ -257,6 +260,7 @@ class EMGProcessor:
                     collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
                     use_muovi_pro = self.use_muovi_pro,
                     use_spatial_filter=self.use_spatial_filter,
+                    sample_difference_overlap=self.skip_in_samples,
                 )
             model.build_training_data(model.movements)
             model.save_trainings_data()
@@ -321,6 +325,7 @@ class EMGProcessor:
                     collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
                     use_muovi_pro=self.use_muovi_pro,
                     use_spatial_filter=self.use_spatial_filter,
+                    sample_difference_overlap=self.skip_in_samples,
                 )
                 model.load_model(subject=self.patient_id)
                 self.best_time_tree = 1  # This might need to be adjusted based on how your model handles time trees
@@ -359,7 +364,8 @@ class EMGProcessor:
             important_channels=self.channels,
             frame_duration=self.window_size,
             use_spatial_filter=self.use_spatial_filter,
-            use_muovi_pro=self.use_muovi_pro
+            use_muovi_pro=self.use_muovi_pro,
+            skip_in_samples=self.skip_in_samples,
         )
 
         #shape should be 320 x #samples
@@ -376,7 +382,7 @@ class EMGProcessor:
 
         #shape should be grid
         if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter)
+            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter,frame_duration=self.window_size,skip_in_samples=self.skip_in_samples)
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
             self.normalizer.set_mean(mean=self.mean_rest)
 
@@ -440,11 +446,11 @@ class EMGProcessor:
         # Main prediction loop
         if self.use_muovi_pro:
             max_chunk_number = np.ceil(
-                max(self.num_previous_samples) / 18
+                max(self.num_previous_samples) / self.skip_in_samples
             )  # calculat
         else:
             max_chunk_number = np.ceil(
-                max(self.num_previous_samples) / 64
+                max(self.num_previous_samples) / self.skip_in_samples
             )  # calculate number of how many chunks we have to store till we delete old
 
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
@@ -511,14 +517,11 @@ class EMGProcessor:
                 emg_buffer = []
                 # ref_data[movement] = normalize_2D_array(ref_data[movement], axis=0)
                 print("movement: ", movement, file=sys.stderr)
-                if self.use_muovi_pro:
-                    skipping_samples = 18
-                else:
-                    skipping_samples = 64
-                for sample in tqdm.tqdm(range(0,emg_data[movement].shape[2]- int((self.window_size / 1000) * self.sampling_frequency), skipping_samples)):
+
+                for sample in tqdm.tqdm(range(0,emg_data[movement].shape[2]- int((self.window_size / 1000) * self.sampling_frequency), self.skip_in_samples)):
                     if (sample <= ref_data[movement].shape[0]) and (sample - max(self.num_previous_samples) >= 0):
                         time_start = time.time()
-                        chunk = emg_data[movement][:, :, sample : sample + skipping_samples]
+                        chunk = emg_data[movement][:, :, sample : sample + self.skip_in_samples]
                         emg_buffer.append(chunk)
                         if (
                             len(emg_buffer) > max_chunk_number
@@ -640,8 +643,8 @@ class EMGProcessor:
                             else:
                                 self.output_results(res_time)
                         time_end = time.time()
-                        if time_end - time_start < (skipping_samples/self.sampling_frequency):
-                            time.sleep((skipping_samples/self.sampling_frequency) - (time_end - time_start))
+                        if time_end - time_start < (self.skip_in_samples/self.sampling_frequency):
+                            time.sleep((self.skip_in_samples/self.sampling_frequency) - (time_end - time_start))
 
             # plt.figure()
             # for finger in range(len(self.finger_indexes)):
@@ -655,14 +658,11 @@ class EMGProcessor:
         self.emg_interface.initialize_all()
         self.exo_controller = Exo_Control()
         self.exo_controller.initialize_all()
-        if self.use_muovi_pro:
-            skip_samples = 18
-        else:
-            skip_samples = 64
+
 
         if not self.load_trained_model:
             max_chunk_number = np.ceil(
-                max(self.num_previous_samples) / skip_samples
+                max(self.num_previous_samples) / self.skip_in_samples
             )  # calculate number of how many chunks we have to store till we delete old
         else:
             max_chunk_number = 15
@@ -835,7 +835,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Test",
+        patient_id="Michi_7_2_different_positions_control",
         movements=[
             "rest",
             "thumb",
@@ -853,23 +853,24 @@ if __name__ == "__main__":
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=40,
+        time_for_each_movement_recording=80,
         load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Test/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_7_2_different_positions_control/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
         use_control_stream=False,
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True,
-        epochs=200,
+        epochs=150,
         use_dtw=False,
         use_muovi_pro=True,
+        skip_in_ms=35,
 
     )
     emg_processor.run()

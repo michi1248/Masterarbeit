@@ -17,6 +17,7 @@ class ChannelExtraction:
         use_gaussian_filter=False,
         use_muovi_pro=False,
         use_spatial_filter=False,
+        skip_in_samples=None,
     ):
         """
 
@@ -59,7 +60,8 @@ class ChannelExtraction:
         self.closest_mu = 0
         self.use_gaussian_filter = use_gaussian_filter
         if self.use_gaussian_filter:
-            self.gauss_filter = helpers.create_gaussian_filter(size_filter=5)
+            self.gauss_filter = helpers.create_gaussian_filter(size_filter=3)
+        self.skip_in_samples = skip_in_samples
 
     def make_heatmap_emg(self, frame):
         """
@@ -135,13 +137,11 @@ class ChannelExtraction:
         """
         # samples = all sample values when using all samples with self.frame_duration in between
         if self.use_muovipro:
-            self.samples =[i for i in range(0, self.sample_length, 18)]
+            self.samples =[i for i in range(0, self.sample_length, self.skip_in_samples,)]
 
         else:
-            self.samples =[i for i in range(0, self.sample_length, 64)]
-        self.samples = [
-            element for element in self.samples if element <= len(self.ref_data)
-        ]
+            self.samples =[i for i in range(0, self.sample_length, self.skip_in_samples,)]
+
         # make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
         num_rows, num_cols,_ = self.emg_data[self.movement_name].shape
         self.heatmaps_flex = np.zeros((num_rows, num_cols))
@@ -172,10 +172,10 @@ class ChannelExtraction:
     def get_channels(self):
         # samples = all sample values when using all samples with self.frame_duration in between
         if self.use_muovipro:
-            self.samples =[i for i in range(0, self.sample_length, 18)]
+            self.samples =[i for i in range(0, self.sample_length,self.skip_in_samples,)]
 
         else:
-            self.samples =[i for i in range(0, self.sample_length, 64)]
+            self.samples =[i for i in range(0, self.sample_length, self.skip_in_samples,)]
         self.samples = [
             element for element in self.samples if element <= len(self.ref_data)
         ]
@@ -251,17 +251,17 @@ class ChannelExtraction:
         return channels_flexion, channels_extension
 
 
-if __name__ == "__main__":
-    movement_list = [
-        "thumb_slow",
-        "thumb_fast",
-        "index_slow",
-        "index_fast",
-    ]
-    important_channels = []
-    for movement in tqdm.tqdm(movement_list):
-        extractor = ChannelExtraction(movement, r"D:\Lab\data\extracted\Sub2")
-        channels = extractor.get_channels()
-        for channel in channels:
-            if channel not in important_channels:
-                important_channels.append(channel)
+# if __name__ == "__main__":
+#     movement_list = [
+#         "thumb_slow",
+#         "thumb_fast",
+#         "index_slow",
+#         "index_fast",
+#     ]
+#     important_channels = []
+#     for movement in tqdm.tqdm(movement_list):
+#         extractor = ChannelExtraction(movement, r"D:\Lab\data\extracted\Sub2")
+#         channels = extractor.get_channels()
+#         for channel in channels:
+#             if channel not in important_channels:
+#                 important_channels.append(channel)
