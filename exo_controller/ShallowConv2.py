@@ -33,6 +33,7 @@ class ShallowConvNetWithAttention(nn.Module):
         self.use_muovi_pro = use_muovi_pro
         # self.criterion = nn.HuberLoss()
         self.criterion = nn.L1Loss()
+        # self.criterion = nn.MSELoss()
 
         if self.use_difference_heatmap:
             # Global Activity Path

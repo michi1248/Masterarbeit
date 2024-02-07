@@ -697,6 +697,7 @@ class EMGProcessor:
                 emg_to_use = data[:, :,
                              (data.shape[2] - 1) - self.window_size_in_samples: -1
                              ]
+                # emg_to_use = np.subtract(emg_to_use,self.mean_rest)
             if self.use_difference_heatmap:
                 # data for difference heatmap
                 if ((data.shape[2] - (self.window_size_in_samples * 2.5)) < 0):
@@ -835,7 +836,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_7_2_different_positions_control",
+        patient_id="Michi_7_2_same_positions",
         movements=[
             "rest",
             "thumb",
@@ -853,24 +854,24 @@ if __name__ == "__main__":
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=80,
-        load_trained_model=False,
+        time_for_each_movement_recording=40,
+        load_trained_model=True,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_7_2_different_positions_control/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_7_2_same_positions/",  # False
         window_size=150,
-        scaling_method="Min_Max_Scaling_over_whole_data",
+        scaling_method="Robust_Scaling",
         only_record_data=False,
         use_control_stream=False,
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation = True,
-        epochs=150,
+        epochs=20,
         use_dtw=False,
         use_muovi_pro=True,
-        skip_in_ms=35,
+        skip_in_ms=25,
 
     )
     emg_processor.run()
