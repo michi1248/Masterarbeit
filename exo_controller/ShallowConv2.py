@@ -281,6 +281,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after fc1
                 spatial_path = self.fc2(spatial_path)
 
+                heatmap1_only_channels = F.dropout(heatmap1_only_channels, p=self.dropout_rate, training=self.training)  # Dropout
                 channel_wise_spatial_path = self.fc_all1(heatmap1_only_channels)
 
                 gobal_path = global_path.view(global_path.size(0), -1)

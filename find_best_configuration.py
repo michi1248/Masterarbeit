@@ -86,7 +86,7 @@ class EMGProcessor:
             self.sampling_frequency = 2048
             self.skip_in_samples = int((skip_in_ms / 1000) * self.sampling_frequency)
 
-
+        self.sample_length_bandpass_buffer = int((1 / 10) * self.sampling_frequency)
         self.mean_rest = None
         self.model = None
         self.exo_controller = None
@@ -298,6 +298,7 @@ class EMGProcessor:
             use_spatial_filter=self.use_spatial_filter,
             use_muovi_pro=self.use_muovi_pro,
             skip_in_samples=self.skip_in_samples,
+            use_bandpass_filter=self.use_bandpass_filter,
 
         )
 
@@ -321,7 +322,7 @@ class EMGProcessor:
 
         #shape should be grid
         if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data.copy(), ref_data.copy(),use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter,frame_duration=self.window_size,skip_in_samples=self.skip_in_samples)
+            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data.copy(), ref_data.copy(),use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter,frame_duration=self.window_size,skip_in_samples=self.skip_in_samples,use_bandpass_filter=self.use_bandpass_filter)
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
             self.normalizer.set_mean(mean=self.mean_rest.copy())
 
@@ -376,14 +377,11 @@ class EMGProcessor:
         predictions = []
         ground_truth = []
         # Main prediction loop
-        if self.use_muovi_pro:
-            max_chunk_number = np.ceil(
-                max(self.num_previous_samples) / self.skip_in_samples
-            )  # calculat
+        if self.window_size_in_samples > self.sample_length_bandpass_buffer:
+            max_chunk_number = np.ceil(self.window_size_in_samples / self.skip_in_samples)
         else:
-            max_chunk_number = np.ceil(
-                max(self.num_previous_samples) / self.skip_in_samples
-            )  # calculate number of how many chunks we have to store till we delete old
+            max_chunk_number = np.ceil(self.sample_length_bandpass_buffer / self.skip_in_samples)
+
         print("max_chunk_number: ", max_chunk_number)
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
@@ -422,11 +420,6 @@ class EMGProcessor:
         ref_data = self.remove_nan_values(ref_data)
         emg_data = self.remove_nan_values(emg_data)
 
-        if self.use_bandpass_filter:
-            for i in emg_data.keys():
-                emg_data[i] = self.filter.bandpass_filter_emg_data(emg_data[i], fs=self.sampling_frequency)
-
-
         for movement in ref_data.keys():
             if movement in self.movements:
                 ref_data_for_this_movement = ref_data[movement]
@@ -444,11 +437,14 @@ class EMGProcessor:
                             emg_buffer.pop(0)
                         data = np.concatenate(emg_buffer, axis=-1)
 
+                        if self.use_bandpass_filter:
+                            data = self.filter.bandpass_filter_grid_emg_data(data.copy(), fs=self.sampling_frequency)
+
                         if ((data.shape[2] - self.window_size_in_samples) < 0 ):
                             emg_to_use = data[:,:,:]
                         else:
                             emg_to_use = data[:,:,
-                                         (data.shape[2]-1) - self.window_size_in_samples: -1
+                                         (data.shape[2]) - self.window_size_in_samples: -1
                                          ]
                         if self.use_difference_heatmap:
                             # data for difference heatmap
@@ -456,7 +452,7 @@ class EMGProcessor:
                                 emg_to_use_difference = data[:,:,:]
                             else:
                                 emg_to_use_difference = data[:,:,
-                                                        (data.shape[2] - 1) - int(self.window_size_in_samples*2.5): -1
+                                                        (data.shape[2]) - int(self.window_size_in_samples*2.5): -1
                                                         ]
                         if self.use_spatial_filter:
                             emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
@@ -556,6 +552,10 @@ class EMGProcessor:
                                 ground_truth.append(control_ref_data)
                             else:
                                 self.output_results(res_time)
+        if np.isnan(predictions).any():
+            print("nan values in predictions")
+        if np.isnan(ground_truth).any():
+            print("nan values in ground truth")
         return predictions,ground_truth
 
 
@@ -620,7 +620,7 @@ if __name__ == "__main__":
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_different_movements_6_2",
+                    patient_id="Michi_7_2_different_positions",
                     movements=[
                         "rest",
                         "thumb",
@@ -645,7 +645,7 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_different_movements_6_2_control/",  # False
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_7_2_different_positions_control/",  # False
                     window_size=150,
                     scaling_method=method,
                     only_record_data=False,
@@ -750,5 +750,5 @@ if __name__ == "__main__":
 
                 train_name = emg_processor.patient_id.split("_")[-1]
                 test_name = emg_processor.use_recorded_data.split("_")[-1].split("/")[0]
-                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + "gauss_filtered.png")
+                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + "gauss_filtered_25ms_bandpass.png")
 

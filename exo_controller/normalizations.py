@@ -15,7 +15,8 @@ class Normalization:
         frame_duration=150,
         use_spatial_filter=False,
         use_muovi_pro = False,
-        skip_in_samples = None
+        skip_in_samples = None,
+        use_bandpass_filter = False,
     ):
         """
         :param movements: list of movements that should be used for normalization
@@ -48,7 +49,8 @@ class Normalization:
             self.sampling_frequency = 2048
         self.frame_duration = frame_duration
         self.use_spatial_filter = use_spatial_filter
-        if self.use_spatial_filter:
+        self.use_bandpass_filter = use_bandpass_filter
+        if self.use_spatial_filter or self.use_bandpass_filter:
             self.spatial_filter = Filters()
 
 
@@ -129,20 +131,14 @@ class Normalization:
             emg_data_one_movement = a[movement]#.transpose(1, 0, 2).reshape(64*len(self.grid_order), -1)
 
 
-            if (self.mean is not None) and (self.mean is not None):
-                # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
-                emg_data_one_movement = (
-                    self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
-                        emg_data_one_movement
-                    )
-                    # - np.reshape(self.mean, (self.mean.shape[0], self.mean.shape[1], 1))
+
+            emg_data_one_movement = (
+                self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+                    emg_data_one_movement
                 )
-            else:
-                emg_data_one_movement = (
-                    self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
-                        emg_data_one_movement
-                    )
-                )
+            )
+            if self.use_bandpass_filter:
+                emg_data_one_movement = self.spatial_filter.bandpass_filter_emg_data(emg_data_one_movement, fs=self.sampling_frequency)
 
             # only take important channels and set all others to 0s
             if np.ndim(self.important_channels) == 2:

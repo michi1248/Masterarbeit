@@ -74,6 +74,7 @@ class EMGProcessor:
         self.use_shallow_conv = use_shallow_conv
         self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
         self.retrain = False
+        self.retrain_movements = None
         self.retrain_counter = 0
         self.epochs = epochs
         self.use_dtw = use_dtw
@@ -83,6 +84,7 @@ class EMGProcessor:
         else:
             self.sampling_frequency = 2048
         self.skip_in_samples = int((skip_in_ms / 1000) * self.sampling_frequency)
+        self.sample_length_bandpass_buffer = int((1/10) * self.sampling_frequency)
 
         self.mean_rest = None
         self.model = None
@@ -366,6 +368,7 @@ class EMGProcessor:
             use_spatial_filter=self.use_spatial_filter,
             use_muovi_pro=self.use_muovi_pro,
             skip_in_samples=self.skip_in_samples,
+            use_bandpass_filter=self.use_bandpass_filter,
         )
 
         #shape should be 320 x #samples
@@ -382,7 +385,7 @@ class EMGProcessor:
 
         #shape should be grid
         if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data, ref_data,use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter,frame_duration=self.window_size,skip_in_samples=self.skip_in_samples)
+            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data.copy(), ref_data.copy(),use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter,frame_duration=self.window_size,skip_in_samples=self.skip_in_samples,use_bandpass_filter=self.use_bandpass_filter)
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
             self.normalizer.set_mean(mean=self.mean_rest)
 
@@ -444,14 +447,14 @@ class EMGProcessor:
         self.exo_controller = Exo_Control()
         self.exo_controller.initialize_all()
         # Main prediction loop
-        if self.use_muovi_pro:
-            max_chunk_number = np.ceil(
-                max(self.num_previous_samples) / self.skip_in_samples
-            )  # calculat
+
+
+        if self.window_size_in_samples > self.sample_length_bandpass_buffer:
+            max_chunk_number = np.ceil(self.window_size_in_samples / self.skip_in_samples)
         else:
-            max_chunk_number = np.ceil(
-                max(self.num_previous_samples) / self.skip_in_samples
-            )  # calculate number of how many chunks we have to store till we delete old
+            max_chunk_number = np.ceil(self.sample_length_bandpass_buffer / self.skip_in_samples)
+
+
 
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
         for i in emg_data.keys():
@@ -485,12 +488,6 @@ class EMGProcessor:
             emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
                 emg_data[i]
             )
-
-
-        if self.use_bandpass_filter:
-            for i in emg_data.keys():
-                emg_data[i] = self.filter.bandpass_filter_emg_data(emg_data[i], fs=self.sampling_frequency)
-
 
         for movement in ref_data.keys():
             buffer_pred = []
@@ -528,11 +525,13 @@ class EMGProcessor:
                         ):  # check if now too many sampels are in the buffer and i can delete old one
                             emg_buffer.pop(0)
                         data = np.concatenate(emg_buffer, axis=-1)
+                        if self.use_bandpass_filter:
+                            data = self.filter.bandpass_filter_grid_emg_data(data.copy(), fs=self.sampling_frequency)
                         if ((data.shape[2] - self.window_size_in_samples) < 0):
                             emg_to_use = data[:,:,:]
                         else:
                             emg_to_use = data[:,:,
-                                         (data.shape[2] - 1) - self.window_size_in_samples: -1
+                                         (data.shape[2]) - self.window_size_in_samples: -1
                                          ]
                         if self.use_difference_heatmap:
                             # data for difference heatmap
@@ -540,7 +539,7 @@ class EMGProcessor:
                                 emg_to_use_difference = data[:,:,:]
                             else:
                                 emg_to_use_difference = data[:,:,
-                                                        (data.shape[2] - 1) - self.window_size_in_samples: -1
+                                                        (data.shape[2]) - self.window_size_in_samples: -1
                                                         ]
 
                         if self.use_spatial_filter:
@@ -660,17 +659,17 @@ class EMGProcessor:
         self.exo_controller.initialize_all()
 
 
-        if not self.load_trained_model:
-            max_chunk_number = np.ceil(
-                max(self.num_previous_samples) / self.skip_in_samples
-            )  # calculate number of how many chunks we have to store till we delete old
+        if self.window_size_in_samples > self.sample_length_bandpass_buffer:
+            max_chunk_number = np.ceil(self.window_size_in_samples / self.skip_in_samples)
         else:
-            max_chunk_number = 15
-            self.window_size_in_samples = int((self.window_size / 1000) * self.sampling_frequency)
+            max_chunk_number = np.ceil(self.sample_length_bandpass_buffer / self.skip_in_samples)
+
+        self.window_size_in_samples = int((self.window_size / 1000) * self.sampling_frequency)
         emg_buffer = []
 
 
         self.retrain = False
+        self.retrain_movements = None
         retrain_input_thread = threading.Thread(target=self.check_input)
         retrain_input_thread.start()
 
@@ -687,15 +686,16 @@ class EMGProcessor:
             ):  # check if now too many sampels are in the buffer and i can delete old one
                 emg_buffer.pop(0)
             data = np.concatenate(emg_buffer, axis=-1)
-            if self.use_bandpass_filter:
-                data = self.filter.bandpass_filter_emg_data(data, fs=self.sampling_frequency)
+
             data = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(data)
+            if self.use_bandpass_filter:
+                data = self.filter.bandpass_filter_grid_emg_data(data.copy(), fs=self.sampling_frequency)
 
             if ((data.shape[2] - self.window_size_in_samples) < 0):
                 emg_to_use = data[:, :, :]
             else:
                 emg_to_use = data[:, :,
-                             (data.shape[2] - 1) - self.window_size_in_samples: -1
+                             (data.shape[2] ) - self.window_size_in_samples: -1
                              ]
                 # emg_to_use = np.subtract(emg_to_use,self.mean_rest)
             if self.use_difference_heatmap:
@@ -704,7 +704,7 @@ class EMGProcessor:
                     emg_to_use_difference = data[:, :, :]
                 else:
                     emg_to_use_difference = data[:, :,
-                                            (data.shape[2] - 1) - int(self.window_size_in_samples*2.5): -1
+                                            (data.shape[2]) - int(self.window_size_in_samples*2.5): -1
                                             ]
 
             if self.use_spatial_filter:
@@ -798,12 +798,25 @@ class EMGProcessor:
 
     def check_input(self):
         while True:
-            user_input = input("Press r for retrain!! ")
+            user_input = input("Press r for retrain or h for help!! ")
             if user_input == "r":  # replace 'certain_input' with your specific condition
                 print("Retraining will be started")
                 # Do something when the specific input is received
                 self.retrain = True
                 break
+            elif user_input == "h":
+                print("following options:")
+                print("r: retrain the model for every movement")
+                for i in range(len(self.movements)):
+                    print(f"{i}: retrain only movement {self.movements[i]}")
+            else:
+                for i in range(len(self.movements)):
+                    if user_input == str(i):
+                        print(f"Retraining will be started for movement {self.movements[i]}")
+                        self.retrain = True
+                        self.retrain_movements = [self.movements[i]]
+                        break
+
 
 
     def retrain_model(self):
@@ -836,7 +849,7 @@ if __name__ == "__main__":
     # "Min_Max_Scaling_all_channels" = min max scaling with max/min is choosen over all channels
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_7_2_same_positions",
+        patient_id="Test",
         movements=[
             "rest",
             "thumb",
@@ -854,24 +867,24 @@ if __name__ == "__main__":
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=40,
-        load_trained_model=True,
+        time_for_each_movement_recording=20,
+        load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_7_2_same_positions/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Test/",  # False
         window_size=150,
         scaling_method="Robust_Scaling",
         only_record_data=False,
         use_control_stream=False,
-        use_shallow_conv=True,
+        use_shallow_conv = True,
         use_virtual_hand_interface_for_coord_generation = True,
-        epochs=20,
+        epochs=30,
         use_dtw=False,
         use_muovi_pro=True,
-        skip_in_ms=25,
+        skip_in_ms=20,
 
     )
     emg_processor.run()

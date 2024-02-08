@@ -18,6 +18,7 @@ class ChannelExtraction:
         use_muovi_pro=False,
         use_spatial_filter=False,
         skip_in_samples=None,
+        use_bandpass_filter=False,
     ):
         """
 
@@ -62,6 +63,11 @@ class ChannelExtraction:
         if self.use_gaussian_filter:
             self.gauss_filter = helpers.create_gaussian_filter(size_filter=3)
         self.skip_in_samples = skip_in_samples
+        self.use_bandpass_filter = use_bandpass_filter
+        if self.use_bandpass_filter:
+            self.emg_data[self.movement_name] = self.filter.bandpass_filter_grid_emg_data(
+                self.emg_data[self.movement_name], fs = self.sampling_frequency)
+
 
     def make_heatmap_emg(self, frame):
         """
