@@ -83,6 +83,7 @@ class EMGProcessor:
             self.sampling_frequency = 2000
         else:
             self.sampling_frequency = 2048
+        self.window_size_in_samples = (self.window_size/1000)*self.sampling_frequency
         self.skip_in_samples = int((skip_in_ms / 1000) * self.sampling_frequency)
         self.sample_length_bandpass_buffer = int((1/10) * self.sampling_frequency)
 
@@ -147,21 +148,38 @@ class EMGProcessor:
             self.gauss_filter = self.filter.create_gaussian_filter(size_filter=3)
 
     def run_video_data_generation(self):
-        # Run video data generation
-        patient = Realtime_Datagenerator(
-            debug=False,
-            patient_id=self.patient_id,
-            sampling_frequency_emg=2048,
-            recording_time=self.time_for_each_movement_recording,
-            movements = self.movements.copy(),
-            grid_order = self.grid_order,
-            use_virtual_hand_interface_for_coord_generation = self.use_virtual_hand_interface_for_coord_generation,
-            retrain = self.retrain,
-            retrain_number = self.retrain_counter,
-            finger_indexes = self.finger_indexes,
-            use_muovi_pro = self.use_muovi_pro
-        )
-        patient.run_parallel()
+        if self.retrain_movements is None:
+            # Run video data generation
+            patient = Realtime_Datagenerator(
+                debug=False,
+                patient_id=self.patient_id,
+                sampling_frequency_emg=self.sampling_frequency,
+                recording_time=self.time_for_each_movement_recording,
+                movements = self.movements.copy(),
+                grid_order = self.grid_order,
+                use_virtual_hand_interface_for_coord_generation = self.use_virtual_hand_interface_for_coord_generation,
+                retrain = self.retrain,
+                retrain_number = self.retrain_counter,
+                finger_indexes = self.finger_indexes,
+                use_muovi_pro = self.use_muovi_pro
+            )
+            patient.run_parallel()
+        else:
+            patient = Realtime_Datagenerator(
+                debug=False,
+                patient_id=self.patient_id,
+                sampling_frequency_emg=self.sampling_frequency,
+                recording_time=self.time_for_each_movement_recording,
+                movements=self.retrain_movements.copy(),
+                grid_order=self.grid_order,
+                use_virtual_hand_interface_for_coord_generation=self.use_virtual_hand_interface_for_coord_generation,
+                retrain=self.retrain,
+                retrain_number=self.retrain_counter,
+                finger_indexes=self.finger_indexes,
+                use_muovi_pro=self.use_muovi_pro
+            )
+            patient.run_parallel()
+
 
     def remove_nan_values(self,data):
         """
@@ -182,25 +200,24 @@ class EMGProcessor:
 
         if self.retrain:
             self.run_video_data_generation()
-
             resulting_file = f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data_retrain{self.retrain_counter}.pkl"
             emg_data = load_pickle_file(resulting_file)
-            print("shape emg data: " ,emg_data["rest"].shape)
+            # print("shape emg data: " ,emg_data["rest"].shape)
             ref_data = load_pickle_file(
                 f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/3d_data_retrain{self.retrain_counter}.pkl"
             )
             self.retrain_counter += 1
-            print("shape ref data: ", ref_data["rest"].shape)
+            # print("shape ref data: ", ref_data["rest"].shape)
 
 
         else:
             resulting_file = f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl"
             emg_data = load_pickle_file(resulting_file)
-            print("shape emg data: ", emg_data["rest"].shape)
+            # print("shape emg data: ", emg_data["rest"].shape)
             ref_data = load_pickle_file(
                 f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/3d_data.pkl"
             )
-            print("shape ref data: ", ref_data["rest"].shape)
+            # print("shape ref data: ", ref_data["rest"].shape)
 
         if self.use_dtw:
             for movement in ref_data.keys():
@@ -360,49 +377,61 @@ class EMGProcessor:
             else:
                 self.channels = range(len(self.grid_order) * 64)
 
-        self.normalizer = normalizations.Normalization(
-            method=self.scaling_method,
-            grid_order=self.grid_order,
-            important_channels=self.channels,
-            frame_duration=self.window_size,
-            use_spatial_filter=self.use_spatial_filter,
-            use_muovi_pro=self.use_muovi_pro,
-            skip_in_samples=self.skip_in_samples,
-            use_bandpass_filter=self.use_bandpass_filter,
-        )
+
+        if self.retrain_movements is None:
+            self.normalizer = normalizations.Normalization(
+                method=self.scaling_method,
+                grid_order=self.grid_order,
+                important_channels=self.channels,
+                frame_duration=self.window_size,
+                use_spatial_filter=self.use_spatial_filter,
+                use_muovi_pro=self.use_muovi_pro,
+                skip_in_samples=self.skip_in_samples,
+                use_bandpass_filter=self.use_bandpass_filter,
+            )
 
         #shape should be 320 x #samples
         #ref_data = resample_reference_data(ref_data, emg_data)
         ref_data = self.remove_nan_values(ref_data)
         emg_data = self.remove_nan_values(emg_data)
-        print("length of emg data: ", len(emg_data["rest"][0]))
-        print("length of ref data: ", ref_data["rest"].shape[0])
+        # print("length of emg data: ", len(emg_data["rest"][0]))
+        # print("length of ref data: ", ref_data["rest"].shape[0])
 
         for i in emg_data.keys():
             emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(emg_data[i])
 
 
+        if self.retrain_movements is None:
+            #shape should be grid
+            if self.use_mean_subtraction:
+                channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data.copy(), ref_data.copy(),use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter,frame_duration=self.window_size,skip_in_samples=self.skip_in_samples,use_bandpass_filter=self.use_bandpass_filter)
+                self.mean_rest, _, _ = channel_extractor.get_heatmaps()
+                self.normalizer.set_mean(mean=self.mean_rest)
 
-        #shape should be grid
-        if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data.copy(), ref_data.copy(),use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter,frame_duration=self.window_size,skip_in_samples=self.skip_in_samples,use_bandpass_filter=self.use_bandpass_filter)
-            self.mean_rest, _, _ = channel_extractor.get_heatmaps()
-            self.normalizer.set_mean(mean=self.mean_rest)
+        if self.retrain_movements is None:
+            # add gaussian noise to the ground truth data so that the model can learn to deal with noise
+            for movement in self.movements:
+                # Generate Gaussian noise for each column
+                for finger in range(len(self.finger_indexes)):
+                    std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
+                    noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
+                    ref_data[movement][:, finger] = np.add(ref_data[movement][:, finger], noise_i)
+        else:
+            for movement in self.retrain_movements:
+                # Generate Gaussian noise for each column
+                for finger in range(len(self.finger_indexes)):
+                    std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
+                    noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
+                    ref_data[movement][:, finger] = np.add(ref_data[movement][:, finger], noise_i)
 
-        # add gaussian noise to the ground truth data so that the model can learn to deal with noise
-        for movement in self.movements:
-            # Generate Gaussian noise for each column
-            for finger in range(len(self.finger_indexes)):
-                std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
-                noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
-                ref_data[movement][:, finger] = np.add(ref_data[movement][:, finger], noise_i)
 
-        # Calculate normalization values
-        self.normalizer.get_all_emg_data(
-            path_to_data=f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl",
-            movements=self.movements.copy(),
-        )
-        self.normalizer.calculate_normalization_values()
+        if self.retrain_movements is None:
+            # Calculate normalization values
+            self.normalizer.get_all_emg_data(
+                path_to_data=f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl",
+                movements=self.movements.copy(),
+            )
+            self.normalizer.calculate_normalization_values()
 
 
     def format_for_exo(self, results,control_results=None):
@@ -832,7 +861,24 @@ class EMGProcessor:
         emg_data, ref_data = self.load_data()
         if self.only_record_data:
             return
+        if not self.retrain:
+            self.old_emg_data = emg_data
+            self.old_ref_data = ref_data
+
         self.process_data(emg_data, ref_data)
+
+        if self.retrain_movements is not None:
+            from sklearn.utils import shuffle
+            length = emg_data[self.retrain_movements[0]].shape[1]
+            for movement in self.movements:
+                self.old_emg_data[movement] = self.old_emg_data[movement][:,:length]
+                self.old_ref_data[movement] = self.old_ref_data[movement][:length,:]
+            for movement in self.retrain_movements:
+                self.old_emg_data[movement] = emg_data[movement]
+                self.old_ref_data[movement] = ref_data[movement]
+                emg_data = self.old_emg_data
+                ref_data = self.old_ref_data
+
 
         model = self.train_model(emg_data, ref_data)
         # if self.use_recorded_data:
@@ -854,7 +900,7 @@ if __name__ == "__main__":
             "rest",
             "thumb",
             "index",
-            # "2pinch",
+            "2pinch",
             # "3pinch",
             "middle",
             "ring",
@@ -868,23 +914,23 @@ if __name__ == "__main__":
         output_on_exo=True,
         filter_output=True,
         time_for_each_movement_recording=20,
-        load_trained_model=False,
+        load_trained_model=True,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Test/",  # False
+        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Test/",  # False
         window_size=150,
         scaling_method="Robust_Scaling",
         only_record_data=False,
         use_control_stream=False,
         use_shallow_conv = True,
         use_virtual_hand_interface_for_coord_generation = True,
-        epochs=30,
+        epochs=100,
         use_dtw=False,
         use_muovi_pro=True,
-        skip_in_ms=20,
+        skip_in_ms=25,
 
     )
     emg_processor.run()

@@ -17,6 +17,7 @@ from exo_controller.spatial_filters import Filters
 from exo_controller.DTW import align_signals_dtw, make_rms_for_dtw
 #from exo_controller.ShallowConv import ShallowConvNetWithAttention
 from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
+from exo_controller.butterworth import Bandpass
 from exo_controller.muovipro import *
 import keyboard
 
@@ -420,6 +421,13 @@ class EMGProcessor:
         ref_data = self.remove_nan_values(ref_data)
         emg_data = self.remove_nan_values(emg_data)
 
+        if self.use_bandpass_filter:
+            instances_bandpass_for_channel = []
+            for i in range(len(self.channels)):
+                instances_bandpass_for_channel.append(Bandpass(10, 500, self.sampling_frequency))
+                instances_bandpass_for_channel = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(np.array(instances_bandpass_for_channel))
+
+
         for movement in ref_data.keys():
             if movement in self.movements:
                 ref_data_for_this_movement = ref_data[movement]
@@ -438,7 +446,9 @@ class EMGProcessor:
                         data = np.concatenate(emg_buffer, axis=-1)
 
                         if self.use_bandpass_filter:
-                            data = self.filter.bandpass_filter_grid_emg_data(data.copy(), fs=self.sampling_frequency)
+                            for row in range(data.shape[0]):
+                                for col in range(data.shape[1]):
+                                    data[row, col] = instances_bandpass_for_channel[row,col].filter_channel(data[row, col], multiple_samples=True)
 
                         if ((data.shape[2] - self.window_size_in_samples) < 0 ):
                             emg_to_use = data[:,:,:]

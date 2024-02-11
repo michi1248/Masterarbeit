@@ -393,8 +393,8 @@ class Realtime_Datagenerator:
                     "trainings_data/resulting_trainings_data/subject_"
                     + str(self.patient_id)
                 )
-            print("number of movements: ", len(kinematics_data))
-            print("number of fingers: ", kinematics_data["rest"].shape[1])
+            # print("number of movements: ", len(kinematics_data))
+            # print("number of fingers: ", kinematics_data["rest"].shape[1])
             for movement_name, data in kinematics_data.items():
                 if data.shape[0] > emg_data[movement_name].shape[1]:
                     kinematics_data[movement_name] = data[:emg_data[movement_name].shape[1],:]

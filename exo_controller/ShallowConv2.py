@@ -26,7 +26,7 @@ class ShallowConvNetWithAttention(nn.Module):
         self.best_time_index = best_time_tree
         self.grid_aranger = grid_aranger
         # Dropout rate
-        self.dropout_rate = 0.2
+        self.dropout_rate = 0.3
         self.retrain = retrain
         self.retrain_number = retrain_number
         self.batch_size = 128
@@ -111,7 +111,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 self.in1 = nn.InstanceNorm2d(32 )
                 self.in2 = nn.InstanceNorm2d(16)
                 self.fc2 = nn.Linear(60, len(self.finger_indexes))
-                self.merge_layer = nn.Linear( 2*len(self.finger_indexes) +1, len(self.finger_indexes))
+                self.merge_layer = nn.Linear( len(self.finger_indexes) +1, len(self.finger_indexes))
 
         # Dropout rate
         self.dropout_rate = 0.2
@@ -281,12 +281,12 @@ class ShallowConvNetWithAttention(nn.Module):
                 spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout after fc1
                 spatial_path = self.fc2(spatial_path)
 
-                heatmap1_only_channels = F.dropout(heatmap1_only_channels, p=self.dropout_rate, training=self.training)  # Dropout
-                channel_wise_spatial_path = self.fc_all1(heatmap1_only_channels)
+                # heatmap1_only_channels = F.dropout(heatmap1_only_channels, p=self.dropout_rate, training=self.training)  # Dropout
+                # channel_wise_spatial_path = self.fc_all1(heatmap1_only_channels)
 
                 gobal_path = global_path.view(global_path.size(0), -1)
-                channel_wise_spatial_path = channel_wise_spatial_path.view(channel_wise_spatial_path.size(0),-1)
-                merged_spatial_path = torch.cat((spatial_path, gobal_path,channel_wise_spatial_path), dim=1)
+                # channel_wise_spatial_path = channel_wise_spatial_path.view(channel_wise_spatial_path.size(0),-1)
+                merged_spatial_path = torch.cat((spatial_path, gobal_path), dim=1)
                 merged_spatial_path = self.merge_layer(merged_spatial_path)
 
 

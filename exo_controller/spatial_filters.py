@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.signal import fftconvolve
 from exo_controller import helpers
-from scipy.signal import butter, lfilter,iirnotch, sosfilt, filtfilt
-from concurrent.futures import ProcessPoolExecutor
+from scipy.signal import butter, lfilter,iirnotch
+
 
 
 class Filters:
@@ -26,7 +26,6 @@ class Filters:
 
     def spatial_filtering(self, siganl_to_be_filtered, filter_name="NDD", mode="same"):
         """
-
         :param siganl_to_be_filtered: in shape (rows,cols,length emg signal) = grid
         :param filter_name: name of the filter to be applied i.e identity, LSD, LDD, TSD, TDD, NDD, IB2, IR
         :return: the filtered grid
@@ -110,11 +109,8 @@ class Filters:
         low = lowcut / nyq
         high = highcut / nyq
         b_notch, a_notch  = iirnotch(50, 30, fs)
-
-        b, a = butter(order, low, btype="high",fs=fs,analog=False)
-
-
-        #y = lfilter(b_notch, a_notch , data)
+        b, a = butter(order, [low,high], btype="band",fs=fs,analog=False)
+        y = lfilter(b_notch, a_notch , data)
         y = lfilter(b, a, data)
         return y
 
@@ -126,6 +122,7 @@ class Filters:
         :return:
         """
         data = np.copy(emg_data)
+        channel_filter_instances = []
         for channel in range(emg_data.shape[0]):
             data[channel] = self.bandpass_filter(
                 emg_data[channel], 10, 500, fs, order=5
