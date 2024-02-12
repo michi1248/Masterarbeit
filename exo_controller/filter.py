@@ -9,14 +9,13 @@ class MichaelFilter:
         output_smoothing=True,
         additinal_filter=True,
         only_additional_filter=False,
-        weight_prediction_impact_on_regression=0.75, # the lower the more smooth but less reactive ( 0.75 is good)
-        weight_additional_filter=1, # the higher the smoother but delayed / less reactive (3 is good)
+        weight_prediction_impact_on_regression=0.75,  # the lower the more smooth but less reactive ( 0.75 is good)
+        weight_additional_filter=1,  # the higher the smoother but delayed / less reactive (3 is good)
         degree_regressions=1,
-        buffer_length=5, # (5 is good)
+        buffer_length=5,  # (5 is good)
         skip_predictions=1,
         num_fingers=2,
     ):
-
         self.last_val = []
         self.last_avg = []
         self.output_smoothing = output_smoothing
@@ -40,25 +39,28 @@ class MichaelFilter:
         # num fingers is how many fingers we want to predict i.e how many values one prediction has
         self.num_fingers = num_fingers
 
-    def parabola(self,x,a):
-        return a * x ** 2
+    def parabola(self, x, a):
+        return a * x**2
 
-    def modified_relu(self,x):
+    def modified_relu(self, x):
         # Segment 1: y = 0 for x <= 0.1
         # Segment 2: y increases with a slope of 1 from x = 0.1 until y = 1
         # Segment 3: y = 1 for the rest
-        a1 = 0.005 / (0.05 ** 2) # value for parabola       y_value / (x_value ** 2)      -> when i want the parabola to be 0.02 at 0.02 then y and x value shoudl be 0.02
-        y = np.where(x <= 0.05,self.parabola(x,a1), np.where(x < 1, x , 1))
+        a1 = 0.005 / (
+            0.05**2
+        )  # value for parabola       y_value / (x_value ** 2)      -> when i want the parabola to be 0.02 at 0.02 then y and x value shoudl be 0.02
+        y = np.where(x <= 0.05, self.parabola(x, a1), np.where(x < 1, x, 1))
         return y
+
     def normalize(self, matrix):
         return matrix / (np.linalg.norm(matrix) + 1e-8)
+
     # TODO hier muss eigentlihc nicht normalisiert werden zwischen allen änderungen für jeden finger sondern
-    #ich übegebe zusätzlich als argument (prediction - self.last_avg[-2]) und dann für jeden finger max und min norm damit machen
+    # ich übegebe zusätzlich als argument (prediction - self.last_avg[-2]) und dann für jeden finger max und min norm damit machen
     # bzw   nicht prdiction- self.last_avg[-2] überg3ben sondern max = max von den beiden, min ist min von den beiden für jeden finger
     # auserdem muss sqrt entfernen in additional filter
 
     def filter(self, prediction):
-
         self.last_avg.append(prediction)
         self.last_val.append(prediction)
 
@@ -68,7 +70,7 @@ class MichaelFilter:
         if self.only_additional_filter:
             new = self.last_avg[-2] + (
                 self.modified_relu(np.abs(prediction - self.last_avg[-2]))
-                / (self.weight_additional_filter )
+                / (self.weight_additional_filter)
             ) * (prediction - self.last_avg[-2])
             self.last_avg[-1] = new
             prediction = new
@@ -79,8 +81,8 @@ class MichaelFilter:
 
         if 1 < len(self.last_avg) < self.buffer_length:
             new = self.last_avg[-2] + (
-                    self.modified_relu(np.abs(prediction - self.last_avg[-2]))
-                    / (self.weight_additional_filter)
+                self.modified_relu(np.abs(prediction - self.last_avg[-2]))
+                / (self.weight_additional_filter)
             ) * (prediction - self.last_avg[-2])
             self.last_avg[-1] = new
             prediction = new
@@ -139,8 +141,7 @@ class MichaelFilter:
 
         if self.additinal_filter == True:
             new = self.last_avg[-2] + (
-                self.modified_relu(np.abs(self.last_avg[-1] - self.last_avg[-2])
-                )
+                self.modified_relu(np.abs(self.last_avg[-1] - self.last_avg[-2]))
                 / self.weight_additional_filter
             ) * (self.last_avg[-1] - self.last_avg[-2])
             self.last_avg[-1] = new

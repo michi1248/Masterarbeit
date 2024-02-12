@@ -19,9 +19,9 @@ class Muoviprobe_Interface:
         self.frame_len = 18
         self.bytes_in_sample = 2
         self.BufferSize = 38 * self.frame_len * self.bytes_in_sample
-        self.emg_indices = np.arange(0,32)
+        self.emg_indices = np.arange(0, 32)
 
-    def _send_configuration_to_device(self) :
+    def _send_configuration_to_device(self):
         try:
             command_bytes = self._integer_to_bytes(self.command)
             success = self.emgSocket.send(command_bytes)
@@ -34,14 +34,13 @@ class Muoviprobe_Interface:
     def _integer_to_bytes(self, command: int) -> bytes:
         return int(command).to_bytes(1, byteorder="big")
 
-
-    def get_start_command(self) :
+    def get_start_command(self):
         self.command = 1 << 3
         self.command += 1 << 1
         self.command += 1
         return self.command
 
-    def get_stop_command(self) :
+    def get_stop_command(self):
         self.command = 1 << 3
         self.command += 1 << 1
         self.command += 0
@@ -54,7 +53,7 @@ class Muoviprobe_Interface:
 
         self.connected = False
         self.emgSocket = None
-        self.tcp_ip =  "0.0.0.0" #"192.168.14.1"
+        self.tcp_ip = "0.0.0.0"  # "192.168.14.1"
         self.tcp_port = 54321
         self.sampling_frequency = 2000
         # Wait until socket connects to server
@@ -77,9 +76,6 @@ class Muoviprobe_Interface:
             self.get_start_command()
             self._send_configuration_to_device()
 
-
-
-
     def initialize_all(self):
         """
 
@@ -90,13 +86,11 @@ class Muoviprobe_Interface:
 
         self.initialize_emg_socket()
 
-
     def clear_socket_buffer(self):
         # Make the socket non-blocking
         self.emgSocket.setblocking(0)
         while True:
             try:
-
                 data = self.emgSocket.recv(self.BufferSize)  # Non-blocking receive
                 if not data:
                     self.emgSocket.setblocking(1)
@@ -121,7 +115,7 @@ class Muoviprobe_Interface:
             print("error while receiving emg chunkg")
             return None
 
-    def _bytes_to_integers(self,data) :
+    def _bytes_to_integers(self, data):
         channel_values = []
         # Separate channels from byte-string. One channel has
         # "bytes_in_sample" many bytes in it.
@@ -136,7 +130,7 @@ class Muoviprobe_Interface:
 
         return np.array(channel_values)
 
-    def _decode_int16(self, bytes_value) :
+    def _decode_int16(self, bytes_value):
         value = None
         # Combine 2 bytes to a 16 bit integer value
         value = bytes_value[0] * 256 + bytes_value[1]
@@ -164,15 +158,13 @@ class Muoviprobe_Interface:
         self.emgSocket.send(msg.encode("utf-8"))
 
 
-
-
 if __name__ == "__main__":
     # pass
     emg_interface = Muoviprobe_Interface()
     emg_interface.initialize_all()
-    #emg_interface.clear_socket_buffer()
+    # emg_interface.clear_socket_buffer()
     while True:
-        #emg_interface.clear_socket_buffer()
+        # emg_interface.clear_socket_buffer()
         emg_chunk = emg_interface.get_EMG_chunk()
         print(emg_chunk)
         time.sleep(0.1)

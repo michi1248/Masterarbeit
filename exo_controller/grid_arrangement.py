@@ -6,15 +6,16 @@ class Grid_Arrangement:
         self.num_grids = len(channel_order)
         self.channel_order = channel_order  # which grid is placed on which quattrocento outlet [2,1,4,5,3] means outlet 2 is the first grid, besides is outlet 1 as second grid...
         self.use_muovi_pro = use_muovi_pro
+
     def make_grid(self):
         """
         creates the grid arrangement for the quattrocento it creates a self variable upper_grid and lower_grid if 5 grids are used otherwise only upper_grid , upper grid = 3 grids besides , lower grid = 2 besides, furthermore it uses the way how we used the outlets from the quattrocento to fit it to the grid positions
         :return:
         """
         if self.use_muovi_pro:
-            array = np.reshape(np.arange(1,17),(16,1))
-            array2 = np.reshape(np.arange(17,33),(16,1))
-            combined = np.concatenate((array,array2),axis=1).T
+            array = np.reshape(np.arange(1, 17), (16, 1))
+            array2 = np.reshape(np.arange(17, 33), (16, 1))
+            combined = np.concatenate((array, array2), axis=1).T
             self.upper_grids = combined
         else:
             if self.num_grids == 2:
@@ -123,7 +124,7 @@ class Grid_Arrangement:
         :return: upper_grid,lower_grid (for 5 grids) or upper_grid (for 3 grids)
         """
         if self.use_muovi_pro:
-            grid = np.zeros((2,16, min(len(row) for row in input)))
+            grid = np.zeros((2, 16, min(len(row) for row in input)))
             for row in range(input.shape[0]):
                 res_row, res_col = self.get_channel_position_and_grid_number_backtrans(
                     row + 1
@@ -134,9 +135,11 @@ class Grid_Arrangement:
             if self.num_grids <= 3:
                 grid = np.zeros((8, 8 * self.num_grids, min(len(row) for row in input)))
                 for row in range(input.shape[0]):
-                    res_row, res_col, res_grid = self.get_channel_position_and_grid_number(
-                        row + 1
-                    )
+                    (
+                        res_row,
+                        res_col,
+                        res_grid,
+                    ) = self.get_channel_position_and_grid_number(row + 1)
                     grid[res_row, res_col, :] = input[row]
                 return grid, None
 
@@ -144,17 +147,15 @@ class Grid_Arrangement:
                 upper_grid = np.zeros((8, 8 * 3, min(len(row) for row in input)))
                 lower_grid = np.zeros((8, 8 * 2, min(len(row) for row in input)))
                 for row in range(input.shape[0]):
-                    res_row, res_col, res_grid = self.get_channel_position_and_grid_number(
-                        row + 1
-                    )
+                    (
+                        res_row,
+                        res_col,
+                        res_grid,
+                    ) = self.get_channel_position_and_grid_number(row + 1)
                     if res_grid < 4:
-                        upper_grid[res_row, res_col, :] = input[
-                            row
-                        ]
+                        upper_grid[res_row, res_col, :] = input[row]
                     else:
-                        lower_grid[res_row, res_col, :] = input[
-                            row
-                        ]
+                        lower_grid[res_row, res_col, :] = input[row]
                 return upper_grid, lower_grid
 
     def transfer_320_into_grid_arangement(self, input):
@@ -164,7 +165,7 @@ class Grid_Arrangement:
         :return: upper_grid,lower_grid (for 5 grids) or upper_grid (for 3 grids)
         """
         if self.use_muovi_pro:
-            grid = np.zeros((2,16, min(len(row) for row in input)))
+            grid = np.zeros((2, 16, min(len(row) for row in input)))
             for row in range(input.shape[0]):
                 res_row, res_col = self.get_channel_position_and_grid_number_backtrans(
                     row + 1
@@ -175,9 +176,11 @@ class Grid_Arrangement:
             if self.num_grids <= 3:
                 grid = np.zeros((8, 8 * self.num_grids, min(len(row) for row in input)))
                 for row in range(input.shape[0]):
-                    res_row, res_col, res_grid = self.get_channel_position_and_grid_number(
-                        row + 1
-                    )
+                    (
+                        res_row,
+                        res_col,
+                        res_grid,
+                    ) = self.get_channel_position_and_grid_number(row + 1)
                     grid[res_row, res_col, :] = input[row]
                 return grid, None
 
@@ -185,9 +188,11 @@ class Grid_Arrangement:
                 upper_grid = np.zeros((8, 8 * 3, min(len(row) for row in input)))
                 lower_grid = np.zeros((8, 8 * 2, min(len(row) for row in input)))
                 for row in range(input.shape[0]):
-                    res_row, res_col, res_grid = self.get_channel_position_and_grid_number(
-                        row + 1
-                    )
+                    (
+                        res_row,
+                        res_col,
+                        res_grid,
+                    ) = self.get_channel_position_and_grid_number(row + 1)
                     if res_grid < 4:
                         upper_grid[res_row, res_col, :] = input[row]
                     else:
@@ -198,9 +203,10 @@ class Grid_Arrangement:
 
     def transfer_and_concatenate_320_into_grid_arangement_all_samples(self, input):
         reverse_input = input.transpose()
-        reverse_input = self.transfer_and_concatenate_320_into_grid_arangement(reverse_input)
+        reverse_input = self.transfer_and_concatenate_320_into_grid_arangement(
+            reverse_input
+        )
         return reverse_input
-
 
     def transfer_and_concatenate_320_into_grid_arangement(self, input):
         """
@@ -209,7 +215,7 @@ class Grid_Arrangement:
         :return: upper_grid,lower_grid (for 5 grids) or upper_grid (for 3 grids)
         """
         if self.use_muovi_pro:
-            grid = np.zeros((2,16, min(len(row) for row in input)))
+            grid = np.zeros((2, 16, min(len(row) for row in input)))
             for row in range(input.shape[0]):
                 res_row, res_col = self.get_channel_position_and_grid_number_backtrans(
                     row + 1
@@ -220,9 +226,11 @@ class Grid_Arrangement:
             if self.num_grids <= 3:
                 grid = np.zeros((8, 8 * self.num_grids, min(len(row) for row in input)))
                 for row in range(input.shape[0]):
-                    res_row, res_col, res_grid = self.get_channel_position_and_grid_number(
-                        row + 1
-                    )
+                    (
+                        res_row,
+                        res_col,
+                        res_grid,
+                    ) = self.get_channel_position_and_grid_number(row + 1)
                     grid[res_row, res_col, :] = input[row]
                 return grid
 
@@ -230,9 +238,11 @@ class Grid_Arrangement:
                 upper_grid = np.zeros((8, 8 * 3, min(len(row) for row in input)))
                 lower_grid = np.zeros((8, 8 * 2, min(len(row) for row in input)))
                 for row in range(input.shape[0]):
-                    res_row, res_col, res_grid = self.get_channel_position_and_grid_number(
-                        row + 1
-                    )
+                    (
+                        res_row,
+                        res_col,
+                        res_grid,
+                    ) = self.get_channel_position_and_grid_number(row + 1)
                     if res_grid < 4:
                         upper_grid[res_row, res_col, :] = input[row]
                     else:
@@ -248,9 +258,7 @@ class Grid_Arrangement:
         """
         if self.num_grids == 5:
             if np.ndim(upper_grid) == 2:
-                lower = np.concatenate(
-                    (lower_grid, np.zeros((8, 8))), axis=1
-                )
+                lower = np.concatenate((lower_grid, np.zeros((8, 8))), axis=1)
             else:
                 lower = np.concatenate(
                     (lower_grid, np.zeros((8, 8, upper_grid.shape[2]))), axis=1
@@ -272,23 +280,21 @@ class Grid_Arrangement:
             if self.num_grids <= 3:
                 extracted_data = np.empty((64 * self.num_grids, input.shape[2]))
                 for channel in range(64 * self.num_grids):
-                    res_row, res_col = self.get_channel_position_and_grid_number_backtrans(
-                        channel + 1
-                    )
+                    (
+                        res_row,
+                        res_col,
+                    ) = self.get_channel_position_and_grid_number_backtrans(channel + 1)
                     extracted_data[channel] = input[res_row, res_col]
                 return extracted_data
 
             elif self.num_grids == 5:
-                extracted_data = np.empty(
-                    (320, input.shape[2])
-                )
+                extracted_data = np.empty((320, input.shape[2]))
                 for channel in range(320):
-                    res_row, res_col = self.get_channel_position_and_grid_number_backtrans(
-                        channel + 1
-                    )
-                    extracted_data[channel ] = input[
-                        res_row, res_col
-                    ]
+                    (
+                        res_row,
+                        res_col,
+                    ) = self.get_channel_position_and_grid_number_backtrans(channel + 1)
+                    extracted_data[channel] = input[res_row, res_col]
                 return extracted_data
             else:
                 raise ValueError("Number of grids not supported")
@@ -328,8 +334,9 @@ class Grid_Arrangement:
         elif self.num_grids <= 3:
             return self.upper_grids[row_position, column_position]
         else:
-            return self.concatenate_upper_and_lower_grid(self.upper_grids, self.lower_grids)[row_position, column_position]
-
+            return self.concatenate_upper_and_lower_grid(
+                self.upper_grids, self.lower_grids
+            )[row_position, column_position]
 
 
 # a = Grid_Arrangement([2,1])

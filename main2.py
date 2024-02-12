@@ -19,7 +19,6 @@ import threading
 import keyboard
 
 
-
 class EMGProcessor:
     def __init__(
         self,
@@ -49,7 +48,6 @@ class EMGProcessor:
         use_dtw,
         use_muovi_pro,
         skip_in_ms,
-
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -72,7 +70,9 @@ class EMGProcessor:
         self.only_record_data = only_record_data
         self.use_control_stream = use_control_stream
         self.use_shallow_conv = use_shallow_conv
-        self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
+        self.use_virtual_hand_interface_for_coord_generation = (
+            use_virtual_hand_interface_for_coord_generation
+        )
         self.retrain = False
         self.retrain_movements = None
         self.retrain_counter = 0
@@ -83,9 +83,11 @@ class EMGProcessor:
             self.sampling_frequency = 2000
         else:
             self.sampling_frequency = 2048
-        self.window_size_in_samples = (self.window_size/1000)*self.sampling_frequency
+        self.window_size_in_samples = (
+            self.window_size / 1000
+        ) * self.sampling_frequency
         self.skip_in_samples = int((skip_in_ms / 1000) * self.sampling_frequency)
-        self.sample_length_bandpass_buffer = int((1/10) * self.sampling_frequency)
+        self.sample_length_bandpass_buffer = int((1 / 10) * self.sampling_frequency)
 
         self.mean_rest = None
         self.model = None
@@ -103,10 +105,16 @@ class EMGProcessor:
 
     def choose_finger_indexes(self):
         if "fist" in self.movements:
-            self.finger_indexes = [0,2,3,4,5]
+            self.finger_indexes = [0, 2, 3, 4, 5]
             return self.finger_indexes
-        elif ("thumb" in self.movements) and ("index" in self.movements) and ("middle" in self.movements) and ("ring" in self.movements) and ("pinkie" in self.movements):
-            self.finger_indexes = [0,2,3,4,5]
+        elif (
+            ("thumb" in self.movements)
+            and ("index" in self.movements)
+            and ("middle" in self.movements)
+            and ("ring" in self.movements)
+            and ("pinkie" in self.movements)
+        ):
+            self.finger_indexes = [0, 2, 3, 4, 5]
             return self.finger_indexes
         else:
             self.finger_indexes = []
@@ -141,7 +149,9 @@ class EMGProcessor:
         self.filter_time = MichaelFilter(num_fingers=len(self.finger_indexes))
         self.filter = Filters()
         print("using the following fingers: ", self.finger_indexes)
-        self.grid_aranger = Grid_Arrangement(self.grid_order,use_muovi_pro=self.use_muovi_pro)
+        self.grid_aranger = Grid_Arrangement(
+            self.grid_order, use_muovi_pro=self.use_muovi_pro
+        )
         self.grid_aranger.make_grid()
 
         if self.use_gauss_filter:
@@ -155,13 +165,13 @@ class EMGProcessor:
                 patient_id=self.patient_id,
                 sampling_frequency_emg=self.sampling_frequency,
                 recording_time=self.time_for_each_movement_recording,
-                movements = self.movements.copy(),
-                grid_order = self.grid_order,
-                use_virtual_hand_interface_for_coord_generation = self.use_virtual_hand_interface_for_coord_generation,
-                retrain = self.retrain,
-                retrain_number = self.retrain_counter,
-                finger_indexes = self.finger_indexes,
-                use_muovi_pro = self.use_muovi_pro
+                movements=self.movements.copy(),
+                grid_order=self.grid_order,
+                use_virtual_hand_interface_for_coord_generation=self.use_virtual_hand_interface_for_coord_generation,
+                retrain=self.retrain,
+                retrain_number=self.retrain_counter,
+                finger_indexes=self.finger_indexes,
+                use_muovi_pro=self.use_muovi_pro,
             )
             patient.run_parallel()
         else:
@@ -176,12 +186,11 @@ class EMGProcessor:
                 retrain=self.retrain,
                 retrain_number=self.retrain_counter,
                 finger_indexes=self.finger_indexes,
-                use_muovi_pro=self.use_muovi_pro
+                use_muovi_pro=self.use_muovi_pro,
             )
             patient.run_parallel()
 
-
-    def remove_nan_values(self,data):
+    def remove_nan_values(self, data):
         """
         removes nan values from the data
         :param data:
@@ -209,7 +218,6 @@ class EMGProcessor:
             self.retrain_counter += 1
             # print("shape ref data: ", ref_data["rest"].shape)
 
-
         else:
             resulting_file = f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl"
             emg_data = load_pickle_file(resulting_file)
@@ -225,14 +233,13 @@ class EMGProcessor:
                     continue
                 dtw_rms = make_rms_for_dtw(emg_data[movement])
                 emg_data[movement], ref_data[movement] = align_signals_dtw(
-                    dtw_rms, ref_data[movement],emg_data[movement]
+                    dtw_rms, ref_data[movement], emg_data[movement]
                 )
 
             print("shape emg rest data after dtw: ", emg_data["rest"].shape)
             print("shape ref rest data after dtw: ", ref_data["rest"].shape)
             print("shape emg thumb data after dtw: ", emg_data["thumb"].shape)
             print("shape ref thumb data after dtw: ", ref_data["thumb"].shape)
-
 
         return emg_data, ref_data
 
@@ -256,8 +263,8 @@ class EMGProcessor:
                     use_difference_heatmap=self.use_difference_heatmap,
                     collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
                     retrain=True,
-                    retrain_number = self.retrain_counter,
-                    use_muovi_pro = self.use_muovi_pro,
+                    retrain_number=self.retrain_counter,
+                    use_muovi_pro=self.use_muovi_pro,
                     use_spatial_filter=self.use_spatial_filter,
                     sample_difference_overlap=self.skip_in_samples,
                 )
@@ -277,7 +284,7 @@ class EMGProcessor:
                     filter_=self.filter,
                     use_difference_heatmap=self.use_difference_heatmap,
                     collected_with_virtual_hand=self.use_virtual_hand_interface_for_coord_generation,
-                    use_muovi_pro = self.use_muovi_pro,
+                    use_muovi_pro=self.use_muovi_pro,
                     use_spatial_filter=self.use_spatial_filter,
                     sample_difference_overlap=self.skip_in_samples,
                 )
@@ -289,24 +296,39 @@ class EMGProcessor:
             self.best_time_tree = 2
 
             if self.use_shallow_conv:
-                shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,retrain=self.retrain,retrain_number= self.retrain_counter, finger_indexes=self.finger_indexes,use_muovi_pro=self.use_muovi_pro)
+                shallow_model = ShallowConvNetWithAttention(
+                    use_difference_heatmap=self.use_difference_heatmap,
+                    best_time_tree=self.best_time_tree,
+                    grid_aranger=self.grid_aranger,
+                    number_of_grids=len(self.grid_order),
+                    use_mean=self.use_mean_subtraction,
+                    retrain=self.retrain,
+                    retrain_number=self.retrain_counter,
+                    finger_indexes=self.finger_indexes,
+                    use_muovi_pro=self.use_muovi_pro,
+                )
                 if self.retrain:
-                    shallow_model.load_model(cls=shallow_model, file_path=self.patient_id + "_shallow.pt")
+                    shallow_model.load_model(
+                        cls=shallow_model, file_path=self.patient_id + "_shallow.pt"
+                    )
                 else:
                     shallow_model.apply(shallow_model._initialize_weights)
 
-                train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
+                train_loader, test_loader = shallow_model.load_trainings_data(
+                    self.patient_id
+                )
 
                 if self.retrain:
-                    shallow_model.train_model(train_loader, epochs=50, learning_rate=0.000001)
+                    shallow_model.train_model(
+                        train_loader, epochs=50, learning_rate=0.000001
+                    )
                 else:
-                    shallow_model.train_model(train_loader, epochs=self.epochs) # 7
+                    shallow_model.train_model(train_loader, epochs=self.epochs)  # 7
                     shallow_model.evaluate(test_loader)
 
             else:
                 model.train()
                 self.best_time_tree = model.evaluate(give_best_time_tree=True)
-
 
             if self.save_trained_model:
                 if self.use_shallow_conv:
@@ -323,8 +345,16 @@ class EMGProcessor:
 
         else:
             if self.use_shallow_conv:
-                model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=2, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction, finger_indexes=self.finger_indexes,use_muovi_pro=self.use_muovi_pro)
-                model.load_model(cls = model,file_path=self.patient_id + "_shallow.pt")
+                model = ShallowConvNetWithAttention(
+                    use_difference_heatmap=self.use_difference_heatmap,
+                    best_time_tree=2,
+                    grid_aranger=self.grid_aranger,
+                    number_of_grids=len(self.grid_order),
+                    use_mean=self.use_mean_subtraction,
+                    finger_indexes=self.finger_indexes,
+                    use_muovi_pro=self.use_muovi_pro,
+                )
+                model.load_model(cls=model, file_path=self.patient_id + "_shallow.pt")
                 print("Shallow model loaded")
                 self.best_time_tree = 3
                 # Loading an existing model
@@ -351,16 +381,19 @@ class EMGProcessor:
             return model
 
     def process_data(self, emg_data, ref_data):
-
         # Process data for model input
         for i in emg_data.keys():
             emg_data[i] = np.array(
-                emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order)*64, -1)
+                emg_data[i]  # .transpose(1, 0, 2).reshape(len(self.grid_order)*64, -1)
             )  # reshape emg data such as it has the shape 320 x #samples for each movement
 
         copied_emg_data = emg_data.copy()
         for i in copied_emg_data.keys():
-            copied_emg_data[i] =self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(copied_emg_data[i])
+            copied_emg_data[
+                i
+            ] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+                copied_emg_data[i]
+            )
 
         if self.use_important_channels:
             important_channels = extract_important_channels_realtime(
@@ -368,7 +401,8 @@ class EMGProcessor:
             )
             self.channels = important_channels
             self.channels_row_shape = [
-                self.grid_aranger.from_grid_position_to_row_position(ch[0],ch[1]) for ch in important_channels
+                self.grid_aranger.from_grid_position_to_row_position(ch[0], ch[1])
+                for ch in important_channels
             ]
 
         else:
@@ -376,7 +410,6 @@ class EMGProcessor:
                 self.channels = range(32)
             else:
                 self.channels = range(len(self.grid_order) * 64)
-
 
         if self.retrain_movements is None:
             self.normalizer = normalizations.Normalization(
@@ -390,21 +423,34 @@ class EMGProcessor:
                 use_bandpass_filter=self.use_bandpass_filter,
             )
 
-        #shape should be 320 x #samples
-        #ref_data = resample_reference_data(ref_data, emg_data)
+        # shape should be 320 x #samples
+        # ref_data = resample_reference_data(ref_data, emg_data)
         ref_data = self.remove_nan_values(ref_data)
         emg_data = self.remove_nan_values(emg_data)
         # print("length of emg data: ", len(emg_data["rest"][0]))
         # print("length of ref data: ", ref_data["rest"].shape[0])
 
         for i in emg_data.keys():
-            emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(emg_data[i])
-
+            emg_data[
+                i
+            ] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+                emg_data[i]
+            )
 
         if self.retrain_movements is None:
-            #shape should be grid
+            # shape should be grid
             if self.use_mean_subtraction:
-                channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data.copy(), ref_data.copy(),use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter,frame_duration=self.window_size,skip_in_samples=self.skip_in_samples,use_bandpass_filter=self.use_bandpass_filter)
+                channel_extractor = ExtractImportantChannels.ChannelExtraction(
+                    "rest",
+                    emg_data.copy(),
+                    ref_data.copy(),
+                    use_gaussian_filter=self.use_gauss_filter,
+                    use_muovi_pro=self.use_muovi_pro,
+                    use_spatial_filter=self.use_spatial_filter,
+                    frame_duration=self.window_size,
+                    skip_in_samples=self.skip_in_samples,
+                    use_bandpass_filter=self.use_bandpass_filter,
+                )
                 self.mean_rest, _, _ = channel_extractor.get_heatmaps()
                 self.normalizer.set_mean(mean=self.mean_rest)
 
@@ -415,15 +461,18 @@ class EMGProcessor:
                 for finger in range(len(self.finger_indexes)):
                     std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
                     noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
-                    ref_data[movement][:, finger] = np.add(ref_data[movement][:, finger], noise_i)
+                    ref_data[movement][:, finger] = np.add(
+                        ref_data[movement][:, finger], noise_i
+                    )
         else:
             for movement in self.retrain_movements:
                 # Generate Gaussian noise for each column
                 for finger in range(len(self.finger_indexes)):
                     std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
                     noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
-                    ref_data[movement][:, finger] = np.add(ref_data[movement][:, finger], noise_i)
-
+                    ref_data[movement][:, finger] = np.add(
+                        ref_data[movement][:, finger], noise_i
+                    )
 
         if self.retrain_movements is None:
             # Calculate normalization values
@@ -433,28 +482,25 @@ class EMGProcessor:
             )
             self.normalizer.calculate_normalization_values()
 
-
-    def format_for_exo(self, results,control_results=None):
+    def format_for_exo(self, results, control_results=None):
         # exo receives 18 values, the first 8 as the values of the predicted hand and the other 8 as the values of the control hand
         if self.use_control_stream:
-            res = [0]*18
+            res = [0] * 18
             count = 0
             for i in self.finger_indexes:
                 res[i] = round(results[count], 3)
-                res[i+9] = round(control_results[count], 3)
+                res[i + 9] = round(control_results[count], 3)
                 count += 1
             return res
         else:
-            res = [0]*9
+            res = [0] * 9
             count = 0
             for i in self.finger_indexes:
                 res[i] = round(results[count], 3)
                 count += 1
             return res
 
-
-    def output_results(self, results,control_results=None):
-
+    def output_results(self, results, control_results=None):
         for i in range(len(self.finger_indexes)):
             if results[i] > 1:
                 results[i] = 1
@@ -466,7 +512,7 @@ class EMGProcessor:
             # Logic to send commands to the exoskeleton
             # Assuming 'results' is in the format expected by the exoskeleton
             # You might need to format 'results' accordingly
-            formatted_results = self.format_for_exo(results,control_results)
+            formatted_results = self.format_for_exo(results, control_results)
             self.exo_controller.move_exo(formatted_results)
         else:
             # Print the prediction results to the console
@@ -477,35 +523,38 @@ class EMGProcessor:
         self.exo_controller.initialize_all()
         # Main prediction loop
 
-
         if self.window_size_in_samples > self.sample_length_bandpass_buffer:
-            max_chunk_number = np.ceil(self.window_size_in_samples / self.skip_in_samples)
+            max_chunk_number = np.ceil(
+                self.window_size_in_samples / self.skip_in_samples
+            )
         else:
-            max_chunk_number = np.ceil(self.sample_length_bandpass_buffer / self.skip_in_samples)
-
-
+            max_chunk_number = np.ceil(
+                self.sample_length_bandpass_buffer / self.skip_in_samples
+            )
 
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
         for i in emg_data.keys():
             emg_data[i] = np.array(
-                emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
+                emg_data[
+                    i
+                ]  # .transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
             )
             if self.use_important_channels:
                 for channel in range(emg_data[i].shape[0]):
                     if channel not in self.channels_row_shape:
-                        emg_data[i][channel,:] = 0
+                        emg_data[i][channel, :] = 0
         emg_data = self.remove_nan_values(emg_data)
 
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
         ref_data = self.remove_nan_values(ref_data)
-        #ref_data = resample_reference_data(ref_data, emg_data)
+        # ref_data = resample_reference_data(ref_data, emg_data)
         if self.use_dtw:
             for movement in ref_data.keys():
                 if movement == "rest":
                     continue
                 dtw_rms = make_rms_for_dtw(emg_data[movement])
                 emg_data[movement], ref_data[movement] = align_signals_dtw(
-                    dtw_rms, ref_data[movement],emg_data[movement]
+                    dtw_rms, ref_data[movement], emg_data[movement]
                 )
 
             print("shape emg rest data after dtw: ", emg_data["rest"].shape)
@@ -514,7 +563,9 @@ class EMGProcessor:
             print("shape ref thumb data after dtw: ", ref_data["thumb"].shape)
 
         for i in emg_data.keys():
-            emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+            emg_data[
+                i
+            ] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
                 emg_data[i]
             )
 
@@ -522,7 +573,6 @@ class EMGProcessor:
             buffer_pred = []
             buffer_control = []
             if movement in self.movements:
-
                 # if movement != "rest":
                 #     ref_data_for_this_movement = normalize_2D_array(ref_data[movement], axis=0)
                 # else:
@@ -544,10 +594,21 @@ class EMGProcessor:
                 # ref_data[movement] = normalize_2D_array(ref_data[movement], axis=0)
                 print("movement: ", movement, file=sys.stderr)
 
-                for sample in tqdm.tqdm(range(0,emg_data[movement].shape[2]- int((self.window_size / 1000) * self.sampling_frequency), self.skip_in_samples)):
-                    if (sample <= ref_data[movement].shape[0]) and (sample - max(self.num_previous_samples) >= 0):
+                for sample in tqdm.tqdm(
+                    range(
+                        0,
+                        emg_data[movement].shape[2]
+                        - int((self.window_size / 1000) * self.sampling_frequency),
+                        self.skip_in_samples,
+                    )
+                ):
+                    if (sample <= ref_data[movement].shape[0]) and (
+                        sample - max(self.num_previous_samples) >= 0
+                    ):
                         time_start = time.time()
-                        chunk = emg_data[movement][:, :, sample : sample + self.skip_in_samples]
+                        chunk = emg_data[movement][
+                            :, :, sample : sample + self.skip_in_samples
+                        ]
                         emg_buffer.append(chunk)
                         if (
                             len(emg_buffer) > max_chunk_number
@@ -555,30 +616,36 @@ class EMGProcessor:
                             emg_buffer.pop(0)
                         data = np.concatenate(emg_buffer, axis=-1)
                         if self.use_bandpass_filter:
-                            data = self.filter.bandpass_filter_grid_emg_data(data.copy(), fs=self.sampling_frequency)
-                        if ((data.shape[2] - self.window_size_in_samples) < 0):
-                            emg_to_use = data[:,:,:]
+                            data = self.filter.bandpass_filter_grid_emg_data(
+                                data.copy(), fs=self.sampling_frequency
+                            )
+                        if (data.shape[2] - self.window_size_in_samples) < 0:
+                            emg_to_use = data[:, :, :]
                         else:
-                            emg_to_use = data[:,:,
-                                         (data.shape[2]) - self.window_size_in_samples: -1
-                                         ]
+                            emg_to_use = data[
+                                :, :, (data.shape[2]) - self.window_size_in_samples : -1
+                            ]
                         if self.use_difference_heatmap:
                             # data for difference heatmap
-                            if ((data.shape[2] - (self.window_size_in_samples * 2.5)) < 0):
-                                emg_to_use_difference = data[:,:,:]
+                            if (
+                                data.shape[2] - (self.window_size_in_samples * 2.5)
+                            ) < 0:
+                                emg_to_use_difference = data[:, :, :]
                             else:
-                                emg_to_use_difference = data[:,:,
-                                                        (data.shape[2]) - self.window_size_in_samples: -1
-                                                        ]
+                                emg_to_use_difference = data[
+                                    :,
+                                    :,
+                                    (data.shape[2]) - self.window_size_in_samples : -1,
+                                ]
 
                         if self.use_spatial_filter:
                             emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
                             if self.use_difference_heatmap:
-                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
+                                emg_to_use_difference = self.filter.spatial_filtering(
+                                    emg_to_use_difference, "IR"
+                                )
 
-                        heatmap_local = calculate_local_heatmap_realtime(
-                            emg_to_use
-                        )
+                        heatmap_local = calculate_local_heatmap_realtime(emg_to_use)
                         if self.use_difference_heatmap:
                             previous_heatmap = calculate_local_heatmap_realtime(
                                 emg_to_use_difference
@@ -587,12 +654,15 @@ class EMGProcessor:
                         if self.use_mean_subtraction:
                             heatmap_local = np.subtract(heatmap_local, self.mean_rest)
                             if self.use_difference_heatmap:
-                                previous_heatmap = np.subtract(heatmap_local, self.mean_rest)
+                                previous_heatmap = np.subtract(
+                                    heatmap_local, self.mean_rest
+                                )
 
                         heatmap_local = self.normalizer.normalize_chunk(heatmap_local)
                         if self.use_difference_heatmap:
-                            previous_heatmap = self.normalizer.normalize_chunk(previous_heatmap)
-
+                            previous_heatmap = self.normalizer.normalize_chunk(
+                                previous_heatmap
+                            )
 
                         if self.use_gauss_filter:
                             heatmap_local = self.filter.apply_gaussian_filter(
@@ -603,13 +673,35 @@ class EMGProcessor:
                                     previous_heatmap, self.gauss_filter
                                 )
                         if self.use_difference_heatmap:
-                            difference_heatmap = np.subtract(heatmap_local, previous_heatmap)
+                            difference_heatmap = np.subtract(
+                                heatmap_local, previous_heatmap
+                            )
                             if not self.use_shallow_conv:
-                                difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                                    np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
+                                difference_heatmap = np.squeeze(
+                                    self.grid_aranger.transfer_grid_arangement_into_320(
+                                        np.reshape(
+                                            difference_heatmap,
+                                            (
+                                                difference_heatmap.shape[0],
+                                                difference_heatmap.shape[1],
+                                                1,
+                                            ),
+                                        )
+                                    )
+                                )
                         if not self.use_shallow_conv:
-                            heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                                np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
+                            heatmap_local = np.squeeze(
+                                self.grid_aranger.transfer_grid_arangement_into_320(
+                                    np.reshape(
+                                        heatmap_local,
+                                        (
+                                            heatmap_local.shape[0],
+                                            heatmap_local.shape[1],
+                                            1,
+                                        ),
+                                    )
+                                )
+                            )
 
                         if self.use_shallow_conv:
                             if not self.use_difference_heatmap:
@@ -637,10 +729,12 @@ class EMGProcessor:
 
                         if self.use_difference_heatmap:
                             if np.isnan(difference_heatmap).any():
-                                res_time = np.array([-1]*len(self.finger_indexes))
+                                res_time = np.array([-1] * len(self.finger_indexes))
                             else:
                                 if self.use_shallow_conv:
-                                    res_time = model.predict(heatmap_local,difference_heatmap)
+                                    res_time = model.predict(
+                                        heatmap_local, difference_heatmap
+                                    )
                                 else:
                                     res_time = model.trees[self.best_time_tree].predict(
                                         [difference_heatmap]
@@ -662,17 +756,22 @@ class EMGProcessor:
                             if self.use_control_stream:
                                 buffer_pred.append(res_local)
                                 buffer_control.append(control_ref_data)
-                                self.output_results(res_local,control_ref_data)
+                                self.output_results(res_local, control_ref_data)
                             else:
                                 self.output_results(res_local)
                         else:
                             if self.use_control_stream:
-                                self.output_results(res_time,control_ref_data)
+                                self.output_results(res_time, control_ref_data)
                             else:
                                 self.output_results(res_time)
                         time_end = time.time()
-                        if time_end - time_start < (self.skip_in_samples/self.sampling_frequency):
-                            time.sleep((self.skip_in_samples/self.sampling_frequency) - (time_end - time_start))
+                        if time_end - time_start < (
+                            self.skip_in_samples / self.sampling_frequency
+                        ):
+                            time.sleep(
+                                (self.skip_in_samples / self.sampling_frequency)
+                                - (time_end - time_start)
+                            )
 
             # plt.figure()
             # for finger in range(len(self.finger_indexes)):
@@ -682,20 +781,23 @@ class EMGProcessor:
             # plt.show()
 
     def run_prediction_loop(self, model):
-
         self.emg_interface.initialize_all()
         self.exo_controller = Exo_Control()
         self.exo_controller.initialize_all()
 
-
         if self.window_size_in_samples > self.sample_length_bandpass_buffer:
-            max_chunk_number = np.ceil(self.window_size_in_samples / self.skip_in_samples)
+            max_chunk_number = np.ceil(
+                self.window_size_in_samples / self.skip_in_samples
+            )
         else:
-            max_chunk_number = np.ceil(self.sample_length_bandpass_buffer / self.skip_in_samples)
+            max_chunk_number = np.ceil(
+                self.sample_length_bandpass_buffer / self.skip_in_samples
+            )
 
-        self.window_size_in_samples = int((self.window_size / 1000) * self.sampling_frequency)
+        self.window_size_in_samples = int(
+            (self.window_size / 1000) * self.sampling_frequency
+        )
         emg_buffer = []
-
 
         self.retrain = False
         self.retrain_movements = None
@@ -711,39 +813,45 @@ class EMGProcessor:
             chunk = self.emg_interface.get_EMG_chunk()
             emg_buffer.append(chunk)
             if (
-                    len(emg_buffer) > max_chunk_number
+                len(emg_buffer) > max_chunk_number
             ):  # check if now too many sampels are in the buffer and i can delete old one
                 emg_buffer.pop(0)
             data = np.concatenate(emg_buffer, axis=-1)
 
-            data = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(data)
+            data = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+                data
+            )
             if self.use_bandpass_filter:
-                data = self.filter.bandpass_filter_grid_emg_data(data.copy(), fs=self.sampling_frequency)
+                data = self.filter.bandpass_filter_grid_emg_data(
+                    data.copy(), fs=self.sampling_frequency
+                )
 
-            if ((data.shape[2] - self.window_size_in_samples) < 0):
+            if (data.shape[2] - self.window_size_in_samples) < 0:
                 emg_to_use = data[:, :, :]
             else:
-                emg_to_use = data[:, :,
-                             (data.shape[2] ) - self.window_size_in_samples: -1
-                             ]
+                emg_to_use = data[
+                    :, :, (data.shape[2]) - self.window_size_in_samples : -1
+                ]
                 # emg_to_use = np.subtract(emg_to_use,self.mean_rest)
             if self.use_difference_heatmap:
                 # data for difference heatmap
-                if ((data.shape[2] - (self.window_size_in_samples * 2.5)) < 0):
+                if (data.shape[2] - (self.window_size_in_samples * 2.5)) < 0:
                     emg_to_use_difference = data[:, :, :]
                 else:
-                    emg_to_use_difference = data[:, :,
-                                            (data.shape[2]) - int(self.window_size_in_samples*2.5): -1
-                                            ]
+                    emg_to_use_difference = data[
+                        :,
+                        :,
+                        (data.shape[2]) - int(self.window_size_in_samples * 2.5) : -1,
+                    ]
 
             if self.use_spatial_filter:
                 emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
                 if self.use_difference_heatmap:
-                    emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
+                    emg_to_use_difference = self.filter.spatial_filtering(
+                        emg_to_use_difference, "IR"
+                    )
 
-            heatmap_local = calculate_local_heatmap_realtime(
-                emg_to_use
-            )
+            heatmap_local = calculate_local_heatmap_realtime(emg_to_use)
             if self.use_difference_heatmap:
                 previous_heatmap = calculate_local_heatmap_realtime(
                     emg_to_use_difference
@@ -769,11 +877,27 @@ class EMGProcessor:
             if self.use_difference_heatmap:
                 difference_heatmap = previous_heatmap
                 if not self.use_shallow_conv:
-                    difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                        np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
+                    difference_heatmap = np.squeeze(
+                        self.grid_aranger.transfer_grid_arangement_into_320(
+                            np.reshape(
+                                difference_heatmap,
+                                (
+                                    difference_heatmap.shape[0],
+                                    difference_heatmap.shape[1],
+                                    1,
+                                ),
+                            )
+                        )
+                    )
             if not self.use_shallow_conv:
-                heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                    np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
+                heatmap_local = np.squeeze(
+                    self.grid_aranger.transfer_grid_arangement_into_320(
+                        np.reshape(
+                            heatmap_local,
+                            (heatmap_local.shape[0], heatmap_local.shape[1], 1),
+                        )
+                    )
+                )
 
             if self.use_shallow_conv:
                 if not self.use_difference_heatmap:
@@ -801,7 +925,7 @@ class EMGProcessor:
 
             if self.use_difference_heatmap:
                 if np.isnan(difference_heatmap).any():
-                    res_time = np.array([-1]*len(self.finger_indexes))
+                    res_time = np.array([-1] * len(self.finger_indexes))
                 else:
                     if self.use_shallow_conv:
                         res_time = model.predict(heatmap_local, difference_heatmap)
@@ -817,7 +941,6 @@ class EMGProcessor:
                     else:
                         res_time = np.array(res_time[0])
 
-
             if self.use_local:
                 self.output_results(res_local)
             else:
@@ -828,7 +951,9 @@ class EMGProcessor:
     def check_input(self):
         while True:
             user_input = input("Press r for retrain or h for help!! ")
-            if user_input == "r":  # replace 'certain_input' with your specific condition
+            if (
+                user_input == "r"
+            ):  # replace 'certain_input' with your specific condition
                 print("Retraining will be started")
                 # Do something when the specific input is received
                 self.retrain = True
@@ -841,20 +966,19 @@ class EMGProcessor:
             else:
                 for i in range(len(self.movements)):
                     if user_input == str(i):
-                        print(f"Retraining will be started for movement {self.movements[i]}")
+                        print(
+                            f"Retraining will be started for movement {self.movements[i]}"
+                        )
                         self.retrain = True
                         self.retrain_movements = [self.movements[i]]
                         break
 
-
-
     def retrain_model(self):
         self.load_trained_model = True
-        self.time_for_each_movement_recording =10
+        self.time_for_each_movement_recording = 10
         self.emg_interface.close_connection()
         self.exo_controller.close_connection()
         self.run()
-
 
     def run(self):
         # Main loop for predictions
@@ -869,16 +993,16 @@ class EMGProcessor:
 
         if self.retrain_movements is not None:
             from sklearn.utils import shuffle
+
             length = emg_data[self.retrain_movements[0]].shape[1]
             for movement in self.movements:
-                self.old_emg_data[movement] = self.old_emg_data[movement][:,:length]
-                self.old_ref_data[movement] = self.old_ref_data[movement][:length,:]
+                self.old_emg_data[movement] = self.old_emg_data[movement][:, :length]
+                self.old_ref_data[movement] = self.old_ref_data[movement][:length, :]
             for movement in self.retrain_movements:
                 self.old_emg_data[movement] = emg_data[movement]
                 self.old_ref_data[movement] = ref_data[movement]
                 emg_data = self.old_emg_data
                 ref_data = self.old_ref_data
-
 
         model = self.train_model(emg_data, ref_data)
         # if self.use_recorded_data:
@@ -907,7 +1031,7 @@ if __name__ == "__main__":
             "pinkie",
             # "fist",
         ],
-        grid_order=[1,2,3,4,5],
+        grid_order=[1, 2, 3, 4, 5],
         use_difference_heatmap=False,
         use_important_channels=False,
         use_local=True,
@@ -920,20 +1044,16 @@ if __name__ == "__main__":
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Test/",  # False
+        use_recorded_data=False,  # r"trainings_data/resulting_trainings_data/subject_Test/",  # False
         window_size=150,
         scaling_method="Robust_Scaling",
         only_record_data=False,
         use_control_stream=False,
-        use_shallow_conv = True,
-        use_virtual_hand_interface_for_coord_generation = True,
+        use_shallow_conv=True,
+        use_virtual_hand_interface_for_coord_generation=True,
         epochs=100,
         use_dtw=False,
         use_muovi_pro=True,
         skip_in_ms=25,
-
     )
     emg_processor.run()
-
-
-

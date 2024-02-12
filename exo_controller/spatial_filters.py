@@ -1,8 +1,7 @@
 import numpy as np
 from scipy.signal import fftconvolve
 from exo_controller import helpers
-from scipy.signal import butter, lfilter,iirnotch
-
+from scipy.signal import butter, lfilter, iirnotch
 
 
 class Filters:
@@ -104,13 +103,13 @@ class Filters:
         :param order:
         :return:
         """
-        order= 5
+        order = 5
         nyq = 0.5 * fs
         low = lowcut / nyq
         high = highcut / nyq
-        b_notch, a_notch  = iirnotch(50, 30, fs)
-        b, a = butter(order, [low,high], btype="band",fs=fs,analog=False)
-        y = lfilter(b_notch, a_notch , data)
+        b_notch, a_notch = iirnotch(50, 30, fs)
+        b, a = butter(order, [low, high], btype="band", fs=fs, analog=False)
+        y = lfilter(b_notch, a_notch, data)
         y = lfilter(b, a, data)
         return y
 
@@ -140,12 +139,10 @@ class Filters:
 
         for row in range(emg_data.shape[0]):
             for col in range(emg_data.shape[1]):
-                data[row,col] = self.bandpass_filter(
-                    emg_data[row,col], 10, 500, fs, order=5
+                data[row, col] = self.bandpass_filter(
+                    emg_data[row, col], 10, 500, fs, order=5
                 )
         return data
-
-
 
     def apply_gaussian_filter(self, grid, gaussian_filter):
         """
@@ -158,7 +155,9 @@ class Filters:
 
         # Define the function to handle the border
         grid = grid.reshape(grid.shape[0], grid.shape[1])
-        grids = helpers.split_grid_into_8x8_grids(grid.reshape(grid.shape[0], grid.shape[1]))
+        grids = helpers.split_grid_into_8x8_grids(
+            grid.reshape(grid.shape[0], grid.shape[1])
+        )
 
         def filter_function(image, filter):
             filtered_image = np.zeros_like(image)

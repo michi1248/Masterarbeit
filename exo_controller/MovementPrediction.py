@@ -9,7 +9,6 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import joblib
 
 
-
 class MultiDimensionalDecisionTree:
     def __init__(
         self,
@@ -30,15 +29,14 @@ class MultiDimensionalDecisionTree:
         use_gauss_filter=False,
         use_bandpass_filter=False,
         use_spatial_filter=False,
-        filter_ = None,
+        filter_=None,
         use_difference_heatmap=False,
         neuromuscular_delay=70,
         delay_to_movement=70,
-        collected_with_virtual_hand = False,
-        retrain = False,
-        retrain_number = None,
-        use_muovi_pro = False,
-
+        collected_with_virtual_hand=False,
+        retrain=False,
+        retrain_number=None,
+        use_muovi_pro=False,
     ):
         self.normalizer = normalizer
         self.mean_rest = mean_rest
@@ -48,7 +46,9 @@ class MultiDimensionalDecisionTree:
         self.use_spatial_filter = use_spatial_filter
         self.filter = filter_
         self.grid_order = grid_order
-        self.grid_aranger = Grid_Arrangement(self.grid_order,use_muovi_pro=use_muovi_pro)
+        self.grid_aranger = Grid_Arrangement(
+            self.grid_order, use_muovi_pro=use_muovi_pro
+        )
         self.grid_aranger.make_grid()
         self.use_difference_heatmap = use_difference_heatmap
         self.collected_with_virtual_hand = collected_with_virtual_hand
@@ -154,8 +154,7 @@ class MultiDimensionalDecisionTree:
                 )
             )
 
-    def evaluate_best(self,predictions,ground_truth):
-
+    def evaluate_best(self, predictions, ground_truth):
         mae = mean_absolute_error(ground_truth, predictions, multioutput="raw_values")
         mse = mean_squared_error(ground_truth, predictions, multioutput="raw_values")
         r2 = r2_score(ground_truth, predictions, multioutput="raw_values")
@@ -163,10 +162,7 @@ class MultiDimensionalDecisionTree:
         print("local Mean Absolute Error: ", mae)
         print("local Mean Squared Error : ", mse)
         print("local R^2 Score : ", r2)
-        return np.mean(r2),np.mean(mse)
-
-
-
+        return np.mean(r2), np.mean(mse)
 
     def select_default_num_previous(self):
         """
@@ -345,33 +341,37 @@ class MultiDimensionalDecisionTree:
             emg_data = self.emg_data[movement]
 
             if np.ndim(self.important_channels) == 2:
-                emg_data_new = np.zeros((emg_data.shape[0],emg_data.shape[1],emg_data.shape[2]))
+                emg_data_new = np.zeros(
+                    (emg_data.shape[0], emg_data.shape[1], emg_data.shape[2])
+                )
                 for important_channel in self.important_channels:
-                    emg_data_new[important_channel[0],important_channel[1], :] = emg_data[important_channel[0],important_channel[1], :]
+                    emg_data_new[
+                        important_channel[0], important_channel[1], :
+                    ] = emg_data[important_channel[0], important_channel[1], :]
                 emg_data = emg_data_new
 
             if self.use_bandpass_filter:
-                emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=self.sampling_frequency)
-
+                emg_data = self.filter.bandpass_filter_emg_data(
+                    emg_data, fs=self.sampling_frequency
+                )
 
             for i in range(
                 0, emg_data.shape[2] - window_size + 1, self.sample_difference_overlap
             ):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
-                if (i <= ref_data.shape[0])and (i - max(self.num_previous_samples) >= 0):
+                if (i <= ref_data.shape[0]) and (
+                    i - max(self.num_previous_samples) >= 0
+                ):
                     # segment = calculate_emg_rms_row(
                     #     emg_data, i, self.window_size_in_samples
                     # )
                     if (i - self.window_size_in_samples < 0) or (
-                            emg_data.shape[2] < (self.window_size_in_samples)
+                        emg_data.shape[2] < (self.window_size_in_samples)
                     ):
-                        emg_to_use =  emg_data[:,:,: i + 1]
+                        emg_to_use = emg_data[:, :, : i + 1]
                     else:
-                        emg_to_use = emg_data[:,:,
-                                       i - self.window_size_in_samples: i
-                                       ]
+                        emg_to_use = emg_data[:, :, i - self.window_size_in_samples : i]
                     if self.use_spatial_filter:
                         emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
-
 
                     segment = self.calculate_heatmap_on_whole_samples(
                         emg_to_use,
@@ -387,23 +387,37 @@ class MultiDimensionalDecisionTree:
                             segment, self.gauss_filter
                         )
                     # segment = np.squeeze(segment)
-                    segment = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(np.reshape(segment,(segment.shape[0],segment.shape[1],1))))
+                    segment = np.squeeze(
+                        self.grid_aranger.transfer_grid_arangement_into_320(
+                            np.reshape(segment, (segment.shape[0], segment.shape[1], 1))
+                        )
+                    )
                     if self.collected_with_virtual_hand:
-                        label= self.ref_data[movement][i, :]
+                        label = self.ref_data[movement][i, :]
                     else:
                         label = ref_erweitert[:, i]
 
                     # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
                     # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
-                    if (i + self.neuromuscular_delay_in_samples) < self.ref_data[movement].shape[0]:
-                        for skip in range(self.sample_difference_overlap, self.neuromuscular_delay_in_samples, self.sample_difference_overlap):
-                            ref_in_the_future = self.ref_data[movement][i+skip, :]
+                    if (i + self.neuromuscular_delay_in_samples) < self.ref_data[
+                        movement
+                    ].shape[0]:
+                        for skip in range(
+                            self.sample_difference_overlap,
+                            self.neuromuscular_delay_in_samples,
+                            self.sample_difference_overlap,
+                        ):
+                            ref_in_the_future = self.ref_data[movement][i + skip, :]
                             segments.append(segment)
                             labels.append(ref_in_the_future)
 
                     if (i - self.delay_to_movement_in_samples) >= 0:
-                        for skip in range(self.sample_difference_overlap, self.delay_to_movement_in_samples, self.sample_difference_overlap):
-                            ref_in_the_past = self.ref_data[movement][i-skip, :]
+                        for skip in range(
+                            self.sample_difference_overlap,
+                            self.delay_to_movement_in_samples,
+                            self.sample_difference_overlap,
+                        ):
+                            ref_in_the_past = self.ref_data[movement][i - skip, :]
                             segments.append(segment)
                             labels.append(ref_in_the_past)
                     segments.append(segment)
@@ -424,7 +438,6 @@ class MultiDimensionalDecisionTree:
         if self.use_difference_heatmap:
             results = []
 
-
             combined_diffs = []
             combined_ys = []
 
@@ -435,41 +448,46 @@ class MultiDimensionalDecisionTree:
                 ref_data = self.ref_data[movement]
                 emg_data = self.emg_data[movement]
                 if self.use_bandpass_filter:
-                    emg_data = self.filter.bandpass_filter_emg_data(emg_data, fs=self.sampling_frequency)
-
+                    emg_data = self.filter.bandpass_filter_emg_data(
+                        emg_data, fs=self.sampling_frequency
+                    )
 
                 for i in range(
                     0,
                     emg_data.shape[2] - window_size + 1,
                     self.sample_difference_overlap,
                 ):  # da unterschiedliche länge von emg und ref nur machen wenn ref noch nicht zuzende ist
-                    if (i <= ref_data.shape[0])and (i - max(self.num_previous_samples) >= 0):
+                    if (i <= ref_data.shape[0]) and (
+                        i - max(self.num_previous_samples) >= 0
+                    ):
                         # heatmap = calculate_emg_rms_row(
                         #     emg_data, i, self.window_size_in_samples
                         # )
                         # data for normal heatmap
                         if (i - self.window_size_in_samples < 0) or (
-                                emg_data.shape[2] < (self.window_size_in_samples)
+                            emg_data.shape[2] < (self.window_size_in_samples)
                         ):
-                            emg_to_use = emg_data[:,:,: i + 1]
+                            emg_to_use = emg_data[:, :, : i + 1]
                         else:
-                            emg_to_use = emg_data[:,:,
-                                         i - self.window_size_in_samples: i
-                                         ]
+                            emg_to_use = emg_data[
+                                :, :, i - self.window_size_in_samples : i
+                            ]
 
                         # data for difference heatmap
-                        if (i - int(self.window_size_in_samples*2.5) < 0) or (
-                                emg_data.shape[2] < (self.window_size_in_samples)
+                        if (i - int(self.window_size_in_samples * 2.5) < 0) or (
+                            emg_data.shape[2] < (self.window_size_in_samples)
                         ):
-                            emg_to_use_difference = emg_data[:,:,: i + 1]
+                            emg_to_use_difference = emg_data[:, :, : i + 1]
                         else:
-                            emg_to_use_difference = emg_data[:,:,
-                                         i - int(self.window_size_in_samples*2.5): i
-                                         ]
+                            emg_to_use_difference = emg_data[
+                                :, :, i - int(self.window_size_in_samples * 2.5) : i
+                            ]
 
                         if self.use_spatial_filter:
                             emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
-                            emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
+                            emg_to_use_difference = self.filter.spatial_filtering(
+                                emg_to_use_difference, "IR"
+                            )
 
                         heatmap = self.calculate_heatmap_on_whole_samples(
                             emg_to_use,
@@ -499,10 +517,20 @@ class MultiDimensionalDecisionTree:
                                 previous_heatmap, self.gauss_filter
                             )
                         difference_heatmap = previous_heatmap
-                        #difference_heatmap = np.squeeze(difference_heatmap)
+                        # difference_heatmap = np.squeeze(difference_heatmap)
 
-                        difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                            np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
+                        difference_heatmap = np.squeeze(
+                            self.grid_aranger.transfer_grid_arangement_into_320(
+                                np.reshape(
+                                    difference_heatmap,
+                                    (
+                                        difference_heatmap.shape[0],
+                                        difference_heatmap.shape[1],
+                                        1,
+                                    ),
+                                )
+                            )
+                        )
                         if self.collected_with_virtual_hand:
                             label = self.ref_data[movement][i, :]
                         else:
@@ -511,15 +539,24 @@ class MultiDimensionalDecisionTree:
                         # after the following will be the additional comparison between the current heatmap and the reference signal some time ago or in the future
                         # best would be to take the ref from the signal because first comes the emg signal(heatmap) and the comes the reference or the real output
 
-
-                        if (i + self.neuromuscular_delay_in_samples) < self.ref_data[movement].shape[0]:
-                            for skip in range(self.sample_difference_overlap, self.neuromuscular_delay_in_samples, self.sample_difference_overlap):
+                        if (i + self.neuromuscular_delay_in_samples) < self.ref_data[
+                            movement
+                        ].shape[0]:
+                            for skip in range(
+                                self.sample_difference_overlap,
+                                self.neuromuscular_delay_in_samples,
+                                self.sample_difference_overlap,
+                            ):
                                 ref_in_the_future = self.ref_data[movement][i + skip, :]
                                 combined_diffs.append(difference_heatmap)
                                 combined_ys.append(ref_in_the_future)
 
                         if (i - self.delay_to_movement_in_samples) >= 0:
-                            for skip in range(self.sample_difference_overlap, self.delay_to_movement_in_samples, self.sample_difference_overlap):
+                            for skip in range(
+                                self.sample_difference_overlap,
+                                self.delay_to_movement_in_samples,
+                                self.sample_difference_overlap,
+                            ):
                                 ref_in_the_past = self.ref_data[movement][i - skip, :]
                                 combined_diffs.append(difference_heatmap)
                                 combined_ys.append(ref_in_the_past)
@@ -536,7 +573,10 @@ class MultiDimensionalDecisionTree:
                     combined_diffs, combined_ys, random_state=42
                 )
                 split_index = int(len(combined_diffs) * split_ratio)
-                X_train, X_test = combined_diffs[:split_index], combined_diffs[split_index:]
+                X_train, X_test = (
+                    combined_diffs[:split_index],
+                    combined_diffs[split_index:],
+                )
                 y_train, y_test = combined_ys[:split_index], combined_ys[split_index:]
 
                 results.append((X_train, X_test, y_train, y_test))
@@ -619,8 +659,6 @@ class MultiDimensionalDecisionTree:
                     + "/training_data_time_mean.pkl"
                 )
 
-
-
     def add_data_for_local_detection(self, x_train, y_train, x_test, y_test):
         self.X_train_local = x_train
         self.y_train_local = y_train
@@ -691,32 +729,42 @@ class MultiDimensionalDecisionTree:
                 self.X_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/X_test_local" + adding + ".pkl",
+                + "/X_test_local"
+                + adding
+                + ".pkl",
             )
             save_as_pickle(
                 self.y_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/y_test_local" + adding + ".pkl",
+                + "/y_test_local"
+                + adding
+                + ".pkl",
             )
             save_as_pickle(
                 self.X_train_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/X_train_local" + adding + ".pkl",
+                + "/X_train_local"
+                + adding
+                + ".pkl",
             )
             save_as_pickle(
                 self.y_train_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/y_train_local" + adding + ".pkl",
+                + "/y_train_local"
+                + adding
+                + ".pkl",
             )
             if self.use_difference_heatmap:
                 save_as_pickle(
                     self.training_data_time,
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(self.patient_number)
-                    + "/training_data_time" + adding + ".pkl",
+                    + "/training_data_time"
+                    + adding
+                    + ".pkl",
                 )
         else:
             print("using mean in MovementPrediction.py")
@@ -724,34 +772,43 @@ class MultiDimensionalDecisionTree:
                 self.X_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/X_test_local_mean" + adding + ".pkl",
+                + "/X_test_local_mean"
+                + adding
+                + ".pkl",
             )
             save_as_pickle(
                 self.y_test_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/y_test_local_mean" + adding + ".pkl",
+                + "/y_test_local_mean"
+                + adding
+                + ".pkl",
             )
             save_as_pickle(
                 self.X_train_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/X_train_local_mean" + adding + ".pkl",
+                + "/X_train_local_mean"
+                + adding
+                + ".pkl",
             )
             save_as_pickle(
                 self.y_train_local,
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_number)
-                + "/y_train_local_mean" + adding + ".pkl",
+                + "/y_train_local_mean"
+                + adding
+                + ".pkl",
             )
             if self.use_difference_heatmap:
                 save_as_pickle(
                     self.training_data_time,
                     r"trainings_data/resulting_trainings_data/subject_"
                     + str(self.patient_number)
-                    + "/training_data_time_mean" + adding + ".pkl",
+                    + "/training_data_time_mean"
+                    + adding
+                    + ".pkl",
                 )
-
 
     def simulate_realtime_prediction(self):
         for i in tqdm.tqdm(range(len(self.trees)), desc="Evaluating trees"):

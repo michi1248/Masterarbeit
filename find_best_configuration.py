@@ -15,12 +15,12 @@ from exo_controller import normalizations
 from exo_controller.helpers import *
 from exo_controller.spatial_filters import Filters
 from exo_controller.DTW import align_signals_dtw, make_rms_for_dtw
-#from exo_controller.ShallowConv import ShallowConvNetWithAttention
+
+# from exo_controller.ShallowConv import ShallowConvNetWithAttention
 from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
 from exo_controller.butterworth import Bandpass
 from exo_controller.muovipro import *
 import keyboard
-
 
 
 class EMGProcessor:
@@ -49,10 +49,10 @@ class EMGProcessor:
         use_shallow_conv,
         use_virtual_hand_interface_for_coord_generation,
         epochs,
-        split_index_if_same_dataset = None,
-        use_dtw = False,
-        use_muovi_pro= False,
-        skip_in_ms = 25,
+        split_index_if_same_dataset=None,
+        use_dtw=False,
+        use_muovi_pro=False,
+        skip_in_ms=25,
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -75,7 +75,9 @@ class EMGProcessor:
         self.only_record_data = only_record_data
         self.use_control_stream = use_control_stream
         self.use_shallow_conv = use_shallow_conv
-        self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
+        self.use_virtual_hand_interface_for_coord_generation = (
+            use_virtual_hand_interface_for_coord_generation
+        )
         self.use_dtw = use_dtw
         self.use_muovi_pro = use_muovi_pro
         self.skip_in_ms = skip_in_ms
@@ -105,13 +107,18 @@ class EMGProcessor:
 
         self.initialize()
 
-
     def choose_finger_indexes(self):
         if "fist" in self.movements:
-            self.finger_indexes = [0,2,3,4,5]
+            self.finger_indexes = [0, 2, 3, 4, 5]
             return self.finger_indexes
-        elif ("thumb" in self.movements) and ("index" in self.movements) and ("middle" in self.movements) and ("ring" in self.movements) and ("pinkie" in self.movements):
-            self.finger_indexes = [0,2,3,4,5]
+        elif (
+            ("thumb" in self.movements)
+            and ("index" in self.movements)
+            and ("middle" in self.movements)
+            and ("ring" in self.movements)
+            and ("pinkie" in self.movements)
+        ):
+            self.finger_indexes = [0, 2, 3, 4, 5]
             return self.finger_indexes
         else:
             self.finger_indexes = []
@@ -145,7 +152,9 @@ class EMGProcessor:
         self.filter_local = MichaelFilter(num_fingers=len(self.finger_indexes))
         self.filter_time = MichaelFilter(num_fingers=len(self.finger_indexes))
         print("using the following fingers: ", self.finger_indexes)
-        self.grid_aranger = Grid_Arrangement(self.grid_order,use_muovi_pro=self.use_muovi_pro)
+        self.grid_aranger = Grid_Arrangement(
+            self.grid_order, use_muovi_pro=self.use_muovi_pro
+        )
         self.grid_aranger.make_grid()
 
         if self.use_gauss_filter:
@@ -158,15 +167,15 @@ class EMGProcessor:
             patient_id=self.patient_id,
             sampling_frequency_emg=2048,
             recording_time=self.time_for_each_movement_recording,
-            movements = self.movements.copy(),
-            grid_order = self.grid_order,
-            use_virtual_hand_interface_for_coord_generation = self.use_virtual_hand_interface_for_coord_generation,
-            finger_indexes = self.finger_indexes,
+            movements=self.movements.copy(),
+            grid_order=self.grid_order,
+            use_virtual_hand_interface_for_coord_generation=self.use_virtual_hand_interface_for_coord_generation,
+            finger_indexes=self.finger_indexes,
             use_muovi_pro=self.use_muovi_pro,
         )
         patient.run_parallel()
 
-    def remove_nan_values(self,data):
+    def remove_nan_values(self, data):
         """
         removes nan values from the data
         :param data:
@@ -185,7 +194,7 @@ class EMGProcessor:
 
         resulting_file = f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/emg_data.pkl"
         emg_data = load_pickle_file(resulting_file)
-        print("shape emg data: " ,emg_data["rest"].shape)
+        print("shape emg data: ", emg_data["rest"].shape)
         ref_data = load_pickle_file(
             f"trainings_data/resulting_trainings_data/subject_{self.patient_id}/3d_data.pkl"
         )
@@ -193,12 +202,11 @@ class EMGProcessor:
 
         if self.use_dtw:
             for movement in ref_data.keys():
-
                 if movement == "rest":
                     continue
                 dtw_rms = make_rms_for_dtw(emg_data[movement])
                 emg_data[movement], ref_data[movement] = align_signals_dtw(
-                    dtw_rms, ref_data[movement],emg_data[movement]
+                    dtw_rms, ref_data[movement], emg_data[movement]
                 )
 
             print("shape emg rest data after dtw: ", emg_data["rest"].shape)
@@ -208,8 +216,7 @@ class EMGProcessor:
 
         return emg_data, ref_data
 
-    def train_model(self, emg_data, ref_data,already_build=False):
-
+    def train_model(self, emg_data, ref_data, already_build=False):
         # Training a new model
         if not already_build:
             model = MultiDimensionalDecisionTree(
@@ -243,15 +250,25 @@ class EMGProcessor:
             model.train()
             model.evaluate()
         else:
-            shallow_model = ShallowConvNetWithAttention(use_difference_heatmap=self.use_difference_heatmap ,best_time_tree=self.best_time_tree, grid_aranger=self.grid_aranger,number_of_grids=len(self.grid_order),use_mean=self.use_mean_subtraction,finger_indexes=self.finger_indexes,use_muovi_pro=self.use_muovi_pro)
+            shallow_model = ShallowConvNetWithAttention(
+                use_difference_heatmap=self.use_difference_heatmap,
+                best_time_tree=self.best_time_tree,
+                grid_aranger=self.grid_aranger,
+                number_of_grids=len(self.grid_order),
+                use_mean=self.use_mean_subtraction,
+                finger_indexes=self.finger_indexes,
+                use_muovi_pro=self.use_muovi_pro,
+            )
             shallow_model.apply(shallow_model._initialize_weights)
-            train_loader,test_loader = shallow_model.load_trainings_data(self.patient_id)
+            train_loader, test_loader = shallow_model.load_trainings_data(
+                self.patient_id
+            )
             shallow_model.train_model(train_loader, epochs=self.epochs)
             shallow_model.evaluate(test_loader)
             self.train_loader = train_loader
         if self.save_trained_model:
             if not self.use_shallow_conv:
-                model.save_model(subject=self.patient_id )
+                model.save_model(subject=self.patient_id)
                 print("Model saved")
             else:
                 shallow_model.save_model(path=self.patient_id + "_shallow.pt")
@@ -262,10 +279,7 @@ class EMGProcessor:
         else:
             return model
 
-
-
     def process_data(self, emg_data, ref_data):
-
         # Process data for model input
         # for i in emg_data.keys():
         #     emg_data[i] = np.array(
@@ -274,7 +288,11 @@ class EMGProcessor:
 
         copied_emg_data = emg_data.copy()
         for i in copied_emg_data.keys():
-            copied_emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(copied_emg_data[i])
+            copied_emg_data[
+                i
+            ] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+                copied_emg_data[i]
+            )
 
         if self.use_important_channels:
             important_channels = extract_important_channels_realtime(
@@ -282,7 +300,8 @@ class EMGProcessor:
             )
             self.channels = important_channels
             self.channels_row_shape = [
-                self.grid_aranger.from_grid_position_to_row_position(ch[0], ch[1]) for ch in important_channels
+                self.grid_aranger.from_grid_position_to_row_position(ch[0], ch[1])
+                for ch in important_channels
             ]
 
         else:
@@ -300,18 +319,21 @@ class EMGProcessor:
             use_muovi_pro=self.use_muovi_pro,
             skip_in_samples=self.skip_in_samples,
             use_bandpass_filter=self.use_bandpass_filter,
-
         )
 
-        #shape should be 320 x #samples
-        #ref_data = resample_reference_data(ref_data, emg_data)
+        # shape should be 320 x #samples
+        # ref_data = resample_reference_data(ref_data, emg_data)
         ref_data = self.remove_nan_values(ref_data)
         emg_data = self.remove_nan_values(emg_data)
         print("length of emg data: ", len(emg_data["rest"][0]))
         print("length of ref data: ", ref_data["rest"].shape[0])
 
         for i in emg_data.keys():
-            emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(emg_data[i])
+            emg_data[
+                i
+            ] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+                emg_data[i]
+            )
 
         # add gaussian noise to the ground truth data so that the model can learn to deal with noise
         for movement in self.movements:
@@ -319,11 +341,23 @@ class EMGProcessor:
             for finger in range(len(self.finger_indexes)):
                 std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
                 noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
-                ref_data[movement][:, finger] = np.add(ref_data[movement][:, finger], noise_i)
+                ref_data[movement][:, finger] = np.add(
+                    ref_data[movement][:, finger], noise_i
+                )
 
-        #shape should be grid
+        # shape should be grid
         if self.use_mean_subtraction:
-            channel_extractor = ExtractImportantChannels.ChannelExtraction("rest", emg_data.copy(), ref_data.copy(),use_gaussian_filter=self.use_gauss_filter,use_muovi_pro=self.use_muovi_pro,use_spatial_filter=self.use_spatial_filter,frame_duration=self.window_size,skip_in_samples=self.skip_in_samples,use_bandpass_filter=self.use_bandpass_filter)
+            channel_extractor = ExtractImportantChannels.ChannelExtraction(
+                "rest",
+                emg_data.copy(),
+                ref_data.copy(),
+                use_gaussian_filter=self.use_gauss_filter,
+                use_muovi_pro=self.use_muovi_pro,
+                use_spatial_filter=self.use_spatial_filter,
+                frame_duration=self.window_size,
+                skip_in_samples=self.skip_in_samples,
+                use_bandpass_filter=self.use_bandpass_filter,
+            )
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
             self.normalizer.set_mean(mean=self.mean_rest.copy())
 
@@ -335,9 +369,7 @@ class EMGProcessor:
 
         self.normalizer.calculate_normalization_values()
 
-
-
-    def format_for_exo(self, results,control_results=None):
+    def format_for_exo(self, results, control_results=None):
         if self.use_control_stream:
             res = [0] * 18
             count = 0
@@ -354,9 +386,7 @@ class EMGProcessor:
                 count += 1
             return res
 
-
-    def output_results(self, results,control_results=None):
-
+    def output_results(self, results, control_results=None):
         for i in range(2):
             if results[i] > 1:
                 results[i] = 1
@@ -368,7 +398,7 @@ class EMGProcessor:
             # Logic to send commands to the exoskeleton
             # Assuming 'results' is in the format expected by the exoskeleton
             # You might need to format 'results' accordingly
-            formatted_results = self.format_for_exo(results,control_results)
+            formatted_results = self.format_for_exo(results, control_results)
             self.exo_controller.move_exo(formatted_results)
         else:
             # Print the prediction results to the console
@@ -379,18 +409,20 @@ class EMGProcessor:
         ground_truth = []
         # Main prediction loop
         if self.window_size_in_samples > self.sample_length_bandpass_buffer:
-            max_chunk_number = np.ceil(self.window_size_in_samples / self.skip_in_samples)
+            max_chunk_number = np.ceil(
+                self.window_size_in_samples / self.skip_in_samples
+            )
         else:
-            max_chunk_number = np.ceil(self.sample_length_bandpass_buffer / self.skip_in_samples)
+            max_chunk_number = np.ceil(
+                self.sample_length_bandpass_buffer / self.skip_in_samples
+            )
 
         print("max_chunk_number: ", max_chunk_number)
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
 
-
         if self.use_dtw:
             for movement in ref_data.keys():
-
                 if movement == "rest":
                     continue
                 dtw_rms = make_rms_for_dtw(emg_data[movement])
@@ -399,22 +431,21 @@ class EMGProcessor:
                 )
         for i in emg_data.keys():
             emg_data[i] = np.array(
-                emg_data[i]#.transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
+                emg_data[
+                    i
+                ]  # .transpose(1, 0, 2).reshape(len(self.grid_order) * 64, -1)
             )
             if self.use_important_channels:
-
                 for channel in range(emg_data[i].shape[0]):
                     if channel not in self.channels_row_shape:
-                        emg_data[i][channel,:] = 0
+                        emg_data[i][channel, :] = 0
 
-
-
-        #ref_data = resample_reference_data(ref_data, emg_data)
-
-
+        # ref_data = resample_reference_data(ref_data, emg_data)
 
         for i in emg_data.keys():
-            emg_data[i] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+            emg_data[
+                i
+            ] = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
                 emg_data[i]
             )
 
@@ -424,9 +455,14 @@ class EMGProcessor:
         if self.use_bandpass_filter:
             instances_bandpass_for_channel = []
             for i in range(len(self.channels)):
-                instances_bandpass_for_channel.append(Bandpass(10, 500, self.sampling_frequency))
-                instances_bandpass_for_channel = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(np.array(instances_bandpass_for_channel))
-
+                instances_bandpass_for_channel.append(
+                    Bandpass(10, 500, self.sampling_frequency)
+                )
+                instances_bandpass_for_channel = (
+                    self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+                        np.array(instances_bandpass_for_channel)
+                    )
+                )
 
         for movement in ref_data.keys():
             if movement in self.movements:
@@ -434,10 +470,22 @@ class EMGProcessor:
                 emg_buffer = []
                 # ref_data[movement] = normalize_2D_array(ref_data[movement], axis=0)
                 print("movement: ", movement, file=sys.stderr)
-                for sample in tqdm.tqdm(range(0,emg_data[movement].shape[2]- int((self.window_size / 1000) * self.sampling_frequency) + 1,self.skip_in_samples)):
-                    if (sample <= ref_data[movement].shape[0]) and (sample - max(self.num_previous_samples) >= 0):
+                for sample in tqdm.tqdm(
+                    range(
+                        0,
+                        emg_data[movement].shape[2]
+                        - int((self.window_size / 1000) * self.sampling_frequency)
+                        + 1,
+                        self.skip_in_samples,
+                    )
+                ):
+                    if (sample <= ref_data[movement].shape[0]) and (
+                        sample - max(self.num_previous_samples) >= 0
+                    ):
                         time_start = time.time()
-                        chunk = emg_data[movement][:, :, sample : sample + self.skip_in_samples]
+                        chunk = emg_data[movement][
+                            :, :, sample : sample + self.skip_in_samples
+                        ]
                         emg_buffer.append(chunk)
                         if (
                             len(emg_buffer) > max_chunk_number
@@ -448,44 +496,56 @@ class EMGProcessor:
                         if self.use_bandpass_filter:
                             for row in range(data.shape[0]):
                                 for col in range(data.shape[1]):
-                                    data[row, col] = instances_bandpass_for_channel[row,col].filter_channel(data[row, col], multiple_samples=True)
+                                    data[row, col] = instances_bandpass_for_channel[
+                                        row, col
+                                    ].filter_channel(
+                                        data[row, col], multiple_samples=True
+                                    )
 
-                        if ((data.shape[2] - self.window_size_in_samples) < 0 ):
-                            emg_to_use = data[:,:,:]
+                        if (data.shape[2] - self.window_size_in_samples) < 0:
+                            emg_to_use = data[:, :, :]
                         else:
-                            emg_to_use = data[:,:,
-                                         (data.shape[2]) - self.window_size_in_samples: -1
-                                         ]
+                            emg_to_use = data[
+                                :, :, (data.shape[2]) - self.window_size_in_samples : -1
+                            ]
                         if self.use_difference_heatmap:
                             # data for difference heatmap
-                            if ((data.shape[2] - (self.window_size_in_samples*2.5)) < 0 ):
-                                emg_to_use_difference = data[:,:,:]
+                            if (
+                                data.shape[2] - (self.window_size_in_samples * 2.5)
+                            ) < 0:
+                                emg_to_use_difference = data[:, :, :]
                             else:
-                                emg_to_use_difference = data[:,:,
-                                                        (data.shape[2]) - int(self.window_size_in_samples*2.5): -1
-                                                        ]
+                                emg_to_use_difference = data[
+                                    :,
+                                    :,
+                                    (data.shape[2])
+                                    - int(self.window_size_in_samples * 2.5) : -1,
+                                ]
                         if self.use_spatial_filter:
                             emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
                             if self.use_difference_heatmap:
-                                emg_to_use_difference = self.filter.spatial_filtering(emg_to_use_difference, "IR")
+                                emg_to_use_difference = self.filter.spatial_filtering(
+                                    emg_to_use_difference, "IR"
+                                )
 
-                        heatmap_local = calculate_local_heatmap_realtime(
-                            emg_to_use
-                        )
+                        heatmap_local = calculate_local_heatmap_realtime(emg_to_use)
                         if self.use_difference_heatmap:
                             previous_heatmap = calculate_local_heatmap_realtime(
-                            emg_to_use_difference
-                        )
+                                emg_to_use_difference
+                            )
 
                         if self.use_mean_subtraction:
                             heatmap_local = np.subtract(heatmap_local, self.mean_rest)
                             if self.use_difference_heatmap:
-                                previous_heatmap = np.subtract(heatmap_local, self.mean_rest)
+                                previous_heatmap = np.subtract(
+                                    heatmap_local, self.mean_rest
+                                )
 
                         heatmap_local = self.normalizer.normalize_chunk(heatmap_local)
                         if self.use_difference_heatmap:
-                            previous_heatmap = self.normalizer.normalize_chunk(previous_heatmap)
-
+                            previous_heatmap = self.normalizer.normalize_chunk(
+                                previous_heatmap
+                            )
 
                         if self.use_gauss_filter:
                             heatmap_local = self.filter.apply_gaussian_filter(
@@ -496,13 +556,33 @@ class EMGProcessor:
                                     previous_heatmap, self.gauss_filter
                                 )
                         if self.use_difference_heatmap:
-                            difference_heatmap =  previous_heatmap
+                            difference_heatmap = previous_heatmap
                             if not self.use_shallow_conv:
-                                difference_heatmap = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                                    np.reshape(difference_heatmap, (difference_heatmap.shape[0], difference_heatmap.shape[1], 1))))
+                                difference_heatmap = np.squeeze(
+                                    self.grid_aranger.transfer_grid_arangement_into_320(
+                                        np.reshape(
+                                            difference_heatmap,
+                                            (
+                                                difference_heatmap.shape[0],
+                                                difference_heatmap.shape[1],
+                                                1,
+                                            ),
+                                        )
+                                    )
+                                )
                         if not self.use_shallow_conv:
-                            heatmap_local = np.squeeze(self.grid_aranger.transfer_grid_arangement_into_320(
-                                np.reshape(heatmap_local, (heatmap_local.shape[0], heatmap_local.shape[1], 1))))
+                            heatmap_local = np.squeeze(
+                                self.grid_aranger.transfer_grid_arangement_into_320(
+                                    np.reshape(
+                                        heatmap_local,
+                                        (
+                                            heatmap_local.shape[0],
+                                            heatmap_local.shape[1],
+                                            1,
+                                        ),
+                                    )
+                                )
+                            )
 
                         if self.use_shallow_conv:
                             if not self.use_difference_heatmap:
@@ -530,10 +610,12 @@ class EMGProcessor:
 
                         if self.use_difference_heatmap:
                             if np.isnan(difference_heatmap).any():
-                                res_time = np.array([-1]*len(self.finger_indexes))
+                                res_time = np.array([-1] * len(self.finger_indexes))
                             else:
                                 if self.use_shallow_conv:
-                                    res_time = model.predict(heatmap_local,difference_heatmap)
+                                    res_time = model.predict(
+                                        heatmap_local, difference_heatmap
+                                    )
                                 else:
                                     res_time = model.trees[self.best_time_tree].predict(
                                         [difference_heatmap]
@@ -566,10 +648,9 @@ class EMGProcessor:
             print("nan values in predictions")
         if np.isnan(ground_truth).any():
             print("nan values in ground truth")
-        return predictions,ground_truth
+        return predictions, ground_truth
 
-
-    def run(self,already_build=False):
+    def run(self, already_build=False):
         # Main loop for predictions
 
         if not already_build:
@@ -577,14 +658,18 @@ class EMGProcessor:
             if self.only_record_data:
                 return
             self.process_data(emg_data, ref_data)
-            model = self.train_model(emg_data.copy(), ref_data.copy(),already_build=already_build)
+            model = self.train_model(
+                emg_data.copy(), ref_data.copy(), already_build=already_build
+            )
         else:
             model = self.train_model(None, None, already_build=already_build)
 
-        results,ground_truth = self.run_prediction_loop_recorded_data(model)
-        #print("difference: ", np.subtract(np.array([target for _, target in self.train_loader]).squeeze()[0],ground_truth))
-        avg_loss,mse_loss = model.evaluate_best(predictions=results,ground_truth=ground_truth)
-        return avg_loss,mse_loss
+        results, ground_truth = self.run_prediction_loop_recorded_data(model)
+        # print("difference: ", np.subtract(np.array([target for _, target in self.train_loader]).squeeze()[0],ground_truth))
+        avg_loss, mse_loss = model.evaluate_best(
+            predictions=results, ground_truth=ground_truth
+        )
+        return avg_loss, mse_loss
 
 
 if __name__ == "__main__":
@@ -611,7 +696,12 @@ if __name__ == "__main__":
 
     use_shallow_conv = True
 
-    for method in  ["Min_Max_Scaling_over_whole_data","no_scaling","Robust_Scaling","Robust_all_channels",]:
+    for method in [
+        "Min_Max_Scaling_over_whole_data",
+        "no_scaling",
+        "Robust_Scaling",
+        "Robust_all_channels",
+    ]:
         evaluation_results_mean_sub = []
         evaluation_results_no_mean_sub = []
         mse_evaluation_results_mean_sub = []
@@ -622,8 +712,16 @@ if __name__ == "__main__":
         best_mse_mean = None
         best_mse_no_mean = None
 
-
-        for epochs in [1,5,10,50,100,150,200,250]:#[1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
+        for epochs in [
+            1,
+            5,
+            10,
+            50,
+            100,
+            150,
+            200,
+            250,
+        ]:  # [1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True, False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
@@ -642,7 +740,7 @@ if __name__ == "__main__":
                         "pinkie",
                         # "fist",
                     ],
-                    grid_order=[1,2,3,4,5],
+                    grid_order=[1, 2, 3, 4, 5],
                     use_difference_heatmap=False,
                     use_important_channels=False,
                     use_local=True,  # set this to false if you want to use prediction with difference heatmap
@@ -661,14 +759,13 @@ if __name__ == "__main__":
                     only_record_data=False,
                     use_control_stream=True,
                     use_shallow_conv=use_shallow_conv,
-                    #set this to false if not recorded with virtual hand interface
-                    use_virtual_hand_interface_for_coord_generation = True,
-                    epochs = epochs,
-                    split_index_if_same_dataset = split_index_if_same_dataset,
-                    use_dtw = False,
+                    # set this to false if not recorded with virtual hand interface
+                    use_virtual_hand_interface_for_coord_generation=True,
+                    epochs=epochs,
+                    split_index_if_same_dataset=split_index_if_same_dataset,
+                    use_dtw=False,
                     use_muovi_pro=True,
-                    skip_in_ms = 25,
-
+                    skip_in_ms=25,
                 )
                 if count <= 1:
                     avg_loss, mse_loss = emg_processor.run(already_build=False)
@@ -688,7 +785,9 @@ if __name__ == "__main__":
                             emg_processor.channels_row_shape = channels_row_shape_mean
                         else:
                             emg_processor.channels = important_channels_no_mean
-                            emg_processor.channels_row_shape = channels_row_shape_no_mean
+                            emg_processor.channels_row_shape = (
+                                channels_row_shape_no_mean
+                            )
                     avg_loss, mse_loss = emg_processor.run(already_build=True)
 
                 if count == 1:
@@ -736,22 +835,63 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [1,5,10,50,100,150,200,250]
-                x = x[:x.index(epochs)+1]
+                x = [1, 5, 10, 50, 100, 150, 200, 250]
+                x = x[: x.index(epochs) + 1]
                 if len(evaluation_results_mean_sub) == len(x):
-                    plt.plot(x,evaluation_results_mean_sub, label="mean_sub",color="red",marker="X")
+                    plt.plot(
+                        x,
+                        evaluation_results_mean_sub,
+                        label="mean_sub",
+                        color="red",
+                        marker="X",
+                    )
                 if len(evaluation_results_no_mean_sub) == len(x):
-                    plt.plot(x,evaluation_results_no_mean_sub,label="no_mean_sub",color="blue",marker="X")
+                    plt.plot(
+                        x,
+                        evaluation_results_no_mean_sub,
+                        label="no_mean_sub",
+                        color="blue",
+                        marker="X",
+                    )
                 if len(mse_evaluation_results_mean_sub) == len(x):
-                    plt.plot(x, mse_evaluation_results_mean_sub, label="mse_mean_sub", color="red", marker="o")
+                    plt.plot(
+                        x,
+                        mse_evaluation_results_mean_sub,
+                        label="mse_mean_sub",
+                        color="red",
+                        marker="o",
+                    )
                 if len(mse_evaluation_results_no_mean_sub) == len(x):
-                    plt.plot(x, mse_evaluation_results_no_mean_sub, label="mse_no_mean_sub", color="blue", marker="o")
+                    plt.plot(
+                        x,
+                        mse_evaluation_results_no_mean_sub,
+                        label="mse_no_mean_sub",
+                        color="blue",
+                        marker="o",
+                    )
 
                 # Creating a dummy plot element for the additional text
-                plt.plot([], [], ' ', label='Best mse no mean is ' + str(round(best_mse_no_mean,3)))
-                plt.plot([], [], ' ', label='Best mse mean is ' + str(round(best_mse_mean,3)))
-                plt.plot([], [], ' ', label='Best r2 no mean is ' + str(round(best_r2_no_mean,3)))
-                plt.plot([], [], ' ', label='Best r2 mean is ' + str(round(best_r2_mean,3)))
+                plt.plot(
+                    [],
+                    [],
+                    " ",
+                    label="Best mse no mean is " + str(round(best_mse_no_mean, 3)),
+                )
+                plt.plot(
+                    [],
+                    [],
+                    " ",
+                    label="Best mse mean is " + str(round(best_mse_mean, 3)),
+                )
+                plt.plot(
+                    [],
+                    [],
+                    " ",
+                    label="Best r2 no mean is " + str(round(best_r2_no_mean, 3)),
+                )
+                plt.plot(
+                    [], [], " ", label="Best r2 mean is " + str(round(best_r2_mean, 3))
+                )
                 plt.grid()
                 plt.ylabel("avg_loss")
                 plt.xlabel("epochs")
@@ -760,5 +900,12 @@ if __name__ == "__main__":
 
                 train_name = emg_processor.patient_id.split("_")[-1]
                 test_name = emg_processor.use_recorded_data.split("_")[-1].split("/")[0]
-                plt.savefig(r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/" + method +  "_" +  train_name + "_" + test_name + "gauss_filtered_25ms_bandpass.png")
-
+                plt.savefig(
+                    r"D:\Lab\MasterArbeit\Plots_Model_Hyperparameters/"
+                    + method
+                    + "_"
+                    + train_name
+                    + "_"
+                    + test_name
+                    + "gauss_filtered_25ms_bandpass.png"
+                )

@@ -2,8 +2,9 @@ import socket
 import numpy as np
 import keyboard
 
+
 class EMG_Interface:
-    def __init__(self,grid_order=None):
+    def __init__(self, grid_order=None):
         """
         This class is used to connect to the EMG device and to receive the EMG data.
 
@@ -12,7 +13,7 @@ class EMG_Interface:
         if less than 5 grids are given, we use the amount of values in the list from multiple in 1 to the number of values
         """
         if grid_order is None:
-            grid_order = [1,2,3,4,5]
+            grid_order = [1, 2, 3, 4, 5]
         self.grid_order = grid_order
 
     def initialize_emg_socket(self):
@@ -71,7 +72,6 @@ class EMG_Interface:
         self.emgSocket.setblocking(0)
         while True:
             try:
-
                 data = self.emgSocket.recv(self.BufferSize)  # Non-blocking receive
                 if not data:
                     self.emgSocket.setblocking(1)

@@ -16,7 +16,9 @@ import vlc
 
 
 class PyPlayer(tk.Frame):
-    def __init__(self, outer_instance, container, container_instance, title=None,movements=None):
+    def __init__(
+        self, outer_instance, container, container_instance, title=None, movements=None
+    ):
         tk.Frame.__init__(self, container_instance)
         self.container = container
         self.container_instance = container_instance
@@ -39,7 +41,9 @@ class PyPlayer(tk.Frame):
         self.canvas.pack(fill=tk.BOTH, expand=1)
         self.video_panel.pack(fill=tk.BOTH, expand=1)
         self.media_list = [
-            r"trainings_data/videos/" + x for x in os.listdir("trainings_data/videos") if any(s in x for s in movements )
+            r"trainings_data/videos/" + x
+            for x in os.listdir("trainings_data/videos")
+            if any(s in x for s in movements)
         ]
         self.media_list_copy = self.media_list.copy()
         # controls
@@ -56,7 +60,11 @@ class PyPlayer(tk.Frame):
             control_panel, text="start capturing", command=self.start_capturing
         )
         self.repeat_this_movement = tk.Button(
-            control_panel, text="repeat movement", command=self.repeat,bg="white", fg="black"
+            control_panel,
+            text="repeat movement",
+            command=self.repeat,
+            bg="white",
+            fg="black",
         )
         ttk.Button(control_panel, text="Play", command=self.play)
 
@@ -67,7 +75,6 @@ class PyPlayer(tk.Frame):
         self.open()
 
     def repeat(self):
-
         self.button.configure(text="start capturing", bg="white", fg="black")
         self.update()
 
@@ -76,12 +83,10 @@ class PyPlayer(tk.Frame):
             this_film = self.media_list_copy.index(self.curent)
         # delete the data that was recorded for this movement
 
-
         del self.outer_Instance.movement_name[-1]
         del self.outer_Instance.movement_name[-1]
 
         self.outer_Instance.movement_count -= 1
-
 
         last_key = list(self.outer_Instance.values_movie_start_emg.keys())[-1]
         del self.outer_Instance.values_movie_start_emg[last_key]

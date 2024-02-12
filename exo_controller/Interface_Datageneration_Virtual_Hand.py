@@ -16,10 +16,20 @@ import vlc
 
 
 class Interface(tk.Frame):
-    def __init__(self, outer_instance, container, container_instance, title=None,movements=None, use_virtual_hand_interface_for_coord_generation = True):
+    def __init__(
+        self,
+        outer_instance,
+        container,
+        container_instance,
+        title=None,
+        movements=None,
+        use_virtual_hand_interface_for_coord_generation=True,
+    ):
         tk.Frame.__init__(self, container_instance)
 
-        self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
+        self.use_virtual_hand_interface_for_coord_generation = (
+            use_virtual_hand_interface_for_coord_generation
+        )
 
         self.container = container
         self.container_instance = container_instance
@@ -31,14 +41,19 @@ class Interface(tk.Frame):
         self.times = {}
         self.name = ""
 
-        self.movement_label = tk.Label(self.container_instance, text="", font=self.big_font, foreground="black", background="white")
+        self.movement_label = tk.Label(
+            self.container_instance,
+            text="",
+            font=self.big_font,
+            foreground="black",
+            background="white",
+        )
         self.movement_label.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
         self.outer_Instance = outer_instance
         # main menubar
         self.menubar = tk.Menu(self.container_instance)
         self.menubar.config(font=self.menu_font)
-
 
         self.media_list = movements
         self.media_list_copy = self.media_list.copy()
@@ -56,9 +71,12 @@ class Interface(tk.Frame):
             control_panel, text="start capturing", command=self.start_capturing
         )
         self.repeat_this_movement = tk.Button(
-            control_panel, text="repeat movement", command=self.repeat,bg="white", fg="black"
+            control_panel,
+            text="repeat movement",
+            command=self.repeat,
+            bg="white",
+            fg="black",
         )
-
 
         # play.pack(side=tk.LEFT)
         self.button.pack(side=tk.LEFT)
@@ -67,7 +85,6 @@ class Interface(tk.Frame):
         self.open()
 
     def repeat(self):
-
         self.button.configure(text="start capturing", bg="white", fg="black")
         self.update()
 
@@ -75,7 +92,6 @@ class Interface(tk.Frame):
             last_film = self.media_list_copy.index(self.curent) - 1
             this_film = self.media_list_copy.index(self.curent)
         # delete the data that was recorded for this movement
-
 
         del self.outer_Instance.movement_name[-1]
         del self.outer_Instance.movement_name[-1]
@@ -86,7 +102,6 @@ class Interface(tk.Frame):
             self.outer_Instance.movement_count_virtual_hand -= 1
 
         self.outer_Instance.movement_count -= 1
-
 
         last_key = list(self.outer_Instance.values_movie_start_emg.keys())[-1]
         del self.outer_Instance.values_movie_start_emg[last_key]
@@ -99,16 +114,11 @@ class Interface(tk.Frame):
         print("reset the data for this movement and repeat the movement recording")
         self.open()
 
-
-
-
-
     def close(self):
         """Close the window."""
         print("close the window")
-        #self.container_instance.destroy()
+        # self.container_instance.destroy()
         self.container.delete_window()
-
 
     def start_capturing(self):
         # self.time is the time when the video started
@@ -138,7 +148,6 @@ class Interface(tk.Frame):
 
         self.button.configure(text="start capturing", bg="white", fg="black")
         self.update()
-
 
         if len(self.media_list) == 0:
             self.outer_Instance.stop_emg_stream = True
@@ -178,7 +187,6 @@ class Interface(tk.Frame):
         self.outer_Instance.video_time = time.time()
 
 
-
 class Container:
     def __init__(self):
         self.tk_instance = tk.Tk()
@@ -194,7 +202,7 @@ class Container:
         tk_instance = self.tk_instance
         tk_instance.quit()
         tk_instance.destroy()
-        #os.exit(1)
+        # os.exit(1)
 
     def __repr__(self):
         return "Base tk Container"

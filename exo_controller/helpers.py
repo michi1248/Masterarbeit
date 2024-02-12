@@ -132,6 +132,7 @@ def open_csv_file(file_path):
     data = pandas.read_csv(file_path)
     return data
 
+
 def save_as_csv(data, where_to_save):
     """
     saves data as csv file
@@ -140,6 +141,7 @@ def save_as_csv(data, where_to_save):
     :return:
     """
     data.to_csv(where_to_save, index=False)
+
 
 def plot_spike_train(spike_train, title=None):
     """
@@ -247,7 +249,8 @@ def calculate_emg_rms_one_channel(emg_data):
     rms = np.sqrt(np.mean(np.square(emg_data)))
     return rms
 
-def calculate_heatmap( emg_grid, position, interval_in_samples):
+
+def calculate_heatmap(emg_grid, position, interval_in_samples):
     """
     Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
 
@@ -269,20 +272,18 @@ def calculate_heatmap( emg_grid, position, interval_in_samples):
             if (position - interval_in_samples < 0) or (
                 len(emg_grid[row_idx][col_idx]) < (interval_in_samples)
             ):
-                channel_data = emg_grid[row_idx][col_idx][: position+1]
+                channel_data = emg_grid[row_idx][col_idx][: position + 1]
 
             else:
                 channel_data = emg_grid[row_idx][col_idx][
                     position - interval_in_samples : position
                 ]
             # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
-            rms_values[row_idx, col_idx] = np.sqrt(
-                np.mean(np.array(channel_data) ** 2)
-            )
+            rms_values[row_idx, col_idx] = np.sqrt(np.mean(np.array(channel_data) ** 2))
     return rms_values
 
 
-def calculate_difference_heatmap_realtime( emg_grid, position, interval_in_samples):
+def calculate_difference_heatmap_realtime(emg_grid, position, interval_in_samples):
     """
     Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
 
@@ -307,18 +308,18 @@ def calculate_difference_heatmap_realtime( emg_grid, position, interval_in_sampl
             elif (position - interval_in_samples < 0) or (
                 len(emg_grid[row_idx][col_idx]) < (interval_in_samples)
             ):
-                channel_data = emg_grid[row_idx][col_idx][: position]
+                channel_data = emg_grid[row_idx][col_idx][:position]
 
             else:
                 channel_data = emg_grid[row_idx][col_idx][
                     position - interval_in_samples : position
                 ]
             # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
-            rms_values[row_idx, col_idx] = np.sqrt(
-                np.mean(np.array(channel_data) ** 2)
-            )
+            rms_values[row_idx, col_idx] = np.sqrt(np.mean(np.array(channel_data) ** 2))
     return rms_values
-def calculate_local_heatmap_realtime( emg_grid ):
+
+
+def calculate_local_heatmap_realtime(emg_grid):
     """
     Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
 
@@ -331,17 +332,17 @@ def calculate_local_heatmap_realtime( emg_grid ):
     - numpy.ndarray: An array of RMS values for each channel.
     """
 
-    num_rows, num_cols,signal_length = emg_grid.shape
+    num_rows, num_cols, signal_length = emg_grid.shape
     rms_values = np.zeros((num_rows, num_cols))
 
     for row_idx in range(num_rows):
         for col_idx in range(num_cols):
             channel_data = emg_grid[row_idx][col_idx][:]
             # print(np.sqrt(np.mean(np.array(channel_data) ** 2)))
-            rms_values[row_idx, col_idx] = np.sqrt(
-                np.mean(np.array(channel_data) ** 2)
-            )
+            rms_values[row_idx, col_idx] = np.sqrt(np.mean(np.array(channel_data) ** 2))
     return rms_values
+
+
 def calculate_emg_rms_row(emg_grid, position, interval_in_samples):
     """
     Calculate the Root Mean Squared (RMS) for every channel in a 3D grid of EMG channels.
@@ -533,8 +534,8 @@ def find_max_min_values_for_each_movement_and_channel(
     This is needed to normalize the data later on.
     :return: max and min values for each channel
     """
-    max_values = np.zeros(len(important_channels)) -np.inf
-    min_values = np.zeros(len(important_channels)) +np.inf
+    max_values = np.zeros(len(important_channels)) - np.inf
+    min_values = np.zeros(len(important_channels)) + np.inf
     for movement in range(len(emg_data)):
         for channel in important_channels:
             if np.max(emg_data[movement][channel]) > max_values[channel]:
@@ -678,15 +679,15 @@ def normalize_2D_array(data, axis=None, negative=False, max_value=None, min_valu
     if (max_value is not None) and (min_value is not None):
         min_value = np.array(min_value)
         max_value = np.array(max_value)
-        norm = (data - min_value) / ((max_value - min_value)+1e-10)
+        norm = (data - min_value) / ((max_value - min_value) + 1e-10)
 
     elif axis is None:
         data = np.array(data)
-        norm = (data - np.min(data)) / (np.max(data) - np.min(data)+1e-10)
+        norm = (data - np.min(data)) / (np.max(data) - np.min(data) + 1e-10)
     else:
         data = np.array(data)
         norm = (data - np.min(data, axis=axis)) / (
-            np.max(data, axis=axis) - np.min(data, axis=axis)+1e-10
+            np.max(data, axis=axis) - np.min(data, axis=axis) + 1e-10
         )
 
     if negative == True:
@@ -963,9 +964,10 @@ def get_locations_of_all_maxima(movement_signal, distance=5000):
                     index = i
             movement_signal = movement_signal[:, index]
 
-
-    local_maxima, _ = find_peaks(movement_signal, distance=distance,height=[0.4,1.2])
-    local_minima, _ = find_peaks(-movement_signal, distance=distance, height=[-0.2,0.4])
+    local_maxima, _ = find_peaks(movement_signal, distance=distance, height=[0.4, 1.2])
+    local_minima, _ = find_peaks(
+        -movement_signal, distance=distance, height=[-0.2, 0.4]
+    )
 
     return local_maxima, local_minima
 
@@ -1020,9 +1022,9 @@ def choose_possible_channels(
     """
     # threshold = only areas with values above it will be considered
 
-    difference_heatmap = normalize_2D_array(difference_heatmap, axis=None, negative=False)
-
-
+    difference_heatmap = normalize_2D_array(
+        difference_heatmap, axis=None, negative=False
+    )
 
     ex_list = []
     flex_list = []
@@ -1032,7 +1034,6 @@ def choose_possible_channels(
     # Determine whether the channel is more active in movement 1 or movement 2
     # Find the centroids of each area and calculate the channel with the highest activity
     # TODO additionaly filter for outliers (has high activity but surrounding not)
-
 
     # Iterate through the grid
     for i in range(difference_heatmap.shape[0]):
@@ -1105,11 +1106,11 @@ def choose_possible_channels(
     plt.show()
 
     plt.figure()
-    data = np.zeros((difference_heatmap.shape[0],difference_heatmap.shape[1]))
+    data = np.zeros((difference_heatmap.shape[0], difference_heatmap.shape[1]))
     for i in flex_list:
-        data[i[0],i[1]] = 1
+        data[i[0], i[1]] = 1
     for i in ex_list:
-        data[i[0],i[1]] = 1
+        data[i[0], i[1]] = 1
     sns.heatmap(data)
     plt.title("choosen channels")
     plt.show()

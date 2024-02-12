@@ -5,7 +5,6 @@ from exo_controller import normalizations
 from exo_controller.spatial_filters import Filters
 
 
-
 class ChannelExtraction:
     def __init__(
         self,
@@ -65,9 +64,11 @@ class ChannelExtraction:
         self.skip_in_samples = skip_in_samples
         self.use_bandpass_filter = use_bandpass_filter
         if self.use_bandpass_filter:
-            self.emg_data[self.movement_name] = self.filter.bandpass_filter_grid_emg_data(
-                self.emg_data[self.movement_name], fs = self.sampling_frequency)
-
+            self.emg_data[
+                self.movement_name
+            ] = self.filter.bandpass_filter_grid_emg_data(
+                self.emg_data[self.movement_name], fs=self.sampling_frequency
+            )
 
     def make_heatmap_emg(self, frame):
         """
@@ -75,20 +76,19 @@ class ChannelExtraction:
 
         """
         if (frame - self.number_observation_samples < 0) or (
-                self.emg_data[self.movement_name].shape[2] < (self.number_observation_samples)
+            self.emg_data[self.movement_name].shape[2]
+            < (self.number_observation_samples)
         ):
             emg_to_use = self.emg_data[self.movement_name][:, :, : frame + 1]
         else:
-            emg_to_use = self.emg_data[self.movement_name][:, :,
-                         frame - self.number_observation_samples: frame
-                         ]
+            emg_to_use = self.emg_data[self.movement_name][
+                :, :, frame - self.number_observation_samples : frame
+            ]
 
         if self.use_spatial_filter:
             emg_to_use = self.filter.spatial_filtering(emg_to_use, "IR")
 
-        heatmap = helpers.calculate_local_heatmap_realtime(
-            emg_to_use
-        )
+        heatmap = helpers.calculate_local_heatmap_realtime(emg_to_use)
 
         if self.movement_name == "rest":
             self.heatmaps_flex = np.add(self.heatmaps_flex, heatmap)
@@ -143,13 +143,27 @@ class ChannelExtraction:
         """
         # samples = all sample values when using all samples with self.frame_duration in between
         if self.use_muovipro:
-            self.samples =[i for i in range(0, self.sample_length, self.skip_in_samples,)]
+            self.samples = [
+                i
+                for i in range(
+                    0,
+                    self.sample_length,
+                    self.skip_in_samples,
+                )
+            ]
 
         else:
-            self.samples =[i for i in range(0, self.sample_length, self.skip_in_samples,)]
+            self.samples = [
+                i
+                for i in range(
+                    0,
+                    self.sample_length,
+                    self.skip_in_samples,
+                )
+            ]
 
         # make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
-        num_rows, num_cols,_ = self.emg_data[self.movement_name].shape
+        num_rows, num_cols, _ = self.emg_data[self.movement_name].shape
         self.heatmaps_flex = np.zeros((num_rows, num_cols))
         self.heatmaps_ex = np.zeros((num_rows, num_cols))
         self.number_heatmaps_flex = 0
@@ -178,22 +192,35 @@ class ChannelExtraction:
     def get_channels(self):
         # samples = all sample values when using all samples with self.frame_duration in between
         if self.use_muovipro:
-            self.samples =[i for i in range(0, self.sample_length,self.skip_in_samples,)]
+            self.samples = [
+                i
+                for i in range(
+                    0,
+                    self.sample_length,
+                    self.skip_in_samples,
+                )
+            ]
 
         else:
-            self.samples =[i for i in range(0, self.sample_length, self.skip_in_samples,)]
+            self.samples = [
+                i
+                for i in range(
+                    0,
+                    self.sample_length,
+                    self.skip_in_samples,
+                )
+            ]
         self.samples = [
             element for element in self.samples if element <= len(self.ref_data)
         ]
         # make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
-        num_rows, num_cols,_ = self.emg_data[self.movement_name].shape
+        num_rows, num_cols, _ = self.emg_data[self.movement_name].shape
         self.heatmaps_flex = np.zeros((num_rows, num_cols))
         self.heatmaps_ex = np.zeros((num_rows, num_cols))
         self.number_heatmaps_flex = 0
         self.number_heatmaps_ex = 0
 
-
-        if np.max(self.ref_data[:,0]) > np.max(self.ref_data[:, 1]):
+        if np.max(self.ref_data[:, 0]) > np.max(self.ref_data[:, 1]):
             self.local_maxima, self.local_minima = helpers.get_locations_of_all_maxima(
                 self.ref_data[:, 0], distance=5000
             )
@@ -207,7 +234,6 @@ class ChannelExtraction:
             helpers.plot_local_maxima_minima(
                 self.ref_data[:, 1], self.local_maxima, self.local_minima
             )
-
 
         important_channels = []
         for i in self.samples:

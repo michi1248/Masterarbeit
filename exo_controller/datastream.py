@@ -30,14 +30,14 @@ class Realtime_Datagenerator:
         debug=False,
         movements=None,
         grid_order=None,
-        use_virtual_hand_interface_for_coord_generation = True,
+        use_virtual_hand_interface_for_coord_generation=True,
         retrain=False,
         retrain_number=0,
         finger_indexes=None,
         use_muovi_pro=False,
     ):
         if grid_order is None:
-            grid_order = [1,2,3,4,5]
+            grid_order = [1, 2, 3, 4, 5]
         self.grid_order = grid_order
         self.debug = debug
         self.patient_id = patient_id
@@ -71,7 +71,6 @@ class Realtime_Datagenerator:
         self.chunk_size = 64
         self.use_muovi_pro = use_muovi_pro
 
-
         self.finger_indexes = finger_indexes
 
         self.retrain = retrain
@@ -85,17 +84,16 @@ class Realtime_Datagenerator:
         self.escape_loop_virtual_hand = False
         self.stop_coordinate_stream = False
 
-
         self.recording_started_emg = False
         self.recording_started_virtual_hand = False
         self.time_differences_virtual_hand = {}
         self.time_differences_emg = {}
 
         if not self.use_muovi_pro:
-            if len(self.grid_order) ==5:
+            if len(self.grid_order) == 5:
                 self.emg_indices = np.concatenate([np.r_[:64], np.r_[128:384]])
             else:
-                self.emg_indices =  np.r_[128:(128+len(self.grid_order)*64)]
+                self.emg_indices = np.r_[128 : (128 + len(self.grid_order) * 64)]
             ##################################### Stuff for Sockets / Streaming ##########################################
             self.buffer_size = 3
             self.EMG_HEADER = 8
@@ -118,9 +116,9 @@ class Realtime_Datagenerator:
 
         self.movement_names_videos = movements
 
-        self.use_virtual_hand_interface_for_coord_generation = use_virtual_hand_interface_for_coord_generation
-
-
+        self.use_virtual_hand_interface_for_coord_generation = (
+            use_virtual_hand_interface_for_coord_generation
+        )
 
     def createInner(self):
         return PyPlayer(self)
@@ -128,16 +126,27 @@ class Realtime_Datagenerator:
     def get_movies_and_process(self):
         if self.use_virtual_hand_interface_for_coord_generation:
             root = Container()
-            Interface(self, root, root.tk_instance, title="Interface", movements=self.movement_names_videos, use_virtual_hand_interface_for_coord_generation=self.use_virtual_hand_interface_for_coord_generation)
+            Interface(
+                self,
+                root,
+                root.tk_instance,
+                title="Interface",
+                movements=self.movement_names_videos,
+                use_virtual_hand_interface_for_coord_generation=self.use_virtual_hand_interface_for_coord_generation,
+            )
             root.tk_instance.mainloop()
             # root.delete_window()
         else:
             root = BaseTkContainer()
-            PyPlayer(self, root, root.tk_instance, title="pyplayer", movements=self.movement_names_videos)
+            PyPlayer(
+                self,
+                root,
+                root.tk_instance,
+                title="pyplayer",
+                movements=self.movement_names_videos,
+            )
             root.tk_instance.mainloop()
         # root.delete_window()
-
-
 
     def run_parallel(self):
         if not self.debug:
@@ -146,8 +155,6 @@ class Realtime_Datagenerator:
                 self.emgSocket.initialize_all()
             else:
                 self.emgSocket.send("startTX".encode("utf-8"))
-
-
 
         t1 = threading.Thread(target=self.get_movies_and_process)
         if self.use_virtual_hand_interface_for_coord_generation:
@@ -164,11 +171,7 @@ class Realtime_Datagenerator:
         # wait till both finishes before continuing main process
         t1.join()
 
-
-
-
         t2.join()
-
 
         if self.use_virtual_hand_interface_for_coord_generation:
             t3.join()
@@ -187,9 +190,11 @@ class Realtime_Datagenerator:
 
         kinematics_data = {}
         if self.use_virtual_hand_interface_for_coord_generation:
-
             for k, v in self.coords_list_virtual_hand.items():
-                print("total time between samples: ", np.sum(self.time_differences_virtual_hand[k]))
+                print(
+                    "total time between samples: ",
+                    np.sum(self.time_differences_virtual_hand[k]),
+                )
                 print("total samples: ", len(self.time_differences_virtual_hand[k]))
 
                 # from seconds to samples like this
@@ -198,20 +203,24 @@ class Realtime_Datagenerator:
                 # # times 10 because of 10 seconds movement we want to have
                 # stop = int(start + (self.recording_time * 60))
 
-                #TODO an dieser Stelle umrechnung für resampling machen
-                #am anfang solange erste koordinate wie zeitunterschied mit self.time:diffs_virtual_hand ist
+                # TODO an dieser Stelle umrechnung für resampling machen
+                # am anfang solange erste koordinate wie zeitunterschied mit self.time:diffs_virtual_hand ist
                 # danach immer zeit zwischen zwei samples nehmen und dann mit sampling frequency der kinematics multiplizieren
                 result_array = []
 
-                mean_time_between_samples = np.mean(self.time_differences_virtual_hand[k])
-                mean_fps = 1/mean_time_between_samples
+                mean_time_between_samples = np.mean(
+                    self.time_differences_virtual_hand[k]
+                )
+                mean_fps = 1 / mean_time_between_samples
                 print("mean fps of coordinates recording: ", mean_fps)
 
                 # we need to know if the kinematics data were first or the emg data
                 # make kinematics start - emg start
                 # if the result is positive, the kinematics started first
                 # if the result is negative, the emg started first
-                difference_between_emg_and_kinematics_start = self.time_diffs_virtual_hand[k] - self.time_diffs[k]
+                difference_between_emg_and_kinematics_start = (
+                    self.time_diffs_virtual_hand[k] - self.time_diffs[k]
+                )
 
                 # if the kinematics started first, we need to crop the kinematics os that the start time is the same
                 sample_at_which_kinematics_has_same_time_like_start_of_emg = 0
@@ -221,31 +230,50 @@ class Realtime_Datagenerator:
                         sum += self.time_differences_virtual_hand[k][p]
                         if sum > difference_between_emg_and_kinematics_start:
                             # maximal sum of time differences without being higher than the difference between emg and kinematics start time
-                            sample_at_which_kinematics_has_same_time_like_start_of_emg = p-1
+                            sample_at_which_kinematics_has_same_time_like_start_of_emg = (
+                                p - 1
+                            )
                             break
-                    #crop the kinematics data, now the kinematics data starts at the same time like the emg data
-                    v = v[int(sample_at_which_kinematics_has_same_time_like_start_of_emg):]
-                    self.time_differences_virtual_hand[k] = self.time_differences_virtual_hand[k][int(sample_at_which_kinematics_has_same_time_like_start_of_emg):]
+                    # crop the kinematics data, now the kinematics data starts at the same time like the emg data
+                    v = v[
+                        int(
+                            sample_at_which_kinematics_has_same_time_like_start_of_emg
+                        ) :
+                    ]
+                    self.time_differences_virtual_hand[
+                        k
+                    ] = self.time_differences_virtual_hand[k][
+                        int(
+                            sample_at_which_kinematics_has_same_time_like_start_of_emg
+                        ) :
+                    ]
 
-                counter= 0
+                counter = 0
                 for time_difference in self.time_differences_virtual_hand[k]:
                     if counter == 0:
                         result_array.append(v[0])
                         counter += 1
                         continue
-                    if round(time_difference*self.sampling_frequency_emg) >= 1:
-                        number_to_resample = round(time_difference*self.sampling_frequency_emg)
+                    if round(time_difference * self.sampling_frequency_emg) >= 1:
+                        number_to_resample = round(
+                            time_difference * self.sampling_frequency_emg
+                        )
                     else:
                         number_to_resample = 1
-                    resampled = resample(v[counter-1:counter],number_to_resample)
+                    resampled = resample(v[counter - 1 : counter], number_to_resample)
                     for value in resampled:
                         result_array.append(value)
                     counter += 1
 
                 # emg_data[self.movement_name[0]] = np.array([step[None, ...] for step in v[start:stop]])
-                kinematics_data[self.movement_name_virtual_hand[0]] = np.array(result_array)
+                kinematics_data[self.movement_name_virtual_hand[0]] = np.array(
+                    result_array
+                )
                 print("length of kinematics data: ", len(result_array))
-                print("length of kinematics data in seconds: ", len(result_array)/self.sampling_frequency_emg)
+                print(
+                    "length of kinematics data in seconds: ",
+                    len(result_array) / self.sampling_frequency_emg,
+                )
                 self.movement_name_virtual_hand.pop(0)
         else:
             for i in self.movement_name:
@@ -278,14 +306,14 @@ class Realtime_Datagenerator:
                 # kinematics_data[i] = np.array(kinematics_temp)
                 kinematics_data[i] = np.array(data)
 
-
         print("Step 2: \t Getting EMG Data from Memory")
 
         emg_data = {}
         for k, v in self.emg_list.items():
-
             if self.use_virtual_hand_interface_for_coord_generation:
-                print("total time between samples: ", np.sum(self.time_differences_emg[k]))
+                print(
+                    "total time between samples: ", np.sum(self.time_differences_emg[k])
+                )
                 print("total samples: ", len(self.time_differences_emg[k]))
                 result_array = []
 
@@ -297,27 +325,35 @@ class Realtime_Datagenerator:
                 # make kinematics start - emg start
                 # if the result is positive, the kinematics started first
                 # if the result is negative, the emg started first
-                difference_between_emg_and_kinematics_start = self.time_diffs_virtual_hand[k] - self.time_diffs[k]
+                difference_between_emg_and_kinematics_start = (
+                    self.time_diffs_virtual_hand[k] - self.time_diffs[k]
+                )
 
-                #because for emg the data are send in buffers with 64 length, the first sample of each 64 buffer has other time difference
-
+                # because for emg the data are send in buffers with 64 length, the first sample of each 64 buffer has other time difference
 
                 print("v shape: ", np.array(v).shape)
                 if self.use_muovi_pro:
-                    v_reshaped = np.array(
-                        v).transpose((1, 0, 2)).reshape(32, -1)
+                    v_reshaped = np.array(v).transpose((1, 0, 2)).reshape(32, -1)
                 else:
-                    v_reshaped = np.array(
-                        v).transpose((1, 0, 2)).reshape(len(self.grid_order) * 64, -1)
-                 # afterwards shape of v_reshaped is #channels x #samples
+                    v_reshaped = (
+                        np.array(v)
+                        .transpose((1, 0, 2))
+                        .reshape(len(self.grid_order) * 64, -1)
+                    )
+                # afterwards shape of v_reshaped is #channels x #samples
                 print("v_reshaped shape: ", v_reshaped.shape)
 
                 time_differences_emg_reshaped = []
 
                 for one_sample in range(v_reshaped.shape[1]):
                     buffer = one_sample // self.number_chunks_one_sample
-                    time_difference_this_chunk_split_into_64_samples =  self.time_differences_emg[k][buffer] / self.number_chunks_one_sample
-                    time_differences_emg_reshaped.append(time_difference_this_chunk_split_into_64_samples)
+                    time_difference_this_chunk_split_into_64_samples = (
+                        self.time_differences_emg[k][buffer]
+                        / self.number_chunks_one_sample
+                    )
+                    time_differences_emg_reshaped.append(
+                        time_difference_this_chunk_split_into_64_samples
+                    )
 
                 # if the kinematics started first, we need to crop the kinematics os that the start time is the same
                 sample_at_which_kinematics_has_same_time_like_start_of_emg = 0
@@ -327,12 +363,22 @@ class Realtime_Datagenerator:
                         sum += time_differences_emg_reshaped[p]
                         if sum > np.abs(difference_between_emg_and_kinematics_start):
                             # maximal sum of time differences without being higher than the difference between emg and kinematics start time
-                            sample_at_which_kinematics_has_same_time_like_start_of_emg = p - 1
+                            sample_at_which_kinematics_has_same_time_like_start_of_emg = (
+                                p - 1
+                            )
                             break
                     # crop the kinematics data, now the kinematics data starts at the same time like the emg data
-                    v_reshaped = v_reshaped[:, int(sample_at_which_kinematics_has_same_time_like_start_of_emg):]
-                    time_differences_emg_reshaped = time_differences_emg_reshaped[int(sample_at_which_kinematics_has_same_time_like_start_of_emg):]
-
+                    v_reshaped = v_reshaped[
+                        :,
+                        int(
+                            sample_at_which_kinematics_has_same_time_like_start_of_emg
+                        ) :,
+                    ]
+                    time_differences_emg_reshaped = time_differences_emg_reshaped[
+                        int(
+                            sample_at_which_kinematics_has_same_time_like_start_of_emg
+                        ) :
+                    ]
 
                 v_reshaped = np.array(v_reshaped).transpose()
                 print("v_reshaped shape: ", v_reshaped.shape)
@@ -345,10 +391,14 @@ class Realtime_Datagenerator:
                         continue
 
                     if round(time_difference * self.sampling_frequency_emg) >= 1:
-                        number_to_resample = round(time_difference * self.sampling_frequency_emg)
+                        number_to_resample = round(
+                            time_difference * self.sampling_frequency_emg
+                        )
                     else:
                         number_to_resample = 1
-                    resampled = resample(v_reshaped[counter - 1:counter], number_to_resample)
+                    resampled = resample(
+                        v_reshaped[counter - 1 : counter], number_to_resample
+                    )
                     for value in resampled:
                         result_array.append(value)
                     counter += 1
@@ -357,8 +407,10 @@ class Realtime_Datagenerator:
                 print("emg shape", np.array(result_array).transpose().shape)
                 self.movement_name.pop(0)
                 print("length of emg data: ", len(result_array))
-                print("length of emg data result array in seconds: ", len(result_array) / self.sampling_frequency_emg)
-
+                print(
+                    "length of emg data result array in seconds: ",
+                    len(result_array) / self.sampling_frequency_emg,
+                )
 
             else:
                 print("emg list key:", k)
@@ -380,14 +432,16 @@ class Realtime_Datagenerator:
             if self.retrain:
                 adding = "_retrain" + str(self.retrain_number)
             resulting_file = (
-                    r"trainings_data/resulting_trainings_data/subject_"
-                    + str(self.patient_id)
-                    + "/3d_data" + adding + ""
-                    + ".pkl"
+                r"trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_id)
+                + "/3d_data"
+                + adding
+                + ""
+                + ".pkl"
             )
             if not os.path.exists(
-                    "trainings_data/resulting_trainings_data/subject_"
-                    + str(self.patient_id)
+                "trainings_data/resulting_trainings_data/subject_"
+                + str(self.patient_id)
             ):
                 os.makedirs(
                     "trainings_data/resulting_trainings_data/subject_"
@@ -397,7 +451,9 @@ class Realtime_Datagenerator:
             # print("number of fingers: ", kinematics_data["rest"].shape[1])
             for movement_name, data in kinematics_data.items():
                 if data.shape[0] > emg_data[movement_name].shape[1]:
-                    kinematics_data[movement_name] = data[:emg_data[movement_name].shape[1],:]
+                    kinematics_data[movement_name] = data[
+                        : emg_data[movement_name].shape[1], :
+                    ]
 
                 # plt.figure()
                 # plt.plot(data[:,0], "r")
@@ -424,7 +480,9 @@ class Realtime_Datagenerator:
             resulting_file = (
                 r"trainings_data/resulting_trainings_data/subject_"
                 + str(self.patient_id)
-                + "/emg_data" + adding + ""
+                + "/emg_data"
+                + adding
+                + ""
                 + ".pkl"
             )
             if not os.path.exists(
@@ -438,9 +496,9 @@ class Realtime_Datagenerator:
 
             for movement_name, data in emg_data.items():
                 if data.shape[1] > kinematics_data[movement_name].shape[0]:
-                    emg_data[movement_name] = data[:,:kinematics_data[movement_name].shape[0]]
-
-
+                    emg_data[movement_name] = data[
+                        :, : kinematics_data[movement_name].shape[0]
+                    ]
 
             with open(resulting_file, "wb") as f:
                 pickle.dump(emg_data, f)
@@ -458,7 +516,7 @@ class Realtime_Datagenerator:
 
             print("new video")
             self.emg_time = time.time()
-            #time_diff = self.emg_time - self.video_time
+            # time_diff = self.emg_time - self.video_time
             count = 0
             last_time = time.time()
             while True:
@@ -478,8 +536,9 @@ class Realtime_Datagenerator:
                         self.emgSocket.setblocking(0)
                         while True:
                             try:
-
-                                data = self.emgSocket.recv(self.BufferSize)  # Non-blocking receive
+                                data = self.emgSocket.recv(
+                                    self.BufferSize
+                                )  # Non-blocking receive
                                 if not data:
                                     self.emgSocket.setblocking(1)
                                     break  # Break if no more data is in the buffer
@@ -487,26 +546,31 @@ class Realtime_Datagenerator:
                                 self.emgSocket.setblocking(1)
                                 break  # No more data to read
                         data = np.frombuffer(
-                                    self.emgSocket.recv(self.BufferSize), dtype=np.int16
-                                ).reshape((408, -1), order="F")[self.emg_indices]
+                            self.emgSocket.recv(self.BufferSize), dtype=np.int16
+                        ).reshape((408, -1), order="F")[self.emg_indices]
                     if self.recording_started_emg:
                         count += 1
                         if count == 1:
                             # time_diff = measures the time difference between when pressed recording start and when the first sample was taken
-                            time_diff = time.time() - self.values_movie_start_emg[
-                                self.movement_name[self.movement_count]]
+                            time_diff = (
+                                time.time()
+                                - self.values_movie_start_emg[
+                                    self.movement_name[self.movement_count]
+                                ]
+                            )
                             time_difference_between_last_sample = 0.0
                             last_time = time.time()
                         else:
-                            time_difference_between_last_sample = time.time() - last_time
+                            time_difference_between_last_sample = (
+                                time.time() - last_time
+                            )
                             last_time = time.time()
 
-                        save_buffer.append(
-                            data
+                        save_buffer.append(data)
+
+                        time_difference_buffer.append(
+                            time_difference_between_last_sample
                         )
-
-
-                        time_difference_buffer.append(time_difference_between_last_sample)
                 except Exception as e:
                     print("exception in datastream get emg")
                     print(e)
@@ -516,10 +580,9 @@ class Realtime_Datagenerator:
             # self.emg_list[self.movement_name[self.movement_count]] = save_buffer
             self.emg_list.update({self.movement_name[self.movement_count]: save_buffer})
 
-
-
             self.time_differences_emg.update(
-                {self.movement_name[self.movement_count]: time_difference_buffer})
+                {self.movement_name[self.movement_count]: time_difference_buffer}
+            )
             self.movement_count += 1
 
     def get_coords_virtual_hand_interface(self):
@@ -528,7 +591,6 @@ class Realtime_Datagenerator:
         self.interface.initialize_all()
 
         while True:
-
             if self.escape_loop_virtual_hand:
                 print("exiting outer coord loop")
                 break
@@ -536,7 +598,7 @@ class Realtime_Datagenerator:
             time_difference_buffer = []
 
             self.coords_time = time.time()
-            #time_diff = self.coords_time - self.video_time
+            # time_diff = self.coords_time - self.video_time
             count = 0
             last_time = time.time()
             while True:
@@ -548,21 +610,31 @@ class Realtime_Datagenerator:
                 # get emg data
 
                 try:
-
                     data = self.interface.get_coords_exo()
 
                     if self.recording_started_virtual_hand:
-                        #print(f"fps: {1 / (time.time() - last_time)} Count: {count}")
+                        # print(f"fps: {1 / (time.time() - last_time)} Count: {count}")
 
                         count += 1
-                        if count ==1:
+                        if count == 1:
                             # time_diff = measures the time difference between when pressed recording start and when the first sample was taken
-                            time_diff = time.time() - self.values_movie_start_emg[self.movement_name_virtual_hand[self.movement_count_virtual_hand]]
+                            time_diff = (
+                                time.time()
+                                - self.values_movie_start_emg[
+                                    self.movement_name_virtual_hand[
+                                        self.movement_count_virtual_hand
+                                    ]
+                                ]
+                            )
                             time_difference_between_last_sample = 0.0
                         else:
-                            time_difference_between_last_sample = time.time() - last_time
+                            time_difference_between_last_sample = (
+                                time.time() - last_time
+                            )
                         last_time = time.time()
-                        time_difference_buffer.append(time_difference_between_last_sample)
+                        time_difference_buffer.append(
+                            time_difference_between_last_sample
+                        )
                         save_buffer.append(
                             [data[finger_index] for finger_index in self.finger_indexes]
                         )
@@ -571,14 +643,30 @@ class Realtime_Datagenerator:
                     print(e)
                     self.interface.close_connection()
                     continue
-            self.time_diffs_virtual_hand.update({self.movement_name_virtual_hand[self.movement_count_virtual_hand]: time_diff})
+            self.time_diffs_virtual_hand.update(
+                {
+                    self.movement_name_virtual_hand[
+                        self.movement_count_virtual_hand
+                    ]: time_diff
+                }
+            )
             # self.emg_list[self.movement_name[self.movement_count]] = save_buffer
-            self.coords_list_virtual_hand.update({self.movement_name_virtual_hand[self.movement_count_virtual_hand]: save_buffer})
+            self.coords_list_virtual_hand.update(
+                {
+                    self.movement_name_virtual_hand[
+                        self.movement_count_virtual_hand
+                    ]: save_buffer
+                }
+            )
 
-            self.time_differences_virtual_hand.update({self.movement_name_virtual_hand[self.movement_count_virtual_hand]: time_difference_buffer})
+            self.time_differences_virtual_hand.update(
+                {
+                    self.movement_name_virtual_hand[
+                        self.movement_count_virtual_hand
+                    ]: time_difference_buffer
+                }
+            )
             self.movement_count_virtual_hand += 1
-
-
 
 
 if __name__ == "__main__":

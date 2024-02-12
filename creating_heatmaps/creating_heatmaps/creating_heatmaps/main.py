@@ -20,12 +20,12 @@ def main():
     rms_datas = []
     kinematics_datas = []
     for movement_type in movement_types:
-        cutting_number= emg[movement_type].shape[1]
-        emg_data = emg[movement_type].astype(np.float32)[:,:cutting_number]
+        cutting_number = emg[movement_type].shape[1]
+        emg_data = emg[movement_type].astype(np.float32)[:, :cutting_number]
         kinematics_data = kinematics[movement_type].astype(np.float32)
-        frames = int(cutting_number/frame_len) #emg_data.shape[1]
-        #emg_data = np.hstack(emg_data)
-        kinematics_data = kinematics_data.T[:,:cutting_number]
+        frames = int(cutting_number / frame_len)  # emg_data.shape[1]
+        # emg_data = np.hstack(emg_data)
+        kinematics_data = kinematics_data.T[:, :cutting_number]
         kinematics_datas.append(kinematics_data)
         print("EMG shape: ", emg_data.shape)
         print("Kinematics shape: ", kinematics_data.shape)
@@ -33,8 +33,8 @@ def main():
         valid = False
         x_axis = np.arange(0, emg_data.shape[1], 1) / sampling_frequency
         test_emg_data = emg_data.copy()
-        #bad_channels = find_bad_channels(movement_type, valid, x_axis, test_emg_data)
-        bad_channels = [116,117,118,266,267]
+        # bad_channels = find_bad_channels(movement_type, valid, x_axis, test_emg_data)
+        bad_channels = [116, 117, 118, 266, 267]
 
         emg_data[bad_channels, :] = 0
 
@@ -52,25 +52,29 @@ def main():
             ]
         )
 
-        #ext_grid, flex_grid = np.split(rms_data, 2, axis=0)
+        # ext_grid, flex_grid = np.split(rms_data, 2, axis=0)
         ext_grid = rms_data[:192]
         flex_grid = rms_data[192:]
-        #target_shape = (8, 8, ext_grid.shape[1])
+        # target_shape = (8, 8, ext_grid.shape[1])
 
-        ext_grid = reshape_grid(ext_grid, (8,24,ext_grid.shape[1]))
-        flex_grid = reshape_grid(flex_grid, (8,16,flex_grid.shape[1]))
+        ext_grid = reshape_grid(ext_grid, (8, 24, ext_grid.shape[1]))
+        flex_grid = reshape_grid(flex_grid, (8, 16, flex_grid.shape[1]))
         #
         print("Ext grid shape: ", ext_grid.shape)
         print("Flex grid shape: ", flex_grid.shape)
         # ext_grid = reshape_grid(ext_grid, (8, 24, ext_grid.shape[1]))
         # flex_grid = reshape_grid(flex_grid, (8, 16, ext_grid.shape[1]))
 
-
         rms_datas.append((ext_grid, flex_grid))
 
     highest_value = np.max(highest_values)
     for i, movement_type in enumerate(movement_types):
-        output_path = r"D:\Lab\MasterArbeit\creating_heatmaps\creating_heatmaps\results/" + str(recording_name) + str("/") + str(movement_type)
+        output_path = (
+            r"D:\Lab\MasterArbeit\creating_heatmaps\creating_heatmaps\results/"
+            + str(recording_name)
+            + str("/")
+            + str(movement_type)
+        )
         # Create folder
         if not os.path.exists(output_path):
             os.makedirs(output_path)

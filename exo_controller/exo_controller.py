@@ -2,6 +2,7 @@ import socket
 import numpy as np
 import ast
 
+
 class Exo_Control:
     def __init__(self):
         ###########################################################################

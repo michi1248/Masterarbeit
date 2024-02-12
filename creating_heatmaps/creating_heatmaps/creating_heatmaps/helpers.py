@@ -100,16 +100,16 @@ def create_heatmaps(
         fig.suptitle("Time window: " + str(round(time_window, 2)))
         gs = GridSpec(2, 2, width_ratios=[1, 1], height_ratios=[1, 1])
 
-        ext_grid_data = (
-            np.mean(ext_grid[:, :, first_index:second_index], axis=2) / (highest_value + 1e-10)
+        ext_grid_data = np.mean(ext_grid[:, :, first_index:second_index], axis=2) / (
+            highest_value + 1e-10
         )
         ax1 = plt.subplot(gs[0, 0])
         ax1.imshow(ext_grid_data, cmap="hot", vmin=0, vmax=1)
         ax1.set_axis_off()
         ax1.set_title("Extensor")
 
-        flex_grid_data = (
-            np.mean(flex_grid[:, :, first_index:second_index], axis=2) / (highest_value + 1e-10)
+        flex_grid_data = np.mean(flex_grid[:, :, first_index:second_index], axis=2) / (
+            highest_value + 1e-10
         )
         ax2 = plt.subplot(gs[0, 1])
         ax2.imshow(flex_grid_data, cmap="hot", vmin=0, vmax=1)
@@ -127,25 +127,29 @@ def create_heatmaps(
 
         # Plot kinematics
         ax4 = plt.subplot(gs[1, :])
-        ax4.plot(x_axis_kinematics, kinematics_data[0,:], label="y")
-        ax4.plot(x_axis_kinematics, kinematics_data[1,:,], label="z")
+        ax4.plot(x_axis_kinematics, kinematics_data[0, :], label="y")
+        ax4.plot(
+            x_axis_kinematics,
+            kinematics_data[
+                1,
+                :,
+            ],
+            label="z",
+        )
         ax4.scatter(
             x_axis_kinematics[kinematics_index],
-            kinematics_data[0,kinematics_index],
+            kinematics_data[0, kinematics_index],
             c="r",
         )
         ax4.scatter(
             x_axis_kinematics[kinematics_index],
-            kinematics_data[1,kinematics_index],
+            kinematics_data[1, kinematics_index],
             c="r",
         )
-        buffer_for_rms.append(np.mean(ext_grid_data)*11)
+        buffer_for_rms.append(np.mean(ext_grid_data) * 11)
         buffer_for_x_rms.append(x_axis_kinematics[kinematics_index])
 
-
-
-        ax4.scatter(buffer_for_x_rms,buffer_for_rms)
-
+        ax4.scatter(buffer_for_x_rms, buffer_for_rms)
 
         plt.savefig(output_path + f"/{recording_name}_{movement_type}_{i}.png")
         plt.close()

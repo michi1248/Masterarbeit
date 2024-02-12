@@ -14,9 +14,9 @@ class Normalization:
         sampling_frequency=2048,
         frame_duration=150,
         use_spatial_filter=False,
-        use_muovi_pro = False,
-        skip_in_samples = None,
-        use_bandpass_filter = False,
+        use_muovi_pro=False,
+        skip_in_samples=None,
+        use_bandpass_filter=False,
     ):
         """
         :param movements: list of movements that should be used for normalization
@@ -41,7 +41,7 @@ class Normalization:
         self.mean = None
         self.all_emg_data = None
         self.method = method
-        self.grid_aranger = Grid_Arrangement(grid_order,use_muovi_pro=use_muovi_pro)
+        self.grid_aranger = Grid_Arrangement(grid_order, use_muovi_pro=use_muovi_pro)
         self.grid_aranger.make_grid()
         if self.use_muovi_pro:
             self.sampling_frequency = 2000
@@ -52,7 +52,6 @@ class Normalization:
         self.use_bandpass_filter = use_bandpass_filter
         if self.use_spatial_filter or self.use_bandpass_filter:
             self.spatial_filter = Filters()
-
 
         self.skip_in_samples = skip_in_samples
 
@@ -69,7 +68,7 @@ class Normalization:
             median = self.median[:, :, 0]
             q1 = self.q1[:, :, 0]
             q2 = self.q2[:, :, 0]
-            return (np.array(data) - median) / ((q2 - q1)+ 1e-8)
+            return (np.array(data) - median) / ((q2 - q1) + 1e-8)
         elif self.method == "Robust_all_channels":
             return (np.array(data) - self.median) / (self.q2 - self.q1)
         else:
@@ -93,16 +92,16 @@ class Normalization:
                 min_value = self.min_values[:, :, 0]
                 max_value = self.max_values[:, :, 0]
 
-            norm = (data - min_value) / ((max_value - min_value)+1e-8)
+            norm = (data - min_value) / ((max_value - min_value) + 1e-8)
 
         elif axis is None:
             data = np.array(data)
-            norm = (data - np.min(data)) / ((np.max(data) - np.min(data))+ 1e-8)
+            norm = (data - np.min(data)) / ((np.max(data) - np.min(data)) + 1e-8)
         else:
             data = np.array(data)
-            norm = (data - np.min(data, axis=axis)) / ((
-                np.max(data, axis=axis) - np.min(data, axis=axis)
-            ) + 1e-8 )
+            norm = (data - np.min(data, axis=axis)) / (
+                (np.max(data, axis=axis) - np.min(data, axis=axis)) + 1e-8
+            )
 
         if negative == True:
             norm = (norm * 2) - 1
@@ -128,9 +127,9 @@ class Normalization:
         print("movements", movements)
 
         for movement in movements:
-            emg_data_one_movement = a[movement]#.transpose(1, 0, 2).reshape(64*len(self.grid_order), -1)
-
-
+            emg_data_one_movement = a[
+                movement
+            ]  # .transpose(1, 0, 2).reshape(64*len(self.grid_order), -1)
 
             emg_data_one_movement = (
                 self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
@@ -138,16 +137,25 @@ class Normalization:
                 )
             )
             if self.use_bandpass_filter:
-                emg_data_one_movement = self.spatial_filter.bandpass_filter_emg_data(emg_data_one_movement, fs=self.sampling_frequency)
+                emg_data_one_movement = self.spatial_filter.bandpass_filter_emg_data(
+                    emg_data_one_movement, fs=self.sampling_frequency
+                )
 
             # only take important channels and set all others to 0s
             if np.ndim(self.important_channels) == 2:
-                emg_data_new = np.zeros((emg_data_one_movement.shape[0], emg_data_one_movement.shape[1],
-                                         emg_data_one_movement.shape[2]))
+                emg_data_new = np.zeros(
+                    (
+                        emg_data_one_movement.shape[0],
+                        emg_data_one_movement.shape[1],
+                        emg_data_one_movement.shape[2],
+                    )
+                )
                 for important_channel in self.important_channels:
-                    emg_data_new[important_channel[0], important_channel[1], :] = emg_data_one_movement[
-                                                                                  important_channel[0],
-                                                                                  important_channel[1], :]
+                    emg_data_new[
+                        important_channel[0], important_channel[1], :
+                    ] = emg_data_one_movement[
+                        important_channel[0], important_channel[1], :
+                    ]
                 emg_data_one_movement = emg_data_new
             all_emg_data.append(emg_data_one_movement)
 
@@ -291,7 +299,6 @@ class Normalization:
         all_heatmaps = []
 
         for movement in range(len(self.all_emg_data)):
-
             sample_length = self.all_emg_data[movement].shape[2]
             num_samples = int(
                 sample_length / (self.sampling_frequency * (self.frame_duration / 1000))
@@ -301,30 +308,33 @@ class Normalization:
             )
 
             if self.use_muovi_pro:
-                self.samples = [i for i in range(0, sample_length, self.skip_in_samples)]
+                self.samples = [
+                    i for i in range(0, sample_length, self.skip_in_samples)
+                ]
             else:
-                self.samples =[i for i in range(0, sample_length, self.skip_in_samples)]
+                self.samples = [
+                    i for i in range(0, sample_length, self.skip_in_samples)
+                ]
 
             for frame in self.samples:
                 if (frame - number_observation_samples < 0) or (
-                        self.all_emg_data[movement].shape[2] < (number_observation_samples)
+                    self.all_emg_data[movement].shape[2] < (number_observation_samples)
                 ):
-                    emg_data_to_use = self.all_emg_data[movement][:,:,: frame + 1]
+                    emg_data_to_use = self.all_emg_data[movement][:, :, : frame + 1]
                 else:
-                    emg_data_to_use = self.all_emg_data[movement][:,:,
-                                   frame - number_observation_samples: frame
-                                   ]
-
+                    emg_data_to_use = self.all_emg_data[movement][
+                        :, :, frame - number_observation_samples : frame
+                    ]
 
                 if self.use_spatial_filter:
-                    emg_data_to_use = self.spatial_filter.spatial_filtering(emg_data_to_use,  filter_name="IR")
+                    emg_data_to_use = self.spatial_filter.spatial_filtering(
+                        emg_data_to_use, filter_name="IR"
+                    )
 
-                heatmap = self.calculate_heatmap_on_whole_samples(
-                    emg_data_to_use
-                )
+                heatmap = self.calculate_heatmap_on_whole_samples(emg_data_to_use)
 
                 if (self.mean is not None) and (self.mean is not None):
-                    heatmap = np.subtract(heatmap ,self.mean)
+                    heatmap = np.subtract(heatmap, self.mean)
 
                 if self.method == "Min_Max_Scaling_all_channels":
                     if np.max(heatmap) > self.max_values:
@@ -389,16 +399,17 @@ class Normalization:
         else:
             raise ValueError("Method not supported")
 
+
 #
 # if __name__ == "__main__":
 #     pass
-    # workflow
-    # normalizer = Normalization()
-    # normalizer.get_all_emg_data(path_to_data="C:/Users/Philipp/Desktop/BA/exo_controller/data/emg_data.pkl",movements=["flexion","extension","pronation","supination","hand_close","hand_open"])
-    # normalizer.find_max_min_values_for_each_movement_and_channel(emg_data=normalizer.all_emg_data)
-    # normalizer.find_q_median_values_for_each_movement_and_channel(emg_data=normalizer.all_emg_data)
-    # normalizer.set_mean(channel_extraction_get_mean)
-    #
-    # heatmap = get heatmap
-    # heatmap = heatmap - normalizer.mean
-    # heatmap = normalizer.normalize_2D_array(emg_data)
+# workflow
+# normalizer = Normalization()
+# normalizer.get_all_emg_data(path_to_data="C:/Users/Philipp/Desktop/BA/exo_controller/data/emg_data.pkl",movements=["flexion","extension","pronation","supination","hand_close","hand_open"])
+# normalizer.find_max_min_values_for_each_movement_and_channel(emg_data=normalizer.all_emg_data)
+# normalizer.find_q_median_values_for_each_movement_and_channel(emg_data=normalizer.all_emg_data)
+# normalizer.set_mean(channel_extraction_get_mean)
+#
+# heatmap = get heatmap
+# heatmap = heatmap - normalizer.mean
+# heatmap = normalizer.normalize_2D_array(emg_data)

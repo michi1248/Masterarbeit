@@ -50,7 +50,7 @@ class Heatmap:
         self.normalizer = normalizations.Normalization(
             method=method,
             grid_order=[1, 2, 3, 4, 5],
-            important_channels=range(64*5),
+            important_channels=range(64 * 5),
             frame_duration=frame_duration,
         )
 
@@ -65,9 +65,7 @@ class Heatmap:
         # self.max_for_heatmap = self.normalizer.normalize_chunk(self.max_for_heatmap)
         # self.min_for_heatmap = self.normalizer.normalize_chunk(self.min_for_heatmap)
 
-
         self.gauss_filter = create_gaussian_filter(size_filter=5)
-
 
         self.movement_name = movement_name
         self.mean_ex = mean_ex_rest
@@ -113,9 +111,12 @@ class Heatmap:
         #         # have to transfer self.mean_ex from grid arrangement to 320 channels arangement
         #         emg_data_for_max_min[i] = emg_data_for_max_min[i] - grid_aranger.transfer_grid_arangement_into_320(np.reshape(self.mean_ex,(self.mean_ex.shape[0],self.mean_ex.shape[1],1)))
 
-        if method == "EMG_signals" :
-            plot_emg_channels(self.emg_data, save_path=self.path_to_save_plots,
-                              movement=self.movement_name + "_raw")
+        if method == "EMG_signals":
+            plot_emg_channels(
+                self.emg_data,
+                save_path=self.path_to_save_plots,
+                movement=self.movement_name + "_raw",
+            )
 
         #
         # if method == "Min_Max_Scaling_all_channels":
@@ -137,7 +138,9 @@ class Heatmap:
         #     self.q1, self.q2, self.median = find_q_median_values_for_each_movement(emg_data_for_max_min, range(320), list(
         #         emg_data_for_max_min.keys()))
 
-        self.emg_data = grid_aranger.transfer_and_concatenate_320_into_grid_arangement(self.emg_data)
+        self.emg_data = grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+            self.emg_data
+        )
         # if method == "Min_Max_Scaling_over_whole_data":
         #     upper_max,lower_max = grid_aranger.transfer_320_into_grid_arangement(self.max_values)
         #     upper_min,lower_min = grid_aranger.transfer_320_into_grid_arangement(self.min_values)
@@ -151,12 +154,10 @@ class Heatmap:
             os.path.join(path_to_subject_dat, "3d_data.pkl")
         )[movement_name]
 
-
         self.ref_data = resample(self.ref_data, self.emg_data.shape[2])
 
         print("ref_data shape: ", self.ref_data.shape)
         print("emg_data shape: ", self.emg_data.shape)
-
 
         # if method == "Min_Max_Scaling_over_whole_data":
         #     self.max_values = grid_aranger.concatenate_upper_and_lower_grid(upper_max,lower_max)
@@ -245,7 +246,9 @@ class Heatmap:
 
         normalized_heatmap = self.normalizer.normalize_chunk(heatmap)
 
-        normalized_heatmap = apply_gaussian_filter(normalized_heatmap,self.gauss_filter)
+        normalized_heatmap = apply_gaussian_filter(
+            normalized_heatmap, self.gauss_filter
+        )
 
         if self.movement_name == "rest":
             self.heatmaps_flex = np.add(self.heatmaps_flex, heatmap)
@@ -305,8 +308,6 @@ class Heatmap:
                 # )
 
         if self.global_counter == 0:
-
-
             hmap = sns.heatmap(
                 normalized_heatmap,
                 ax=self.ax_emg,
@@ -315,11 +316,9 @@ class Heatmap:
                 xticklabels=True,
                 yticklabels=True,
                 cbar_kws={"label": "norm. RMS"},
-
             )  # ,cbar_ax=self.ax_emg,)
 
         else:
-
             hmap = sns.heatmap(
                 normalized_heatmap,
                 ax=self.ax_emg,
@@ -328,7 +327,6 @@ class Heatmap:
                 xticklabels=True,
                 yticklabels=True,
                 cbar_kws={"label": "norm. RMS"},
-
             )  # ,cbar_ax=self.ax_emg,)
 
         self.global_counter += 1
@@ -359,7 +357,9 @@ class Heatmap:
                 index_movement = 1
 
             self.ax_ref.plot(
-                self.x_for_ref, normalize_2D_array(self.ref_data[:, index_movement]), color="blue"
+                self.x_for_ref,
+                normalize_2D_array(self.ref_data[:, index_movement]),
+                color="blue",
             )
             self.ax_ref.scatter(
                 self.x_for_ref[frame],
@@ -396,7 +396,7 @@ class Heatmap:
         # Save the frame as an image
         frame_filename = os.path.join(self.path_to_save_plots, f"frame_{frame:03d}.png")
         self.fig.canvas.draw()
-        #plt.savefig(frame_filename)
+        # plt.savefig(frame_filename)
         pil_image = Image.frombytes(
             "RGB", self.fig.canvas.get_width_height(), self.fig.canvas.tostring_rgb()
         )
@@ -426,7 +426,7 @@ class Heatmap:
     def animate(self, save=False):
         print("number_observation_samples: " + str(self.number_observation_samples))
         # samples = all sample values when using all samples with self.frame_duration in between
-        self.samples =[i for i in range(0, self.ref_data.shape[0], 64)]
+        self.samples = [i for i in range(0, self.ref_data.shape[0], 64)]
         self.samples = [
             element for element in self.samples if element <= self.ref_data.shape[0]
         ]
