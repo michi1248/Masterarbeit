@@ -698,7 +698,7 @@ if __name__ == "__main__":
 
     for method in [
         "Min_Max_Scaling_over_whole_data",
-        "no_scaling",
+        # "no_scaling",
         "Robust_Scaling",
         "Robust_all_channels",
     ]:
@@ -722,7 +722,7 @@ if __name__ == "__main__":
             200,
             250,
         ]:  # [1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
-            for use_mean_sub in [True, False]:  # [True,False]
+            for use_mean_sub in [True]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
                 print("epochs: ", epochs)
@@ -754,7 +754,7 @@ if __name__ == "__main__":
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
                     use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_7_2_different_positions_control/",  # False
-                    window_size=150,
+                    window_size=100,
                     scaling_method=method,
                     only_record_data=False,
                     use_control_stream=True,
