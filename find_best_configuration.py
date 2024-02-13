@@ -421,14 +421,7 @@ class EMGProcessor:
         emg_data = load_pickle_file(self.use_recorded_data + "emg_data.pkl")
         ref_data = load_pickle_file(self.use_recorded_data + "3d_data.pkl")
 
-        if self.use_dtw:
-            for movement in ref_data.keys():
-                if movement == "rest":
-                    continue
-                dtw_rms = make_rms_for_dtw(emg_data[movement])
-                emg_data[movement], ref_data[movement] = align_signals_dtw(
-                    dtw_rms, ref_data[movement], emg_data[movement]
-                )
+
         for i in emg_data.keys():
             emg_data[i] = np.array(
                 emg_data[
@@ -718,9 +711,7 @@ if __name__ == "__main__":
             10,
             50,
             100,
-            150,
-            200,
-            250,
+
         ]:  # [1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
@@ -835,7 +826,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [1, 5, 10, 50, 100, 150, 200, 250]
+                x = [1, 5, 10, 50, 100,]
                 x = x[: x.index(epochs) + 1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(

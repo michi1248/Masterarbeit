@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 from scipy.signal import resample
 from scipy import signal
 from scipy.signal import butter, filtfilt
-from dtw import *
+from fastdtw import fastdtw
+from scipy.spatial.distance import euclidean
+
 
 
 def align_signals_dtw(rms_emg_signal, movement_signal, emg_grid):
@@ -39,19 +41,15 @@ def align_signals_dtw(rms_emg_signal, movement_signal, emg_grid):
     emg_grid = resample(emg_grid, len(rms_emg_signal) // 10, axis=1)
 
     print("computing dtw")
-    alignment = dtw(
-        downsampled_emg,
-        downsampled_movement[:, index],
-        keep_internals=True,
-        step_pattern=rabinerJuangStepPattern(6, "c", smoothed=True),
-        open_begin=False,
-        open_end=False,
-    )
+    distance, path = fastdtw(x =downsampled_emg, y =downsampled_movement[:,index])
+    x_indices, y_indices = zip(*path)
+    x_indices = np.array(x_indices)
+    y_indices = np.array(y_indices)
     print("dtw done")
 
-    aligned_emg = np.array(downsampled_emg[alignment.index1])
-    aligned_movement = np.array(downsampled_movement[alignment.index2, :])
-    emg_grid = np.array(emg_grid[:, alignment.index1])
+    aligned_emg = np.array(downsampled_emg[x_indices])
+    aligned_movement = np.array(downsampled_movement[y_indices, :])
+    emg_grid = np.array(emg_grid[:, x_indices])
 
     aligned_emg = resample(aligned_emg, original_emg_length)
     aligned_movement = resample(aligned_movement, original_movement_length, axis=0)
@@ -76,12 +74,6 @@ def align_signals_dtw(rms_emg_signal, movement_signal, emg_grid):
     return emg_grid, aligned_movement
 
 
-def butter_lowpass_filter(signal, cutoff_freq=20, fs=2048, order=2):
-    nyquist = 0.5 * fs
-    normal_cutoff = cutoff_freq / nyquist
-    b, a = butter(order, normal_cutoff, btype="low", analog=False)
-    return filtfilt(b, a, signal)
-
 
 def make_rms_for_dtw(emg_matrix):
     """Compute the RMS of the EMG matrix.
@@ -92,5 +84,6 @@ def make_rms_for_dtw(emg_matrix):
     """
 
     rms = np.sqrt(np.median(emg_matrix**2, axis=0))
+
 
     return rms

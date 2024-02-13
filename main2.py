@@ -1037,16 +1037,16 @@ if __name__ == "__main__":
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=20,
-        load_trained_model=True,
+        time_for_each_movement_recording=40,
+        load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=False,  # r"trainings_data/resulting_trainings_data/subject_Test/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Test/",  # False
         window_size=150,
-        scaling_method="Robust_Scaling",
+        scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
         use_control_stream=False,
         use_shallow_conv=True,
@@ -1054,6 +1054,6 @@ if __name__ == "__main__":
         epochs=100,
         use_dtw=False,
         use_muovi_pro=True,
-        skip_in_ms=25,
+        skip_in_ms=25,   # 25 for muovi probe , 35 for quattrocento
     )
     emg_processor.run()

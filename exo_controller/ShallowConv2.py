@@ -103,29 +103,37 @@ class ShallowConvNetWithAttention(nn.Module):
 
             if not self.use_muovi_pro:
                 # Spatial Activity Path
-                self.conv1 = nn.Conv2d(
-                    number_of_grids,
-                    64 * number_of_grids,
-                    groups=number_of_grids,
-                    kernel_size=5,
-                    padding=1,
-                )
-                self.pool = nn.MaxPool2d(2, 2)
-                self.conv2 = nn.Conv2d(
-                    64 * number_of_grids, 32, kernel_size=5, padding=1
-                )
-                self.fc1 = nn.Linear(512, 60)
+                self.conv1 = nn.Conv2d(1, 70, kernel_size=3, padding=1)
+                self.bn1 = nn.BatchNorm2d(70)
+                self.in1 = nn.InstanceNorm2d(70)
+                self.pool_1 = nn.MaxPool2d(2, 2)
 
-                # Add Batch Normalization after convolutional layers
-                self.bn1 = nn.BatchNorm2d(64 * number_of_grids)
-                self.bn2 = nn.BatchNorm2d(32)
+                self.conv2 = nn.Conv2d(70, 70, kernel_size=3, padding=1)
+                self.bn2 = nn.BatchNorm2d(70)
+                self.in2 = nn.InstanceNorm2d(70)
+                self.pool2 = nn.MaxPool2d(2, 2)
 
-                # Instance Normalization
-                self.in1 = nn.InstanceNorm2d(64 * number_of_grids)
-                self.in2 = nn.InstanceNorm2d(32)
-                self.fc2 = nn.Linear(60, len(self.finger_indexes))
+                self.dropout = nn.Dropout(0.1)
+
+                self.conv3 = nn.Conv2d(70, 150, kernel_size=3, padding=1)
+                self.bn3 = nn.BatchNorm2d(150)
+                self.in3 = nn.InstanceNorm2d(150)
+                self.pool3 = nn.MaxPool2d(2, 2)
+
+                self.conv4 = nn.Conv2d(150, 150, kernel_size=3, padding=1)
+                self.bn4 = nn.BatchNorm2d(150)
+                self.in4 = nn.InstanceNorm2d(150)
+                self.pool4 = nn.MaxPool2d(2, 2)
+
+                self.conv5 = nn.Conv2d(150, 75, kernel_size=1)
+                self.bn5 = nn.BatchNorm2d(75)
+                self.in5 = nn.InstanceNorm2d(75)
+                self.pool5 = nn.MaxPool2d(2, 2)
+
+                self.fc1 = nn.Linear(28800 , 500)
+                self.fc2 = nn.Linear(500, len(self.finger_indexes))
                 self.merge_layer = nn.Linear(
-                    number_of_grids + len(self.finger_indexes), len(self.finger_indexes)
+                    len(self.finger_indexes) + number_of_grids, len(self.finger_indexes)
                 )
             else:
 
@@ -317,15 +325,13 @@ class ShallowConvNetWithAttention(nn.Module):
                 )  # Average over the channels
 
                 # Spatial Activity Path
-                gelu = torch.nn.GELU(approximate="tanh")
-                spatial_path = self.conv1(stacked_input)
+                spatial_path = self.conv1(heatmap1)
                 spatial_path = self.bn1(spatial_path)
                 spatial_path = self.in1(
                     spatial_path
                 )  # Uncomment if using instance normalization
                 spatial_path = torch.nn.GELU(approximate="tanh")(spatial_path)
                 # spatial_path = self.pool(spatial_path)
-                spatial_path = self.conv1_dropout(spatial_path)
 
                 spatial_path = self.conv2(spatial_path)
                 spatial_path = self.bn2(spatial_path)
@@ -334,23 +340,45 @@ class ShallowConvNetWithAttention(nn.Module):
                 )  # Uncomment if using instance normalization
                 spatial_path = torch.nn.GELU(approximate="tanh")(spatial_path)
                 # spatial_path = self.pool(spatial_path)
-                spatial_path = self.conv2_dropout(spatial_path)
+
+                spatial_path = self.conv3(spatial_path)
+                spatial_path = self.bn3(spatial_path)
+                spatial_path = self.in3(
+                    spatial_path
+                )
+                spatial_path = torch.nn.GELU(approximate="tanh")(spatial_path)
+
+                spatial_path = self.conv4(spatial_path)
+                spatial_path = self.bn4(spatial_path)
+                spatial_path = self.in4(
+                    spatial_path
+                )
+                spatial_path = torch.nn.GELU(approximate="tanh")(spatial_path)
+
+                spatial_path = self.conv5(spatial_path)
+                spatial_path = self.bn5(spatial_path)
+                spatial_path = self.in5(
+                    spatial_path
+                )
+                spatial_path = torch.nn.GELU(approximate="tanh")(spatial_path)
 
                 spatial_path = spatial_path.view(spatial_path.size(0), -1)
-                spatial_path = F.dropout(
-                    spatial_path, p=self.dropout_rate, training=self.training
-                )  # Dropout after conv2
+
+                spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)  # Dropout
                 spatial_path = self.fc1(spatial_path)
-                spatial_path = F.dropout(
-                    spatial_path, p=self.dropout_rate, training=self.training
-                )  # Dropout after fc1
+                spatial_path = F.dropout(spatial_path, p=self.dropout_rate, training=self.training)
                 spatial_path = self.fc2(spatial_path)
 
+                # heatmap1_only_channels = F.dropout(heatmap1_only_channels, p=self.dropout_rate, training=self.training)  # Dropout
+                # channel_wise_spatial_path = self.fc_all1(heatmap1_only_channels)
+
                 gobal_path = global_path.view(global_path.size(0), -1)
+                # channel_wise_spatial_path = channel_wise_spatial_path.view(channel_wise_spatial_path.size(0),-1)
                 merged_spatial_path = torch.cat((spatial_path, gobal_path), dim=1)
                 merged_spatial_path = self.merge_layer(merged_spatial_path)
+
+
             else:
-                heatmap1_only_channels = heatmap1.view(heatmap1.size(0), 1, -1)
                 global_path = self.global_pool(heatmap1)
                 global_path = global_path.view(global_path.size(0), -1)  # Flatten
                 global_path = torch.multiply(
