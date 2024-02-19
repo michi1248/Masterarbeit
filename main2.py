@@ -48,6 +48,7 @@ class EMGProcessor:
         use_dtw,
         use_muovi_pro,
         skip_in_ms,
+        take_trainings_data_multiple_times,
     ):
         self.patient_id = patient_id
         self.movements = movements
@@ -79,6 +80,7 @@ class EMGProcessor:
         self.epochs = epochs
         self.use_dtw = use_dtw
         self.use_muovi_pro = use_muovi_pro
+        self.take_trainings_data_multiple_times = take_trainings_data_multiple_times
         if use_muovi_pro:
             self.sampling_frequency = 2000
         else:
@@ -227,6 +229,7 @@ class EMGProcessor:
             )
             # print("shape ref data: ", ref_data["rest"].shape)
 
+
         if self.use_dtw:
             for movement in ref_data.keys():
                 if movement == "rest":
@@ -268,6 +271,7 @@ class EMGProcessor:
                     use_spatial_filter=self.use_spatial_filter,
                     sample_difference_overlap=self.skip_in_samples,
                     windom_size=self.window_size,
+                    take_trainings_data_multiple_times = self.take_trainings_data_multiple_times,
                 )
 
             else:
@@ -289,6 +293,7 @@ class EMGProcessor:
                     use_spatial_filter=self.use_spatial_filter,
                     sample_difference_overlap=self.skip_in_samples,
                     windom_size=self.window_size,
+                    take_trainings_data_multiple_times=self.take_trainings_data_multiple_times,
                 )
             model.build_training_data(model.movements)
             model.save_trainings_data()
@@ -322,7 +327,7 @@ class EMGProcessor:
 
                 if self.retrain:
                     shallow_model.train_model(
-                        train_loader, epochs=50, learning_rate=0.000001
+                        train_loader, epochs=30, learning_rate=0.000001
                     )
                 else:
                     shallow_model.train_model(train_loader, epochs=self.epochs)  # 7
@@ -377,7 +382,8 @@ class EMGProcessor:
                     use_muovi_pro=self.use_muovi_pro,
                     use_spatial_filter=self.use_spatial_filter,
                     sample_difference_overlap=self.skip_in_samples,
-                    windom_size=self.window_size
+                    windom_size=self.window_size,
+                    take_trainings_data_multiple_times=self.take_trainings_data_multiple_times,
                 )
                 model.load_model(subject=self.patient_id)
                 self.best_time_tree = 1  # This might need to be adjusted based on how your model handles time trees
@@ -457,12 +463,17 @@ class EMGProcessor:
                 self.mean_rest, _, _ = channel_extractor.get_heatmaps()
                 self.normalizer.set_mean(mean=self.mean_rest)
 
+        for i in self.movements:
+            if self.take_trainings_data_multiple_times is not None:
+                ref_data[i] = np.repeat(ref_data[i],self.take_trainings_data_multiple_times,axis=0)
+                emg_data[i] = np.repeat(emg_data[i],self.take_trainings_data_multiple_times,axis=2)
+
         if self.retrain_movements is None:
             # add gaussian noise to the ground truth data so that the model can learn to deal with noise
             for movement in self.movements:
                 # Generate Gaussian noise for each column
                 for finger in range(len(self.finger_indexes)):
-                    std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
+                    std_i = np.std(ref_data[movement][:, finger]) * 0.1
                     noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
                     ref_data[movement][:, finger] = np.add(
                         ref_data[movement][:, finger], noise_i
@@ -471,7 +482,7 @@ class EMGProcessor:
             for movement in self.retrain_movements:
                 # Generate Gaussian noise for each column
                 for finger in range(len(self.finger_indexes)):
-                    std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
+                    std_i = np.std(ref_data[movement][:, finger]) * 0.1
                     noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
                     ref_data[movement][:, finger] = np.add(
                         ref_data[movement][:, finger], noise_i
@@ -996,15 +1007,15 @@ class EMGProcessor:
 
         if self.retrain_movements is not None:
             from sklearn.utils import shuffle
-
-            length = emg_data[self.retrain_movements[0]].shape[1]
-            for movement in self.movements:
-                self.old_emg_data[movement] = self.old_emg_data[movement][:, :self.old_emg_data[movement].shape[1]-length]
-                self.old_ref_data[movement] = self.old_ref_data[movement][:self.old_ref_data[movement].shape[1]-length, :]
-                # TODO hier noch die neuen daten hinten hin appenden
-                self.old_emg_data[movement] = np.vstack(self.old_emg_data[movement],emg_data[movement])
-                self.old_ref_data[movement] = np.vstack(self.old_ref_data[movement],ref_data[movement],)
+            # length of the movement we want to retrain in samples
+            length = emg_data[self.retrain_movements[0]].shape[2]
             for movement in self.retrain_movements:
+                self.old_emg_data[movement] = self.old_emg_data[movement][:, :, :self.old_emg_data[movement].shape[1]-length]
+                self.old_ref_data[movement] = self.old_ref_data[movement][:self.old_ref_data[movement].shape[1]-length, :]
+
+                self.old_emg_data[movement] = np.concatenate((self.old_emg_data[movement],emg_data[movement]),axis = 2)
+                self.old_ref_data[movement] = np.concatenate((self.old_ref_data[movement],ref_data[movement]),axis=0)
+
                 self.old_emg_data[movement] = emg_data[movement]
                 self.old_ref_data[movement] = ref_data[movement]
                 emg_data = self.old_emg_data
@@ -1026,17 +1037,17 @@ if __name__ == "__main__":
     # "no_scaling" = do not apply scaling at all
 
     emg_processor = EMGProcessor(
-        patient_id="Michi_13_2_24_normal1_control_control_control",
+        patient_id="Test",
         movements=[
             "rest",
             "thumb",
             "index",
-            "2pinch",
+            # "2pinch",
             # "3pinch",
             "middle",
             "ring",
             "pinkie",
-            "fist",
+            # "fist",
         ],
         grid_order=[1, 2], # if muovi por plus is used [1,2] else [1]
         use_difference_heatmap=False,
@@ -1044,14 +1055,14 @@ if __name__ == "__main__":
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=30,
-        load_trained_model=True,
+        time_for_each_movement_recording=15,
+        load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Michi_13_2_24_normal1_control_control_control/",  # False
+        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Test/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
@@ -1060,7 +1071,8 @@ if __name__ == "__main__":
         use_virtual_hand_interface_for_coord_generation=True,
         epochs=50,
         use_dtw=False,
-        use_muovi_pro=False,
-        skip_in_ms=35,   #25 for muovi probe , 35 for quattrocento
+        use_muovi_pro=True,
+        skip_in_ms=25,   #25 for muovi probe , 35 for quattrocento
+        take_trainings_data_multiple_times = None
     )
     emg_processor.run()

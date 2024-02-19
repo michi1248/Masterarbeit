@@ -37,6 +37,7 @@ class MultiDimensionalDecisionTree:
         retrain=False,
         retrain_number=None,
         use_muovi_pro=False,
+        take_trainings_data_multiple_times = None,
     ):
         self.normalizer = normalizer
         self.mean_rest = mean_rest
@@ -55,6 +56,7 @@ class MultiDimensionalDecisionTree:
         self.retrain = retrain
         self.retrain_number = retrain_number
         self.use_muovi_pro = use_muovi_pro
+        self.take_trainings_data_multiple_times = take_trainings_data_multiple_times
         if self.use_muovi_pro:
             self.sampling_frequency = 2000
 
@@ -422,6 +424,17 @@ class MultiDimensionalDecisionTree:
                             labels.append(ref_in_the_past)
                     segments.append(segment)
                     labels.append(label)
+
+        if self.take_trainings_data_multiple_times is not None:
+            segments = np.array(segments).T
+            for channel in range(segments.shape[0]):
+                std_i = np.std(segments[channel])* 0.1
+                noise_i = np.random.normal(0, std_i, segments[channel].shape[0])
+                segments[channel] = np.add(
+                    segments[channel], noise_i
+                )
+            segments = segments.T
+
 
         segments, labels = shuffle(segments, labels, random_state=42)
         split_index = int(len(labels) * split_ratio)
