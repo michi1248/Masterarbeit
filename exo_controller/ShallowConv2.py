@@ -589,8 +589,9 @@ class ShallowConvNetWithAttention(nn.Module):
 
         # Calculate the mean R-squared value
         mean_r_squared = torch.mean(torch.tensor(r_squared_values))
+        mean_mse = mse_loss / ground_truth.shape[1]
         print(f"Average Loss to next recording: {mse_loss}")
-        return mean_r_squared.item(), mse_loss.item()
+        return mean_r_squared.item(), mean_mse.item()
 
     def evaluate(self, test_loader):
         self.eval()

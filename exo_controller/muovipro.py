@@ -19,6 +19,7 @@ class Muoviprobe_Interface:
         self.frame_len = 18
         self.bytes_in_sample = 2
         self.BufferSize = 38 * self.frame_len * self.bytes_in_sample
+        # 70 *10 *2 for muovi pro plus
         self.emg_indices = np.arange(0, 32)
 
     def _send_configuration_to_device(self):

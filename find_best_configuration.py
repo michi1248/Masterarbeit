@@ -691,7 +691,7 @@ if __name__ == "__main__":
 
     for method in [
         "Min_Max_Scaling_over_whole_data",
-        # "no_scaling",
+        "no_scaling",
         "Robust_Scaling",
         "Robust_all_channels",
     ]:
@@ -713,23 +713,23 @@ if __name__ == "__main__":
             100,
 
         ]:  # [1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
-            for use_mean_sub in [True]:  # [True,False]
+            for use_mean_sub in [True,False]:  # [True,False]
                 if (count > 0) and use_shallow_conv is False:
                     continue
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_7_2_different_positions",
+                    patient_id="Michi_13_2_24_normal1_control",
                     movements=[
                         "rest",
                         "thumb",
                         "index",
-                        # "2pinch",
+                        "2pinch",
                         # "3pinch",
                         "middle",
                         "ring",
                         "pinkie",
-                        # "fist",
+                        "fist",
                     ],
                     grid_order=[1, 2, 3, 4, 5],
                     use_difference_heatmap=False,
@@ -744,8 +744,8 @@ if __name__ == "__main__":
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_7_2_different_positions_control/",  # False
-                    window_size=100,
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_13_2_24_normal1_control_control/",  # False
+                    window_size=120,
                     scaling_method=method,
                     only_record_data=False,
                     use_control_stream=True,
@@ -755,7 +755,7 @@ if __name__ == "__main__":
                     epochs=epochs,
                     split_index_if_same_dataset=split_index_if_same_dataset,
                     use_dtw=False,
-                    use_muovi_pro=True,
+                    use_muovi_pro=False,
                     skip_in_ms=25,
                 )
                 if count <= 1:
@@ -898,5 +898,5 @@ if __name__ == "__main__":
                     + train_name
                     + "_"
                     + test_name
-                    + "gauss_filtered_25ms_bandpass.png"
+                    + "not_affine25_skip_200msTimeWindow.png"
                 )
