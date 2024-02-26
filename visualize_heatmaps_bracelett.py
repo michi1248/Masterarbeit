@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from exo_controller.helpers import *
 from exo_controller import grid_arrangement
 from exo_controller import normalizations
+from exo_controller.helpers import *
 import seaborn as sns
 from PIL import Image
 from matplotlib.animation import FuncAnimation
@@ -21,6 +22,7 @@ class Heatmap:
         self,
         movement_name,
         path_to_subject_dat,
+        path_to_data,
         sampling_frequency=2048,
         path_to_save_plots=r"D:\Lab\differences_train_test_heatmaps",
         frame_duration=150,
@@ -50,22 +52,25 @@ class Heatmap:
         self.normalizer = normalizations.Normalization(
             method=method,
             grid_order=[1, 2, 3, 4, 5],
-            important_channels=range(64 * 5),
             frame_duration=frame_duration,
+            use_muovi_pro=True,
+            skip_in_samples=30,
         )
+
+        self.grid_aranger = grid_arrangement.Grid_Arrangement([1, 2, 3, 4, 5],use_muovi_pro=True)
+        self.grid_aranger.make_grid()
 
         if (mean_flex_rest is not None) and (mean_ex_rest is not None):
             self.normalizer.set_mean(mean=mean_ex_rest)
-        self.normalizer.get_all_emg_data(
-            path_to_data=os.path.join(path_to_subject_dat, "emg_data.pkl"),
-            movements=["rest", "2pinch", "index", "thumb"],
+        self.get_all_emg_data(
+            path_to_data=path_to_subject_dat,
         )
         self.normalizer.calculate_normalization_values()
         # self.max_for_heatmap,self.min_for_heatmap = self.normalizer.calculate_norm_values_heatmap()
         # self.max_for_heatmap = self.normalizer.normalize_chunk(self.max_for_heatmap)
         # self.min_for_heatmap = self.normalizer.normalize_chunk(self.min_for_heatmap)
 
-        self.gauss_filter = create_gaussian_filter(size_filter=5)
+        # self.gauss_filter = create_gaussian_filter(size_filter=3)
 
         self.movement_name = movement_name
         self.mean_ex = mean_ex_rest
@@ -94,15 +99,14 @@ class Heatmap:
             movement_name + "_" + additional_term,
         )
         self.emg_data = (
-            load_pickle_file(os.path.join(path_to_subject_dat, "emg_data.pkl"))[
-                movement_name
+            load_pickle_file(path_to_data)[
+                "emg"
             ]
             # .transpose(1, 0, 2)
             # .reshape(64*3, -1)
         )
 
-        grid_aranger = grid_arrangement.Grid_Arrangement([1, 2, 3, 4, 5])
-        grid_aranger.make_grid()
+
 
         # emg_data_for_max_min = load_pickle_file(os.path.join(path_to_subject_dat, "emg_data.pkl"))
         # for i in emg_data_for_max_min.keys():
@@ -138,7 +142,7 @@ class Heatmap:
         #     self.q1, self.q2, self.median = find_q_median_values_for_each_movement(emg_data_for_max_min, range(320), list(
         #         emg_data_for_max_min.keys()))
 
-        self.emg_data = grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+        self.emg_data = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
             self.emg_data
         )
         # if method == "Min_Max_Scaling_over_whole_data":
@@ -150,11 +154,18 @@ class Heatmap:
         #     upper_q2,lower_q2 = grid_aranger.transfer_320_into_grid_arangement(self.q2)
         #     upper_median, lower_median = grid_aranger.transfer_320_into_grid_arangement(self.median)
 
-        self.ref_data = load_pickle_file(
-            os.path.join(path_to_subject_dat, "3d_data.pkl")
-        )[movement_name]
 
-        self.ref_data = resample(self.ref_data, self.emg_data.shape[2])
+        self.ref_data = load_pickle_file(
+            path_to_data
+        )["kinematics"]
+
+        # resample ref to same length like emg
+        new_ref_data = np.zeros((self.ref_data.shape[0], self.emg_data.shape[2]))
+        for i in range (self.ref_data.shape[0]):
+            new_ref_data[i,:] =  resample(
+                self.ref_data[i,:], self.emg_data.shape[2]
+            )
+        self.ref_data = new_ref_data
 
         print("ref_data shape: ", self.ref_data.shape)
         print("emg_data shape: ", self.emg_data.shape)
@@ -186,10 +197,25 @@ class Heatmap:
             ylim=(0, 1),
         )
         self.x_for_ref = np.linspace(
-            0, self.sample_length / self.sampling_frequency, self.ref_data.shape[0]
+            0, self.sample_length / self.sampling_frequency, self.ref_data.shape[1]
         )
         self.global_counter = 0
         self.last_frame = 0
+
+    def get_all_emg_data(self, path_to_data):
+
+        all_emg_data = []
+
+        for recording in os.listdir(path_to_data):
+            a = load_pickle_file(os.path.join(path_to_data, recording))["emg"]
+
+            emg_data_one_movement = (
+                self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
+                    a
+                )
+            )
+            all_emg_data.append(emg_data_one_movement)
+        self.normalizer.all_emg_data = all_emg_data
 
     def calculate_heatmap(self, emg_grid, position, interval_in_samples):
         """
@@ -246,9 +272,9 @@ class Heatmap:
 
         normalized_heatmap = self.normalizer.normalize_chunk(heatmap)
 
-        normalized_heatmap = apply_gaussian_filter(
-            normalized_heatmap, self.gauss_filter
-        )
+        # normalized_heatmap = apply_gaussian_filter(
+        #     normalized_heatmap, self.gauss_filter
+        # )
 
         if self.movement_name == "rest":
             self.heatmaps_flex = np.add(self.heatmaps_flex, normalized_heatmap)
@@ -334,41 +360,27 @@ class Heatmap:
         # self.ax_emg.imshow(heatmap, cmap='hot', interpolation='nearest')
 
     def make_Ref_trackings(self, frame):
-        if (
-            ("pinch" in self.movement_name)
-            or ("fist" in self.movement_name)
-            or ("rest" in self.movement_name)
-        ):
-            self.ax_ref.plot(
-                self.x_for_ref, normalize_2D_array(self.ref_data[:, 0]), color="blue"
-            )
-            self.ax_ref.scatter(
-                self.x_for_ref[frame],
-                normalize_2D_array(self.ref_data[:, 0])[frame],
-                color="green",
-                marker="x",
-                s=90,
-                linewidth=3,
-            )
-        else:
-            if self.movement_name == "thumb":
-                index_movement = 0
-            elif self.movement_name == "index":
-                index_movement = 1
 
-            self.ax_ref.plot(
-                self.x_for_ref,
-                normalize_2D_array(self.ref_data[:, index_movement]),
-                color="blue",
-            )
-            self.ax_ref.scatter(
-                self.x_for_ref[frame],
-                normalize_2D_array(self.ref_data)[:, index_movement][frame],
-                color="green",
-                marker="x",
-                s=90,
-                linewidth=3,
-            )
+        index_movement = 0
+        max_difference = 0
+        for i in range(self.ref_data.shape[0]):
+            if np.max(self.ref_data[i, :]) - np.min(self.ref_data[i, 0]) > max_difference:
+                max_difference = np.max(self.ref_data[:, i]) - np.min(self.ref_data[:, i])
+                index_movement = i
+
+        self.ax_ref.plot(
+            self.x_for_ref,
+            self.ref_data[index_movement,:],
+            color="blue",
+        )
+        self.ax_ref.scatter(
+            self.x_for_ref[frame],
+            self.ref_data[index_movement][frame],
+            color="green",
+            marker="x",
+            s=90,
+            linewidth=3,
+        )
 
     def update(self, frame):
         plt.figure()
@@ -426,9 +438,9 @@ class Heatmap:
     def animate(self, save=False):
         print("number_observation_samples: " + str(self.number_observation_samples))
         # samples = all sample values when using all samples with self.frame_duration in between
-        self.samples = [i for i in range(0, self.ref_data.shape[0], 64)]
+        self.samples = [i for i in range(0, self.ref_data.shape[1], 64)]
         self.samples = [
-            element for element in self.samples if element <= self.ref_data.shape[0]
+            element for element in self.samples if element <= self.ref_data.shape[1]
         ]
         # make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
         num_rows, num_cols, _ = self.emg_data.shape
@@ -436,29 +448,20 @@ class Heatmap:
         self.heatmaps_ex = np.zeros((num_rows, num_cols))
         self.number_heatmaps_flex = 0
         self.number_heatmaps_ex = 0
-        if (
-            ("pinch" in self.movement_name)
-            or ("fist" in self.movement_name)
-            or ("rest" in self.movement_name)
-        ):
-            self.local_maxima, self.local_minima = get_locations_of_all_maxima(
-                self.ref_data[:, 0],
-            )
-            plot_local_maxima_minima(
-                self.ref_data[:, 0], self.local_maxima, self.local_minima
-            )
-        else:
-            if self.movement_name == "thumb":
-                index_movement = 0
-            elif self.movement_name == "index":
-                index_movement = 1
+        index_movement = 0
+        max_difference = 0
+        for i in range(self.ref_data.shape[0]):
+            if np.max(self.ref_data[i, :]) - np.min(self.ref_data[i, 0]) > max_difference:
+                max_difference = np.max(self.ref_data[:, i]) - np.min(self.ref_data[:, i])
+                index_movement = i
 
-            self.local_maxima, self.local_minima = get_locations_of_all_maxima(
-                self.ref_data[:, index_movement]
-            )
-            plot_local_maxima_minima(
-                self.ref_data[:, index_movement], self.local_maxima, self.local_minima
-            )
+
+        self.local_maxima, self.local_minima = get_locations_of_all_maxima(
+            self.ref_data[index_movement, :]
+        )
+        plot_local_maxima_minima(
+            self.ref_data[index_movement, :], self.local_maxima, self.local_minima
+        )
 
         if not save:
             # stuff for interactive plot
@@ -512,6 +515,7 @@ class Heatmap:
         mean_flex_heatmap = np.divide(self.heatmaps_flex, self.number_heatmaps_flex)
 
         mean_ex_heatmap = np.divide(self.heatmaps_ex, self.number_heatmaps_ex)
+
 
         mean_ex_heatmap[np.isnan(mean_ex_heatmap)] = 0
         mean_flex_heatmap[np.isnan(mean_flex_heatmap)] = 0
@@ -604,78 +608,46 @@ if __name__ == "__main__":
     for method in [
         "Min_Max_Scaling_over_whole_data",
         "Robust_Scaling",
-        "Min_Max_Scaling_all_channels",
-        "no_scaling",
-        "Robust_all_channels",
-        "EMG_signals",
+        # "Min_Max_Scaling_all_channels",
+        # "no_scaling",
+        # "Robust_all_channels",
+        # "EMG_signals",
     ]:
         mean_flex_rest = None
         mean_ex_rest = None
 
         for additional_term in [""]:#["before", "after"]:
-            for movement in ["rest", "thumb", "index", "2pinch"]:
-                # if additional_term == "before":
-                #     path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_18_01_2024_normal2"  # trainingsdata recorded for training
-                # else:
-                #     path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_18_01_2024_normal3"  # trainingsdata recorded after training
-                path = r"D:\Lab\SCI_recording_Brandmueller_23_2\data\recordings\recording1"
-                print("method is: ", method)
-                print("movement is: ", movement)
-                print("additional term is: ", additional_term)
 
-                heatmap = Heatmap(
-                    movement,
-                    path,
-                    frame_duration=window_size,
-                    additional_term=additional_term,
-                    method=method,
-                )
-                if method == "EMG_signals":
-                    continue
-                heatmap.animate(save=True)
-                fps = 10
-                heatmap.save_animation(
-                    r"D:\Lab\differences_train_test_heatmaps/"
-                    + str(window_size)
-                    + "ms_rms_window/"
-                    + method
-                    + "/"
-                    + str(movement)
-                    + str(fps)
-                    + "fps_most_firings.gif",
-                    fps=fps,
-                )
-                mean_flex, mean_ex = heatmap.channel_extraction()
-                heatmap.channel_extraction(mark_choosen_channels=True)
+            # if additional_term == "before":
+            #     path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_18_01_2024_normal2"  # trainingsdata recorded for training
+            # else:
+            #     path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_18_01_2024_normal3"  # trainingsdata recorded after training
+            path = r"D:\Lab\SCI_recording_Brandmueller_23_2\data\recordings\recording1"
+            for movement in ["rest", "fist", "middle", "pinky", "index", "thumb", "ring"]:
+                for i, s in enumerate(os.listdir(path)):
+                    if movement in s:
+                        index = i
+                recording = os.listdir(path)[index]
 
-                if plot_emg:
-                    # Do the same again for method == EMG_signals to produce emg singals plot
+                if movement in recording:
+                    path1 = os.path.join(path, recording)
+
+                    print("method is: ", method)
+                    print("movement is: ", movement)
+                    print("additional term is: ", additional_term)
+
                     heatmap = Heatmap(
-                        movement,
-                        path,
+                        movement_name=movement,
+                        path_to_data=path1,
+                        path_to_subject_dat=path,
                         frame_duration=window_size,
                         additional_term=additional_term,
-                        method="EMG_signals",
-                    )
-
-                if movement == "rest":
-                    # if the movement is rest save the mean flex and ex for later subtraction from the other movements
-                    mean_ex_rest = mean_ex
-                    mean_flex_rest = mean_flex
-
-                else:
-                    # if the movement is not rest subtract the mean flex and ex from the rest from the current movement therefore give the means of the rest to the functions
-                    heatmap = Heatmap(
-                        movement,
-                        path,
-                        frame_duration=window_size,
-                        additional_term=additional_term
-                        + "_subtracted_mean_rest_from_emg",
                         method=method,
-                        mean_flex_rest=mean_flex_rest,
-                        mean_ex_rest=mean_ex_rest,
                     )
+                    if method == "EMG_signals":
+                        continue
                     heatmap.animate(save=True)
+                    fps = 10
                     heatmap.save_animation(
                         r"D:\Lab\differences_train_test_heatmaps/"
                         + str(window_size)
@@ -684,8 +656,8 @@ if __name__ == "__main__":
                         + "/"
                         + str(movement)
                         + str(fps)
-                        + "fps_most_firings_trash.gif",
-                        fps=10,
+                        + "fps_most_firings.gif",
+                        fps=fps,
                     )
                     mean_flex, mean_ex = heatmap.channel_extraction()
                     heatmap.channel_extraction(mark_choosen_channels=True)
@@ -696,13 +668,56 @@ if __name__ == "__main__":
                             movement,
                             path,
                             frame_duration=window_size,
+                            additional_term=additional_term,
+                            method="EMG_signals",
+                        )
+
+                    if movement == "rest":
+                        # if the movement is rest save the mean flex and ex for later subtraction from the other movements
+                        mean_ex_rest = mean_ex
+                        mean_flex_rest = mean_flex
+
+                    else:
+                        # if the movement is not rest subtract the mean flex and ex from the rest from the current movement therefore give the means of the rest to the functions
+                        heatmap = Heatmap(
+                            movement_name=movement,
+                            path_to_data=path1,
+                            path_to_subject_dat=path,
+                            frame_duration=window_size,
                             additional_term=additional_term
                             + "_subtracted_mean_rest_from_emg",
-                            method="EMG_signals",
+                            method=method,
                             mean_flex_rest=mean_flex_rest,
                             mean_ex_rest=mean_ex_rest,
                         )
-                gc.collect()
+                        heatmap.animate(save=True)
+                        heatmap.save_animation(
+                            r"D:\Lab\differences_train_test_heatmaps/"
+                            + str(window_size)
+                            + "ms_rms_window/"
+                            + method
+                            + "/"
+                            + str(movement)
+                            + str(fps)
+                            + "fps_most_firings_trash.gif",
+                            fps=10,
+                        )
+                        mean_flex, mean_ex = heatmap.channel_extraction()
+                        heatmap.channel_extraction(mark_choosen_channels=True)
+
+                        if plot_emg:
+                            # Do the same again for method == EMG_signals to produce emg singals plot
+                            heatmap = Heatmap(
+                                movement,
+                                path,
+                                frame_duration=window_size,
+                                additional_term=additional_term
+                                + "_subtracted_mean_rest_from_emg",
+                                method="EMG_signals",
+                                mean_flex_rest=mean_flex_rest,
+                                mean_ex_rest=mean_ex_rest,
+                            )
+                    gc.collect()
     # movement = "thumb"
     # heatmap = Heatmap(movement,r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_Test1",additional_term="before")
     # heatmap.animate(save=True)

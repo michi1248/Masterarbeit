@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import resample
 from scipy import signal
 from scipy.signal import butter, filtfilt
-from fastdtw import fastdtw
+from dtaidistance import dtw
 from scipy.spatial.distance import euclidean
 
 
@@ -41,15 +41,17 @@ def align_signals_dtw(rms_emg_signal, movement_signal, emg_grid):
     emg_grid = resample(emg_grid, len(rms_emg_signal) // 10, axis=1)
 
     print("computing dtw")
-    distance, path = fastdtw(x =downsampled_emg, y =downsampled_movement[:,index])
-    x_indices, y_indices = zip(*path)
-    x_indices = np.array(x_indices)
-    y_indices = np.array(y_indices)
+    # distance, path = fastdtw(x =downsampled_emg, y =downsampled_movement[:,index])
+    distance, paths = dtw.warping_paths(downsampled_emg,downsampled_movement[:,index],window=None,)
+    best_path = dtw.best_path(paths)
+    # Extract the indices of the aligned points
+    aligned_emg_indices = [index[0] for index in best_path]
+    aligned_movement_indices = [index[1] for index in best_path]
     print("dtw done")
 
-    aligned_emg = np.array(downsampled_emg[x_indices])
-    aligned_movement = np.array(downsampled_movement[y_indices, :])
-    emg_grid = np.array(emg_grid[:, x_indices])
+    aligned_emg = np.array(downsampled_emg[aligned_emg_indices])
+    aligned_movement = np.array(downsampled_movement[aligned_movement_indices, :])
+    emg_grid = np.array(emg_grid[:, aligned_emg_indices])
 
     aligned_emg = resample(aligned_emg, original_emg_length)
     aligned_movement = resample(aligned_movement, original_movement_length, axis=0)
@@ -73,7 +75,12 @@ def align_signals_dtw(rms_emg_signal, movement_signal, emg_grid):
     plt.show()
     return emg_grid, aligned_movement
 
-
+def lowpass_filter(data, lowcut=0.5, fs=2000, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    b, a = butter(order, low, btype="low", analog=False)
+    y = filtfilt(b, a, data)
+    return y
 
 def make_rms_for_dtw(emg_matrix):
     """Compute the RMS of the EMG matrix.
@@ -84,6 +91,7 @@ def make_rms_for_dtw(emg_matrix):
     """
 
     rms = np.sqrt(np.median(emg_matrix**2, axis=0))
+    rms= lowpass_filter(rms)
 
 
     return rms

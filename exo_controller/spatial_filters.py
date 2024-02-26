@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.signal import fftconvolve
 from exo_controller import helpers
-from scipy.signal import butter, lfilter, iirnotch
+from scipy.signal import butter, lfilter, iirnotch, filtfilt
 
 
 class Filters:
@@ -109,8 +109,8 @@ class Filters:
         high = highcut / nyq
         b_notch, a_notch = iirnotch(50, 30, fs)
         b, a = butter(order, [low, high], btype="band", fs=fs, analog=False)
-        y = lfilter(b_notch, a_notch, data)
-        y = lfilter(b, a, data)
+        y = filtfilt(b_notch, a_notch, data)
+        y = filtfilt(b, a, data)
         return y
 
     def bandpass_filter_emg_data(self, emg_data, fs=2048):

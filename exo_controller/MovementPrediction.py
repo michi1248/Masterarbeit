@@ -428,7 +428,7 @@ class MultiDimensionalDecisionTree:
         if self.take_trainings_data_multiple_times is not None:
             segments = np.array(segments).T
             for channel in range(segments.shape[0]):
-                std_i = np.std(segments[channel])* 0.1
+                std_i = np.std(segments[channel])* 0.05
                 noise_i = np.random.normal(0, std_i, segments[channel].shape[0])
                 segments[channel] = np.add(
                     segments[channel], noise_i

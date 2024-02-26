@@ -463,17 +463,18 @@ class EMGProcessor:
                 self.mean_rest, _, _ = channel_extractor.get_heatmaps()
                 self.normalizer.set_mean(mean=self.mean_rest)
 
-        for i in self.movements:
-            if self.take_trainings_data_multiple_times is not None:
-                ref_data[i] = np.repeat(ref_data[i],self.take_trainings_data_multiple_times,axis=0)
-                emg_data[i] = np.repeat(emg_data[i],self.take_trainings_data_multiple_times,axis=2)
+        if not self.retrain:
+            for i in self.movements:
+                if self.take_trainings_data_multiple_times is not None:
+                    ref_data[i] = np.repeat(ref_data[i],self.take_trainings_data_multiple_times,axis=0)
+                    emg_data[i] = np.repeat(emg_data[i],self.take_trainings_data_multiple_times,axis=2)
 
         if self.retrain_movements is None:
             # add gaussian noise to the ground truth data so that the model can learn to deal with noise
             for movement in self.movements:
                 # Generate Gaussian noise for each column
                 for finger in range(len(self.finger_indexes)):
-                    std_i = np.std(ref_data[movement][:, finger]) * 0.1
+                    std_i = np.std(ref_data[movement][:, finger]) * 0.05
                     noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
                     ref_data[movement][:, finger] = np.add(
                         ref_data[movement][:, finger], noise_i
@@ -482,7 +483,7 @@ class EMGProcessor:
             for movement in self.retrain_movements:
                 # Generate Gaussian noise for each column
                 for finger in range(len(self.finger_indexes)):
-                    std_i = np.std(ref_data[movement][:, finger]) * 0.1
+                    std_i = np.std(ref_data[movement][:, finger]) * 0.05
                     noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
                     ref_data[movement][:, finger] = np.add(
                         ref_data[movement][:, finger], noise_i
@@ -835,10 +836,10 @@ class EMGProcessor:
             data = self.grid_aranger.transfer_and_concatenate_320_into_grid_arangement(
                 data
             )
-            if self.use_bandpass_filter:
-                data = self.filter.bandpass_filter_grid_emg_data(
-                    data.copy(), fs=self.sampling_frequency
-                )
+            # if self.use_bandpass_filter:
+            #     data = self.filter.bandpass_filter_grid_emg_data(
+            #         data.copy(), fs=self.sampling_frequency
+            #     )
 
             if (data.shape[2] - self.window_size_in_samples) < 0:
                 emg_to_use = data[:, :, :]
@@ -1042,27 +1043,27 @@ if __name__ == "__main__":
             "rest",
             "thumb",
             "index",
-            # "2pinch",
+            "2pinch",
             # "3pinch",
             "middle",
             "ring",
             "pinkie",
-            # "fist",
+            "fist",
         ],
-        grid_order=[1, 2], # if muovi por plus is used [1,2] else [1]
+        grid_order=[2, 3, 4, 5], # if muovi por plus is used [1,2] else [1]
         use_difference_heatmap=False,
         use_important_channels=False,
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=15,
+        time_for_each_movement_recording=10,
         load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
         use_mean_subtraction=True,
         use_bandpass_filter=False,
         use_gauss_filter=True,
-        use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Test/",  # False
+        use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Test/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
         only_record_data=False,
@@ -1071,8 +1072,8 @@ if __name__ == "__main__":
         use_virtual_hand_interface_for_coord_generation=True,
         epochs=50,
         use_dtw=False,
-        use_muovi_pro=True,
-        skip_in_ms=25,   #25 for muovi probe , 35 for quattrocento
+        use_muovi_pro=False,
+        skip_in_ms=35,   #25 for muovi probe , 35 for quattrocento
         take_trainings_data_multiple_times = None
     )
     emg_processor.run()

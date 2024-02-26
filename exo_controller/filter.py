@@ -9,7 +9,7 @@ class MichaelFilter:
         output_smoothing=True,
         additinal_filter=True,
         only_additional_filter=False,
-        weight_prediction_impact_on_regression=0.75,  # the lower the more smooth but less reactive ( 0.75 is good)
+        weight_prediction_impact_on_regression=0.7,  # the lower the more smooth but less reactive ( 0.75 is good)
         weight_additional_filter=1,  # the higher the smoother but delayed / less reactive (3 is good)
         degree_regressions=1,
         buffer_length=5,  # (5 is good)
@@ -46,19 +46,20 @@ class MichaelFilter:
         # Segment 1: y = 0 for x <= 0.1
         # Segment 2: y increases with a slope of 1 from x = 0.1 until y = 1
         # Segment 3: y = 1 for the rest
+        #TODO hier sollte ich 0.005 nochmal erhöhen zu 0.01 oder mittelteil zusätzlich machen bei dem nicht steigung 1 sondern wo ende dannn auch parabel aber anders herum also zwischen 0.5 und 1 dann auch limitiert
         a1 = 0.005 / (
             0.05**2
         )  # value for parabola       y_value / (x_value ** 2)      -> when i want the parabola to be 0.02 at 0.02 then y and x value shoudl be 0.02
         y = np.where(x <= 0.05, self.parabola(x, a1), np.where(x < 1, x, 1))
+
+        #comment following line out if want to be faster than hand, use the line if you want smoother predictions
+        y = np.where(y>0.3, -0.4286 * y**2 + 0.1286 * y + 0.3, y)
+
         return y
 
     def normalize(self, matrix):
         return matrix / (np.linalg.norm(matrix) + 1e-8)
 
-    # TODO hier muss eigentlihc nicht normalisiert werden zwischen allen änderungen für jeden finger sondern
-    # ich übegebe zusätzlich als argument (prediction - self.last_avg[-2]) und dann für jeden finger max und min norm damit machen
-    # bzw   nicht prdiction- self.last_avg[-2] überg3ben sondern max = max von den beiden, min ist min von den beiden für jeden finger
-    # auserdem muss sqrt entfernen in additional filter
 
     def filter(self, prediction):
         self.last_avg.append(prediction)
@@ -144,6 +145,7 @@ class MichaelFilter:
                 self.modified_relu(np.abs(self.last_avg[-1] - self.last_avg[-2]))
                 / self.weight_additional_filter
             ) * (self.last_avg[-1] - self.last_avg[-2])
+            #TODO hier überprüfen ob zu grosser sprung von einem zum anderen sample ist (mehr als 0.5 ?? ) wenn ja dann sollte ich es einfach lassen ?
             self.last_avg[-1] = new
             self.last_val.pop(0)
             self.last_avg.pop(0)
