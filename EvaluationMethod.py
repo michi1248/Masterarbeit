@@ -346,6 +346,7 @@ class VispyPlotWidget(QWidget):
 
         :param values: A list of 5 values, one for each bar plot.
         :param boundaries: A list of 5 arrays/lists, each containing two values (lower and upper boundaries) for each bar plot.
+        :param important_fingers: A list of the fingers that are important. If None, all fingers are plotted in the same color. (values between 0 and 4)
         """
         self.scene.bgcolor = 'white'  # Set background to white
 
@@ -388,7 +389,6 @@ class VispyPlotWidget(QWidget):
                 self.rects[i].width=bar_width
                 self.rects[i].height = height
                 self.rects[i].color=color
-                self.rects[i].parent = self.view.scene
 
             # Plotting non-filled boundary rectangles instead of lines
             lower_boundary, upper_boundary = boundaries[i]
@@ -413,15 +413,16 @@ class VispyPlotWidget(QWidget):
                                            i = i)
 
             # Add X-axis labels
-        for i, label in enumerate(labels):
-            x_position = i * spacing + bar_width / 2
-            text = scene.Text(text=label, pos=(x_position, -0.1), color='black',
-                              font_size=7, parent=self.view.scene)
-            text.rotation = -45
-
-            # Adjust camera to ensure everything is visible
-            # Ensure X-axis labels and Y-axis are correctly positioned and added
         if first_trigger == 1:
+            for i, label in enumerate(labels):
+                x_position = i * spacing + bar_width / 2
+                text = scene.Text(text=label, pos=(x_position, -0.1), color='black',
+                                  font_size=7, parent=self.view.scene)
+                text.rotation = -45
+
+                # Adjust camera to ensure everything is visible
+                # Ensure X-axis labels and Y-axis are correctly positioned and added
+
             self.adjust_camera_and_labels(n_bars=len(values), values=values, spacing=0.2)
             self.add_fixed_y_axis()
 
@@ -499,7 +500,7 @@ if __name__ == "__main__":
 
     timer = QTimer()
     timer.timeout.connect(update_bar_values)  # Connect timeout signal to the update function
-    timer.start(50)  # Update interval in milliseconds (e.g., 1000ms = 1 second)
+    timer.start(10)  # Update interval in milliseconds (e.g., 1000ms = 1 second)
 
     # Show the main window
     main_window.show()
