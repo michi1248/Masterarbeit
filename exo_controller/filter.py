@@ -53,7 +53,7 @@ class MichaelFilter:
         y = np.where(x <= 0.05, self.parabola(x, a1), np.where(x < 1, x, 1))
 
         #comment following line out if want to be faster than hand, use the line if you want smoother predictions
-        y = np.where(y>0.3, -0.4286 * y**2 + 0.1286 * y + 0.3, y)
+        #y = np.where(y>0.3, -0.4286 * y**2 + 0.1286 * y + 0.3, y)
 
         return y
 

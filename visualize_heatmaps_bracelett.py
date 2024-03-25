@@ -70,7 +70,7 @@ class Heatmap:
         # self.max_for_heatmap = self.normalizer.normalize_chunk(self.max_for_heatmap)
         # self.min_for_heatmap = self.normalizer.normalize_chunk(self.min_for_heatmap)
 
-        # self.gauss_filter = create_gaussian_filter(size_filter=3)
+        self.gauss_filter = create_gaussian_filter(size_filter=3)
 
         self.movement_name = movement_name
         self.mean_ex = mean_ex_rest
@@ -258,32 +258,25 @@ class Heatmap:
         heatmap = self.calculate_heatmap(
             self.emg_data, frame, self.number_observation_samples
         )
-        # plt.figure()
-        # for i in range(self.emg_data.shape[0]):
-        #     for j in range(self.emg_data.shape[1]):
-        #         if (frame -  self.number_observation_samples < 0) or (len(self.emg_data[i][j]) < ( self.number_observation_samples)):
-        #             plt.plot(self.emg_data[i][j][:frame])
-        #         else:
-        #             plt.plot(self.emg_data[i][j][frame - self.number_observation_samples:frame])
-        # plt.savefig(os.path.join(self.path_to_save_plots, "_emg_plot_" + str(frame) + ".png"))
+        if self.movement_name == "rest":
+            self.heatmaps_flex = np.add(self.heatmaps_flex, heatmap)
+            # add heatmap and not normalized heatmap because impact of all heatmaps will be the same but maybe some heatmaps have higher values and i want to use this ??
+            # TODO maybe change this (better to use normalized or not ?)
+            # IT IS BETER TO USE NORMALIZED BECAUSE IF EMG SCHWANKUNGEN
+            self.number_heatmaps_flex += 1
+            self.heatmaps_ex = np.add(self.heatmaps_ex, heatmap)
+            self.number_heatmaps_ex += 1
 
         if (self.mean_ex is not None) and (self.mean_flex is not None):
             heatmap = heatmap - self.mean_ex
 
         normalized_heatmap = self.normalizer.normalize_chunk(heatmap)
 
-        # normalized_heatmap = apply_gaussian_filter(
-        #     normalized_heatmap, self.gauss_filter
-        # )
+        normalized_heatmap = apply_gaussian_filter(
+            normalized_heatmap, self.gauss_filter
+        )
 
-        if self.movement_name == "rest":
-            self.heatmaps_flex = np.add(self.heatmaps_flex, normalized_heatmap)
-            # add heatmap and not normalized heatmap because impact of all heatmaps will be the same but maybe some heatmaps have higher values and i want to use this ??
-            # TODO maybe change this (better to use normalized or not ?)
-            # IT IS BETER TO USE NORMALIZED BECAUSE IF EMG SCHWANKUNGEN
-            self.number_heatmaps_flex += 1
-            self.heatmaps_ex = np.add(self.heatmaps_ex, normalized_heatmap)
-            self.number_heatmaps_ex += 1
+
 
         # only do the following if +- window size near extrema
         if (self.movement_name != "rest") and (
@@ -322,7 +315,7 @@ class Heatmap:
                 # )
             else:
                 self.heatmaps_ex = np.add(
-                    self.heatmaps_ex, heatmap
+                    self.heatmaps_ex, normalized_heatmap
                 )  # np.multiply(heatmap, 1/(distance+0.1) ))
                 self.number_heatmaps_ex += 1
                 # plot_local_maxima_minima(
@@ -442,6 +435,7 @@ class Heatmap:
         self.samples = [
             element for element in self.samples if element <= self.ref_data.shape[1]
         ]
+        self.samples = self.samples[:int(0.3*len(self.samples))]
         # make both lists to save all coming heatmaps into it by adding the values and dividing at the end through number of heatmaps
         num_rows, num_cols, _ = self.emg_data.shape
         self.heatmaps_flex = np.zeros((num_rows, num_cols))
@@ -606,11 +600,11 @@ if __name__ == "__main__":
 
     window_size = 150
     for method in [
-        "Min_Max_Scaling_over_whole_data",
-        "Robust_Scaling",
-        # "Min_Max_Scaling_all_channels",
-        # "no_scaling",
-        # "Robust_all_channels",
+        #"Min_Max_Scaling_over_whole_data",
+        #"Robust_Scaling",
+        "Min_Max_Scaling_all_channels",
+        #"no_scaling",
+        #"Robust_all_channels",
         # "EMG_signals",
     ]:
         mean_flex_rest = None

@@ -52,15 +52,31 @@ class Heatmap:
             grid_order=[1, 2, 3, 4, 5],
             important_channels=range(64 * 5),
             frame_duration=frame_duration,
+            use_muovi_pro=False,
+            skip_in_samples=int((35/1000) *2048)
+        )
+        self.mean_normalizer = normalizations.Normalization(
+            method="Min_Max_Scaling_all_channels",
+            grid_order=[1, 2, 3, 4, 5],
+            important_channels=range(64 * 5),
+            frame_duration=frame_duration,
+            use_muovi_pro=False,
+            skip_in_samples=int((35/1000) *2048)
         )
 
-        if (mean_flex_rest is not None) and (mean_ex_rest is not None):
-            self.normalizer.set_mean(mean=mean_ex_rest)
+        # if (mean_flex_rest is not None) and (mean_ex_rest is not None):
+        #     self.normalizer.set_mean(mean=mean_ex_rest)
         self.normalizer.get_all_emg_data(
             path_to_data=os.path.join(path_to_subject_dat, "emg_data.pkl"),
             movements=["rest", "2pinch", "index", "thumb"],
         )
         self.normalizer.calculate_normalization_values()
+
+        self.mean_normalizer.get_all_emg_data(
+            path_to_data=os.path.join(path_to_subject_dat, "emg_data.pkl"),
+            movements=["rest", "2pinch", "index", "thumb"],
+        )
+        self.mean_normalizer.calculate_normalization_values()
         # self.max_for_heatmap,self.min_for_heatmap = self.normalizer.calculate_norm_values_heatmap()
         # self.max_for_heatmap = self.normalizer.normalize_chunk(self.max_for_heatmap)
         # self.min_for_heatmap = self.normalizer.normalize_chunk(self.min_for_heatmap)
@@ -241,10 +257,13 @@ class Heatmap:
         #             plt.plot(self.emg_data[i][j][frame - self.number_observation_samples:frame])
         # plt.savefig(os.path.join(self.path_to_save_plots, "_emg_plot_" + str(frame) + ".png"))
 
-        if (self.mean_ex is not None) and (self.mean_flex is not None):
-            heatmap = heatmap - self.mean_ex
+
 
         normalized_heatmap = self.normalizer.normalize_chunk(heatmap)
+
+        if (self.mean_ex is not None) and (self.mean_flex is not None):
+            normalized_heatmap = normalized_heatmap - self.normalizer.normalize_chunk(self.mean_ex)
+        np.where(normalized_heatmap < 0, 0, normalized_heatmap)
 
         normalized_heatmap = apply_gaussian_filter(
             normalized_heatmap, self.gauss_filter
@@ -252,9 +271,7 @@ class Heatmap:
 
         if self.movement_name == "rest":
             self.heatmaps_flex = np.add(self.heatmaps_flex, normalized_heatmap)
-            # add heatmap and not normalized heatmap because impact of all heatmaps will be the same but maybe some heatmaps have higher values and i want to use this ??
-            # TODO maybe change this (better to use normalized or not ?)
-            # IT IS BETER TO USE NORMALIZED BECAUSE IF EMG SCHWANKUNGEN
+
             self.number_heatmaps_flex += 1
             self.heatmaps_ex = np.add(self.heatmaps_ex, normalized_heatmap)
             self.number_heatmaps_ex += 1
@@ -296,7 +313,7 @@ class Heatmap:
                 # )
             else:
                 self.heatmaps_ex = np.add(
-                    self.heatmaps_ex, heatmap
+                    self.heatmaps_ex, normalized_heatmap
                 )  # np.multiply(heatmap, 1/(distance+0.1) ))
                 self.number_heatmaps_ex += 1
                 # plot_local_maxima_minima(
@@ -515,12 +532,10 @@ class Heatmap:
 
         mean_ex_heatmap[np.isnan(mean_ex_heatmap)] = 0
         mean_flex_heatmap[np.isnan(mean_flex_heatmap)] = 0
-        # mean_ex_heatmap = normalize_2D_array(mean_ex_heatmap) # here normalize again just over this sample because it is nevertheless just  one image
-        # mean_flex_heatmap = normalize_2D_array(mean_flex_heatmap)
-        # difference_heatmap = normalize_2D_array(np.abs(np.subtract(mean_ex_heatmap, mean_flex_heatmap)))
+
         difference_heatmap = np.subtract(mean_ex_heatmap, mean_flex_heatmap)
         difference_heatmap[np.isnan(difference_heatmap)] = 0
-        # difference_heatmap = normalize_2D_array(difference_heatmap)
+
         if mark_choosen_channels:
             channels_flexion, channels_extension = choose_possible_channels(
                 difference_heatmap, mean_flex_heatmap, mean_ex_heatmap
@@ -569,9 +584,7 @@ class Heatmap:
                     path_to_difference_plot, "difference_plot_" + str(movement) + ".png"
                 )
             )
-            return np.divide(self.heatmaps_flex, self.number_heatmaps_flex), np.divide(
-                self.heatmaps_ex, self.number_heatmaps_ex
-            )
+            return mean_flex_heatmap, mean_ex_heatmap
         # chosen channels flexion heatmap
         # sns.heatmap(chosen_heatmap_flexion,ax=axes[1])
         # plt.subplot(3, 1)
@@ -599,26 +612,25 @@ if __name__ == "__main__":
     # "Gauss_filter" = use Gauss filter on raw data
     # "Bandpass_filter" = use bandpass filter on raw data and plot the filtered all emg channels
     plot_emg = False
-
     window_size = 150
     for method in [
+
+        #"Robust_Scaling",
+        #"Min_Max_Scaling_all_channels",
         "Min_Max_Scaling_over_whole_data",
-        "Robust_Scaling",
-        "Min_Max_Scaling_all_channels",
-        "no_scaling",
-        "Robust_all_channels",
-        "EMG_signals",
+        #"no_scaling",
+        #"Robust_all_channels",
+        #"EMG_signals",
     ]:
         mean_flex_rest = None
         mean_ex_rest = None
-
         for additional_term in [""]:#["before", "after"]:
             for movement in ["rest", "thumb", "index", "2pinch"]:
                 # if additional_term == "before":
                 #     path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_18_01_2024_normal2"  # trainingsdata recorded for training
                 # else:
                 #     path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_18_01_2024_normal3"  # trainingsdata recorded after training
-                path = r"D:\Lab\SCI_recording_Brandmueller_23_2\data\recordings\recording1"
+                path = r"D:\Lab\MasterArbeit\trainings_data\resulting_trainings_data\subject_Michi_13_2_24_normal1_control_control"
                 print("method is: ", method)
                 print("movement is: ", movement)
                 print("additional term is: ", additional_term)

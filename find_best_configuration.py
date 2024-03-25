@@ -21,7 +21,8 @@ from exo_controller.ShallowConv2 import ShallowConvNetWithAttention
 from exo_controller.butterworth import Bandpass
 from exo_controller.muovipro import *
 import keyboard
-
+from torchview import draw_graph
+from IPython.display import display
 
 class EMGProcessor:
     def __init__(
@@ -339,7 +340,7 @@ class EMGProcessor:
         for movement in self.movements:
             # Generate Gaussian noise for each column
             for finger in range(len(self.finger_indexes)):
-                std_i = np.divide(np.std(ref_data[movement][:, finger]), 10)
+                std_i = np.std(ref_data[movement][:, finger]) * 0.05
                 noise_i = np.random.normal(0, std_i, ref_data[movement].shape[0])
                 ref_data[movement][:, finger] = np.add(
                     ref_data[movement][:, finger], noise_i
@@ -359,7 +360,7 @@ class EMGProcessor:
                 use_bandpass_filter=self.use_bandpass_filter,
             )
             self.mean_rest, _, _ = channel_extractor.get_heatmaps()
-            self.normalizer.set_mean(mean=self.mean_rest.copy())
+            # self.normalizer.set_mean(mean=self.mean_rest.copy())
 
         # Calculate normalization values
         self.normalizer.get_all_emg_data(
@@ -527,18 +528,29 @@ class EMGProcessor:
                                 emg_to_use_difference
                             )
 
-                        if self.use_mean_subtraction:
-                            heatmap_local = np.subtract(heatmap_local, self.mean_rest)
-                            if self.use_difference_heatmap:
-                                previous_heatmap = np.subtract(
-                                    heatmap_local, self.mean_rest
-                                )
+                        # if self.use_mean_subtraction:
+                        #     heatmap_local = np.subtract(heatmap_local, self.mean_rest)
+                        #     if self.use_difference_heatmap:
+                        #         previous_heatmap = np.subtract(
+                        #             heatmap_local, self.mean_rest
+                        #         )
 
                         heatmap_local = self.normalizer.normalize_chunk(heatmap_local)
                         if self.use_difference_heatmap:
                             previous_heatmap = self.normalizer.normalize_chunk(
                                 previous_heatmap
                             )
+                        if self.use_mean_subtraction:
+                            heatmap_local = np.subtract(heatmap_local, self.normalizer.normalize_chunk(self.mean_rest))
+                            np.where(heatmap_local < 0, 0, heatmap_local)
+                            if self.use_difference_heatmap:
+                                previous_heatmap = np.subtract(
+                                    heatmap_local, self.mean_rest
+                                )
+
+
+
+
 
                         if self.use_gauss_filter:
                             heatmap_local = self.filter.apply_gaussian_filter(
@@ -579,6 +591,7 @@ class EMGProcessor:
 
                         if self.use_shallow_conv:
                             if not self.use_difference_heatmap:
+
                                 res_local = model.predict(heatmap_local)
                                 if self.filter_output:
                                     res_local = self.filter_local.filter(
@@ -656,6 +669,10 @@ class EMGProcessor:
             )
         else:
             model = self.train_model(None, None, already_build=already_build)
+        # batch_size = 128
+        # model_graph = draw_graph(model, input_size=(128,1, 16, 24), device=model.device, expand_nested=False,
+        #                          hide_inner_tensors=True, hide_module_functions=True,roll=True)
+        # model_graph.visual_graph.render(format = "pdf")
 
         results, ground_truth = self.run_prediction_loop_recorded_data(model)
         # print("difference: ", np.subtract(np.array([target for _, target in self.train_loader]).squeeze()[0],ground_truth))
@@ -691,6 +708,7 @@ if __name__ == "__main__":
 
     for method in [
         "Min_Max_Scaling_over_whole_data",
+        "Min_Max_Scaling_all_channels"
         "no_scaling",
         "Robust_Scaling",
         "Robust_all_channels",
@@ -709,8 +727,15 @@ if __name__ == "__main__":
             1,
             5,
             10,
+            15,
+            20,
+            25,
+            30,
+            35,
+            40,
+            45,
             50,
-            100,
+
 
         ]:  # [1,5,10,15,20,25,30,40,50,60,70,100,250,500,1000,1500,2000,2500]:
             for use_mean_sub in [True,False]:  # [True,False]
@@ -719,17 +744,17 @@ if __name__ == "__main__":
                 print("epochs: ", epochs)
                 print("use_mean_sub: ", use_mean_sub)
                 emg_processor = EMGProcessor(
-                    patient_id="Michi_13_2_24_normal1_control",
+                    patient_id="Michi_Thesis_before",
                     movements=[
                         "rest",
                         "thumb",
                         "index",
-                        "2pinch",
+                        # "2pinch",
                         # "3pinch",
                         "middle",
                         "ring",
                         "pinkie",
-                        "fist",
+                        # "fist",
                     ],
                     grid_order=[1, 2, 3, 4, 5],
                     use_difference_heatmap=False,
@@ -737,25 +762,24 @@ if __name__ == "__main__":
                     use_local=True,  # set this to false if you want to use prediction with difference heatmap
                     output_on_exo=True,
                     filter_output=False,
-                    time_for_each_movement_recording=25,
+                    time_for_each_movement_recording=30,
                     load_trained_model=False,
-                    save_trained_model=True,
+                    save_trained_model=False,
                     use_spatial_filter=False,
                     use_mean_subtraction=use_mean_sub,
                     use_bandpass_filter=False,
                     use_gauss_filter=True,
-                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_13_2_24_normal1_control_control/",  # False
-                    window_size=120,
+                    use_recorded_data=r"trainings_data/resulting_trainings_data/subject_Michi_Thesis_after/",  # False
+                    window_size=150,
                     scaling_method=method,
                     only_record_data=False,
-                    use_control_stream=True,
+                    use_control_stream=False,
                     use_shallow_conv=use_shallow_conv,
                     # set this to false if not recorded with virtual hand interface
                     use_virtual_hand_interface_for_coord_generation=True,
                     epochs=epochs,
-                    split_index_if_same_dataset=split_index_if_same_dataset,
                     use_dtw=False,
-                    use_muovi_pro=False,
+                    use_muovi_pro=True,
                     skip_in_ms=25,
                 )
                 if count <= 1:
@@ -826,7 +850,7 @@ if __name__ == "__main__":
 
             if use_shallow_conv:
                 plt.figure()
-                x = [1, 5, 10, 50, 100,]
+                x = [1, 5, 10, 50,]
                 x = x[: x.index(epochs) + 1]
                 if len(evaluation_results_mean_sub) == len(x):
                     plt.plot(
@@ -848,7 +872,7 @@ if __name__ == "__main__":
                     plt.plot(
                         x,
                         mse_evaluation_results_mean_sub,
-                        label="mse_mean_sub",
+                        label="MAE_mean_sub",
                         color="red",
                         marker="o",
                     )
@@ -856,7 +880,7 @@ if __name__ == "__main__":
                     plt.plot(
                         x,
                         mse_evaluation_results_no_mean_sub,
-                        label="mse_no_mean_sub",
+                        label="MAE_no_mean_sub",
                         color="blue",
                         marker="o",
                     )
@@ -866,13 +890,13 @@ if __name__ == "__main__":
                     [],
                     [],
                     " ",
-                    label="Best mse no mean is " + str(round(best_mse_no_mean, 3)),
+                    label="Best MAE no mean is " + str(round(best_mse_no_mean, 3)),
                 )
                 plt.plot(
                     [],
                     [],
                     " ",
-                    label="Best mse mean is " + str(round(best_mse_mean, 3)),
+                    label="Best MAE mean is " + str(round(best_mse_mean, 3)),
                 )
                 plt.plot(
                     [],
@@ -884,8 +908,8 @@ if __name__ == "__main__":
                     [], [], " ", label="Best r2 mean is " + str(round(best_r2_mean, 3))
                 )
                 plt.grid()
-                plt.ylabel("avg_loss")
-                plt.xlabel("epochs")
+                plt.ylabel("Mean Absolute Error")
+                plt.xlabel("Epochs")
                 plt.title(method)
                 plt.legend()
 
@@ -898,5 +922,5 @@ if __name__ == "__main__":
                     + train_name
                     + "_"
                     + test_name
-                    + "not_affine25_skip_200msTimeWindow.png"
+                    + "all_normls_inkl_gauss.png"
                 )

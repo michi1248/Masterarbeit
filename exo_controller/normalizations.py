@@ -181,8 +181,8 @@ class Normalization:
                 heatmap = self.calculate_heatmap(
                     self.all_emg_data[movement], frame, number_observation_samples
                 )
-                # if (self.mean is not None) and (self.mean is not None):
-                #     heatmap = heatmap - self.mean
+                if (self.mean is not None) and (self.mean is not None):
+                    heatmap = heatmap - self.mean
                 if np.max(heatmap) > max_values:
                     max_values = np.max(heatmap)
                 if np.min(heatmap) < min_values:

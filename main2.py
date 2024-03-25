@@ -19,6 +19,7 @@ import threading
 import keyboard
 
 
+
 class EMGProcessor:
     def __init__(
         self,
@@ -1038,42 +1039,42 @@ if __name__ == "__main__":
     # "no_scaling" = do not apply scaling at all
 
     emg_processor = EMGProcessor(
-        patient_id="Test",
+        patient_id="Michi_Thesis_after",
         movements=[
             "rest",
             "thumb",
             "index",
-            "2pinch",
+            # "2pinch",
             # "3pinch",
             "middle",
             "ring",
             "pinkie",
-            "fist",
+            # "fist",
         ],
-        grid_order=[2, 3, 4, 5], # if muovi por plus is used [1,2] else [1]
+        grid_order=[1,2, 3, 4, 5], # if muovi por plus is used [1,2] else [1]
         use_difference_heatmap=False,
         use_important_channels=False,
         use_local=True,
         output_on_exo=True,
         filter_output=True,
-        time_for_each_movement_recording=10,
+        time_for_each_movement_recording=30,
         load_trained_model=False,
         save_trained_model=True,
         use_spatial_filter=False,
-        use_mean_subtraction=True,
+        use_mean_subtraction=False,
         use_bandpass_filter=False,
         use_gauss_filter=True,
         use_recorded_data=False,#r"trainings_data/resulting_trainings_data/subject_Test/",  # False
         window_size=150,
         scaling_method="Min_Max_Scaling_over_whole_data",
-        only_record_data=False,
+        only_record_data=True,
         use_control_stream=False,
         use_shallow_conv=True,
         use_virtual_hand_interface_for_coord_generation=True,
         epochs=50,
         use_dtw=False,
-        use_muovi_pro=False,
-        skip_in_ms=35,   #25 for muovi probe , 35 for quattrocento
+        use_muovi_pro=True,
+        skip_in_ms=25,   #25 for muovi probe , 35 for quattrocento
         take_trainings_data_multiple_times = None
     )
     emg_processor.run()

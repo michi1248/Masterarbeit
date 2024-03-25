@@ -179,6 +179,10 @@ class ShallowConvNetWithAttention(nn.Module):
 
     def _initialize_weights(self, m, seed=42):
         torch.manual_seed(seed)
+        # If using CUDA:
+        torch.cuda.manual_seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
             init.xavier_uniform_(m.weight)
             if m.bias is not None:
@@ -565,6 +569,7 @@ class ShallowConvNetWithAttention(nn.Module):
                 return self(x1, x2).cpu().numpy()
 
     def evaluate_best(self, predictions, ground_truth):
+
         self.eval()
 
         if isinstance(predictions, list):

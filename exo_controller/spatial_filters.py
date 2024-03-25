@@ -19,11 +19,11 @@ class Filters:
                 [[-1, -2, -1], [-2, 12, -2], [-1, -2, -1]]
             ),  # inverse binomial filter of order 2
             "IR": np.array(
-                [[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]]
+                [[-1/8, -1/8, -1/8], [-1/8, 1, -1/8], [-1/8, -1/8, -1/8]]
             ),  # inverse rectangle
         }
 
-    def spatial_filtering(self, siganl_to_be_filtered, filter_name="NDD", mode="same"):
+    def spatial_filtering(self, siganl_to_be_filtered, filter_name="IR", mode="same"):
         """
         :param siganl_to_be_filtered: in shape (rows,cols,length emg signal) = grid
         :param filter_name: name of the filter to be applied i.e identity, LSD, LDD, TSD, TDD, NDD, IB2, IR
@@ -32,36 +32,25 @@ class Filters:
 
         grid = siganl_to_be_filtered
         grids = helpers.split_grid_into_8x8_grids(grid)
+        filtered_grid = np.zeros_like(grid)
         for one_grid in range(len(grids)):
+            filter_result  = fftconvolve(
+                grids[one_grid],
+                self._DIFFERENTIAL_FILTERS[filter_name].reshape(
+                    (
+                        self._DIFFERENTIAL_FILTERS[filter_name].shape[0],
+                        self._DIFFERENTIAL_FILTERS[filter_name].shape[1],
+                        1,
+                    )
+                ),
+                mode=mode,
+            ).astype(np.float32)
             if one_grid < 3:  # if upper grids
-                grid[0:8, 0 + 8 * one_grid : 8 + 8 * one_grid, :] = fftconvolve(
-                    grids[one_grid],
-                    self._DIFFERENTIAL_FILTERS[filter_name].reshape(
-                        (
-                            self._DIFFERENTIAL_FILTERS[filter_name].shape[0],
-                            self._DIFFERENTIAL_FILTERS[filter_name].shape[1],
-                            1,
-                        )
-                    ),
-                    mode=mode,
-                ).astype(np.float32)
+                filtered_grid[0:8, 0 + 8 * one_grid: 8 + 8 * one_grid, :] = filter_result
             else:  # if lower grids
-                grid[
-                    8:16, 0 + 8 * (one_grid - 3) : 8 + 8 * (one_grid - 3), :
-                ] = fftconvolve(
-                    grids[one_grid],
-                    self._DIFFERENTIAL_FILTERS[filter_name].reshape(
-                        (
-                            self._DIFFERENTIAL_FILTERS[filter_name].shape[0],
-                            self._DIFFERENTIAL_FILTERS[filter_name].shape[1],
-                            1,
-                        )
-                    ),
-                    mode=mode,
-                ).astype(
-                    np.float32
-                )
+                filtered_grid[8:16, 0 + 8 * (one_grid - 3): 8 + 8 * (one_grid - 3), :] = filter_result
 
+        grid[:, :, :] = filtered_grid
         return grid
 
     def create_gaussian_filter(self, size_filter=3, sigma=None):

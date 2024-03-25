@@ -378,12 +378,16 @@ class MultiDimensionalDecisionTree:
                     segment = self.calculate_heatmap_on_whole_samples(
                         emg_to_use,
                     )
-                    if self.mean_rest is not None:
-                        segment = np.subtract(segment, self.mean_rest)
+                    # if self.mean_rest is not None:
+                    #     segment = np.subtract(segment, self.mean_rest)
 
                     segment = self.normalizer.normalize_chunk(segment)
                     # feature = calculate_rms(segment)
                     # segments.append
+                    if self.mean_rest is not None:
+                        segment = np.subtract(segment, self.normalizer.normalize_chunk(self.mean_rest))
+                        np.where(segment < 0, 0, segment)
+
                     if self.use_gauss_filter:
                         segment = self.filter.apply_gaussian_filter(
                             segment, self.gauss_filter
